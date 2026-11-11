@@ -151,3 +151,37 @@ Shared contracts, lockfiles and integration files have one writer. Use short bra
 **Documentation review:** independent supplied-text contract review found six material gaps; they were corrected and the follow-up returned PASS. The corrections define same-revision result selection/cache delivery, hypothetical-scenario authority, catalogue version identity, deadline outcomes, phase-specific acceptance and the first dependency order. Cross-scenario metric identity and infeasible-comparison handling were also clarified. This is documentation consistency evidence, not implemented software or scientific validation. The earlier distributed documentation archive contains its snapshot integrity manifest; checks must be rerun against each new repository revision.
 
 After the contract/owner acknowledgement, begin B01 and B03 in parallel. B02 integration starts when the relevant B01 models are available; Arnav may independently explore analytic formulas against this named draft before then, but that is not integrated B02 acceptance. Do not hold all engineering hostage to real-site selection or future hardware access.
+
+## 7. Priority-aware delivery plan
+
+The canonical catalogue, feature acceptance, P0–P3 boundaries and M0–M7 gates are in [FEATURE_PRIORITIES.md](FEATURE_PRIORITIES.md). B01–B12 remain the only implementation/task IDs and the only task-status home. These phases organise delivery; they do not mark planned work complete or replace any B/V acceptance.
+
+| Milestone | Existing tasks | Exit condition |
+|---|---|---|
+| M0 Development readiness | B01, B03; start B09 readiness investigation when available | Acknowledged contract/owners, tested portable setup/interfaces, and event/data-rights gates recorded with unknowns explicit. |
+| M1 Scientific foundation | B02, B04; B03 only gates real-site claims | Analytic solar/geometry references and reproducible baseline-versus-one-tree calculation, including valid zero. |
+| M2 First vertical slice | B01, B04, B05 | Real request→calculation→UI result; edits immediately stale old values; failure/zero/provisional states shown. No optimiser, polished 3D or model prerequisite. |
+| M3 Basic optimisation | B06 | Feasible finite-candidate layout, independent constraint validation, reference comparison and truthful objective/status. |
+| M4 Early local tool proof | B01, B09; B10 consumes it later | Genuine local model chooses a registered implemented tool, dispatches it, observes actual output and gives grounded response with device/version evidence. Can run beside M1/M2; advanced B07 sensitivity is not a prerequisite. |
+| M5 Agentic replanning | B05/B06/B09/B10 | Accepted budget/constraint change drives the correct real operation; B10's full adaptive investigation acceptance remains intact. |
+| M6 Selected P1 enhancements | B07/B10/B12 | Chosen growth/season/sensitivity/counterfactual/report features pass their mapped V criteria; no mandatory constraint omitted. |
+| M7 Submission candidate | P0-relevant B08/B09/B12 evidence, plus actual entry gate | Peer-reproducible demo and claim ledger for the scope actually shown; site, runtime, fallback and event eligibility claims evidenced. This scoped candidate does not mark B12 or B11 fully Verified. Full B12 still retains its stated B05–B11 dependencies and V12 acceptance. |
+
+**P0 versus first slice:** P0 is the complete competitive MVP, not M2. P0 needs F001–F010, including a constrained proposal, actual metrics/cost, user-driven recomputation and real local Nemotron tool round-trip. Basic replanning can be manual UI/API work in B05/B06 while B09 proves one early model tool call. This limited B09 evidence is not B10 completion. F013's richer counterfactual agent and B10's full adaptive loop remain P1 work with the original V09 acceptance; B07's full comparisons/sensitivity and B11 agent-value comparison are not prerequisites for the M2 slice. A demonstrated feature still passes its applicable checks.
+
+**Critical path:** B01→B02/B04→B05→B06→B10→B11/B12 for the full planned system. B03 runs in parallel against a candidate/fallback and gates real-site claims at B08, not synthetic engineering. Start B09 when schema and permitted runtime are available, not after B07. Leave time before the verified deadline for integration, affected validation, claim/evidence capture, recovery and pitch.
+
+**Proposed lanes (unacknowledged until owners agree):** Ben—backend foundation, typed API, scenarios/jobs, dispatcher, Nemotron, DGX and integration; Arnav—geospatial processing, solar/canopy physics, optimisation, numerical validation and uncertainty; Alex—map/3D view, controls, comparisons, evidence panels and demo interaction. Shared: Ben/Arnav numerical result contract; Arnav/Alex coordinate/render agreement; Ben/Alex revision, async and stale-state behaviour. One human owner and one writer per task/shared file. Change contracts only with affected producers/consumers coordinated; use isolated worktrees for parallel work.
+
+**Feature admission and freeze:** confirm the actual event deadline/rules before setting a freeze. After freeze, take defect fixes, affected validation, evidence, recovery and demo-critical work only. Before freeze, admit P1/P2 only when dependencies are ready, method/data/rights are adequate, its mapped V acceptance fits, and it cannot consume the P0 integration/evidence reserve. P3 does not enter the hackathon critical path.
+
+**Existing-plan interpretation:** B07 contains the full growth, season, sensitivity and comparison work; B10 contains the full adaptive investigator; B11 compares that agent with manual/fixed workflows; B12 remains the full reproducible candidate. Staging early B09 and a P0 manual replanning path does not reduce those tasks' final acceptance or claim their completion.
+
+### Documentation update record
+
+- **Scope/revision:** user-assigned feature-priority documentation update on branch docs/feature-priorities-mvp, based on fetched origin/main revision 14d0ce8. No pre-existing B01–B12 item was assigned to this documentation task; this record is in the existing BUILD plan and does not create an implementation task or change task states.
+- **Files:** AGENTS.md, README.md, docs/README.md, docs/SPEC.md, docs/CONTRACTS.md, docs/BUILD.md, docs/VALIDATION.md, and new docs/FEATURE_PRIORITIES.md.
+- **Checks actually run:** local Markdown path/anchor audit (54 local links/anchors; PASS); feature/reference audit (F001–F035 and referenced R/B/V IDs; PASS); git diff --cached --check (PASS before this record; rerun on final diff before commit).
+- **Tests not run:** no application tests or runtime/model/site checks; this branch changes documentation only and does not claim numerical, Sheffield-site, DGX, or Nemotron evidence.
+- **Interface impact:** no wire fields, units, states, error codes, revision rules or numerical definitions changed. CONTRACTS only identifies when existing operations enter milestones; NUMERICS and SOURCES were reviewed and left unchanged.
+- **Limits/next dependency:** priorities, owners and event timing remain proposed/unacknowledged; no site, runtime or eligibility gate is resolved. Next: review this scoped PR and any repository checks; teammates acknowledge lanes/contracts before parallel dependent implementation.

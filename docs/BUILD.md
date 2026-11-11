@@ -1,0 +1,150 @@
+# Build plan, task state and decisions
+
+**This is the only task-status/decision home until a shared tracker is explicitly adopted.**  
+Documentation baseline 0.1. All implementation items below are **Planned**, not completed. Named owners are proposed and must acknowledge their lane; they can use scoped coding assistants without giving away scientific or integration accountability.
+
+Related: [Spec](SPEC.md) · [Contracts](CONTRACTS.md) · [Numerics](NUMERICS.md) · [Validation](VALIDATION.md).
+
+## 1. Delivery policy
+
+Develop the portable core **before the event**, after the relevant working contracts are understood. Do not wait until Spark access to write CPU physics, tests, jobs or the interface. Separately check current competition eligibility and preserve an honest advance-work record. A rule/rights gate blocks the affected submission or asset use, not unrelated engineering.
+
+Build in dependency order, not three isolated prototypes. The research handoff and this documentation are not software completion. Do not reduce the ambition to a mock: each slice must produce a real behaviour and then improve that same system.
+
+## 2. Proposed ownership and integration
+
+- **Ben:** scenario/backend contracts, job identity, domain dispatcher, agent adapter and integrated working baseline. Owns contract-change coordination, not sole authorship/review of everything.
+- **Arnav:** physical semantics, analytic reference, site/evaluator validity, search correctness and uncertainty. Split site → evaluator → masks → search, rather than one late monolith.
+- **Alex:** scene import/view transform, map controls, target/exclusion editing, comparison/evidence panels, accessibility and demo interaction.
+- **Ben + Arnav:** real evaluator request/result and final constraint validation. Ben can implement search plumbing after Arnav defines/tests semantics.
+- **Arnav + Alex:** one known point, north direction, metre scale, tree size and target area agree between viewer and solver.
+- **Ben + Alex:** revision identity, queued/error/cancelled/cached/stale states and late-job rejection.
+
+At each integration checkpoint provide: exact revision, what ran, output/evidence, interface changes, current blocker and next action. Do not substitute a meeting or a model's assurance for a working path.
+
+## 3. Work items
+
+### B01 — Contract and portable application foundation
+
+- **Owner:** Ben; reviews: Arnav + Alex. **State:** Planned. **Dependencies:** this working spec; explicit acknowledgement before parallel consumers build against it.
+- Create typed backend models, generated API/frontend types and the minimal local API/UI shell. Select versions through imports and an actual smoke; record tested install/start commands. Establish immutable revisions, structured errors and a central asset registry.
+- The dedicated private repository is established under D08; B01 covers application/schema work, not another repository. Use this checkout or an isolated worktree and preserve unrelated work.
+- **Acceptance:** V01 and the validation portion of V05; one valid synthetic site/scenario is accepted, malformed units/refs are rejected, generated types match backend. Setup can be repeated. No invented successful numerical response.
+- **Evidence to attach:** commands/output, schema/OpenAPI version, generated-type check and source revision. **Next consumer:** B02/B04/B05/B09.
+
+### B02 — Analytic solar and geometry reference
+
+- **Owner:** Arnav. **State:** Planned. **Dependencies:** B01 shared models.
+- Implement solar direction, UTC/time bins, analytic ellipsoid/trunk intersections and a minimal static occluder reference. Tests use authored, explicitly synthetic inputs; maintain correct normals/areas and no double-counting.
+- **Acceptance:** V02's B02 analytic/opaque-geometry subset, finite/units tests and same-input repeatability. Solar-reference comparisons are separate from hand-computed shadow tests. Multi-tree evaluation and transmission wait for their named later gates.
+- **Evidence:** test command/output and input/expected/actual values. **Next consumer:** B04 and accelerator comparison.
+
+### B03 — Real-site and rights audit (parallel lane)
+
+- **Owner:** Arnav + Alex, one named writer per asset/manifest. **State:** Planned. **Dependencies:** SiteBundle contract, not the full solver.
+- Audit one park/playground candidate plus a fallback; verify lawful team sharing/display/export, geometry scale/north/context, semantic masks and existing-tree assumptions. Keep unknown utilities/soil/permission visible. Do not substitute historical planting areas or School Localities for site permission/geometry.
+- **Acceptance:** V03; a reviewed manifest and usable source assets, or an explicit failed-site decision and replacement. Unknown rights do not pass.
+- **Evidence:** provenance/licence records, transform checks and gap list. **Next consumer:** B08. **Does not block:** synthetic B02/B04/B05.
+
+### B04 — Baseline versus one tree, real computation
+
+- **Owner:** Arnav evaluator; Ben job wrapper. **State:** Planned. **Dependencies:** B01 + B02. B03 only for real-site claims.
+- Evaluate unchanged scene and one proposed tree on identical samples/bins. Return actual metrics, constraints, identity and provenance through the API. Capture real runtime fixtures from this implementation for UI development; label synthetic scene provenance.
+- **Acceptance:** V02's B04 single-tree subset + V04 baseline/single-tree metric cases; valid zero gain and already-shaded target. Multi-proposed-tree overlap/constraint tests belong to B06. No optimiser/model prerequisite.
+- **Evidence:** reproducible run IDs, input snapshot and baseline/proposal result. **Next consumer:** B05/B06/B07/B08.
+
+### B05 — Interactive vertical slice
+
+- **Owner:** Alex with Ben. **State:** Planned. **Dependencies:** B01 for shell; B04 for actual data.
+- Show site, target, existing/proposed tree and computed difference. Add manual evaluation, progress, cancellation, error/provisional/cached labels and revision-safe edits. Validate viewer/solver transform with Arnav.
+- **Acceptance:** V05 + V10's B05 single-tree UI subset; edit a scenario while an old run finishes and prove the old result cannot overwrite the draft/current revision. A rendered sun slider does not silently change analytical metrics. Search/comparison and multi-zone/case panels are integrated with B06/B07/B10 and covered fully at B12, not prerequisites for G1.
+- **Evidence:** end-to-end trace and actual UI capture, including failure/stale state. **Next gate:** G1.
+
+### B06 — Candidate search and independent feasibility
+
+- **Owner:** Arnav semantics; Ben may implement search/job plumbing under agreed ownership. **State:** Planned. **Dependencies:** B04 and candidate/profile contract.
+- Build candidate masks, deterministic competent reference, marginal-gain greedy plus local improvement. Implement maximise-shade first, then target-seeking least-cost search. Keep a separate final-layout validator.
+- **Acceptance:** V04 and V06 plus V02's B06 multi-tree overlap subset; compare tiny exact cases, enforce pins/spacing/budget/winter rules, show actual spend/count, preserve empty/target-miss outcomes. Supported winter-case evaluation is supplied by B07 before that portion is verified; B06's portable search work can proceed first. Never claim proven infeasibility from a heuristic miss.
+- **Evidence:** reference/selected layouts, constraint report and method/seed. **Next consumer:** B10.
+
+### B07 — Cases, uncertainty and controlled comparison
+
+- **Owner:** Arnav with Ben; Alex consumes results. **State:** Planned. **Dependencies:** B04.
+- Add establishment/target/leaf-state cases, fixed-crossing crown transmission, supported winter checks, controlled one-tree relocation and fixed-layout sensitivity. Test spatial/time/context refinement and correct cache invalidation. Full redesign reuses B06; path-length attenuation is not required in this core.
+- **Acceptance:** V07 plus V02's B07 fixed-transmission subset; separate horizon from uncertainty, record all changed inputs, keep other trees fixed in relocation, and flag infeasible alternatives instead of silently modifying them. Validate matching comparison/case UI panels with Alex before G2/G3.
+- **Evidence:** comparisons/ranking and convergence records, including stable rankings when that is what occurs. **Next consumer:** B10.
+
+### B08 — Real Sheffield integration proof
+
+- **Owner:** all three, Arnav accountable for physical validity. **State:** Planned. **Dependencies:** B03 + B04 + B05.
+- Replace synthetic input with the accepted real site without changing API meaning. Re-run transform, baseline, one-tree and context checks on the actual assets. Inspect independent reference/observation evidence where available.
+- **Acceptance:** V03 + applicable V02/V07; real-site claim is supported and provisional assumptions are prominent. A visually convincing mesh alone does not pass.
+- **Evidence:** rights-cleared manifest, reproducible real runs and matching UI. **Next gate:** real-site portion of G2.
+
+### B09 — Local model/runtime proof (start early when available)
+
+- **Owner:** Ben. **State:** Planned. **Dependencies:** tool schema from B01; actual Spark access for Spark evidence.
+- Test an exact supported open-model/checkpoint/quantisation/parser/runtime and one registered tool call. On a laptop, test adapter/schema behaviour separately and label the environment. Model unavailability must not block CPU/manual work.
+- **Acceptance:** V08: actual model → tool arguments → dispatcher → observation, with recorded device and cold/warm behaviour. An assumed SDK or scripted response does not pass.
+- **Evidence:** exact versions, logs with secrets removed, timings and coexistence memory. **Next consumer:** B10.
+
+### B10 — Adaptive planning investigator
+
+- **Owner:** Ben; Arnav validates tools, Alex validates interaction. **State:** Planned. **Dependencies:** B06 + B07 + B09, B05 for visible product.
+- Implement interpret/inspect/choose/analyse/explain loop over immutable scenarios. Include relocation, redesign after an accepted change, and justified sensitivity. Guard claims, permissions, prompt injection and no-progress termination.
+- **Acceptance:** V09; unfamiliar requests choose appropriate real operations, preserve constraints and cite actual current result IDs. No hardcoded “AI demonstration” replacing the model path.
+- **Evidence:** traces for success, ambiguity, unsupported savings, tool failure, no-progress and stale scenarios. **Next gate:** G3.
+
+### B11 — Same-tools value comparison
+
+- **Owner:** all three; someone other than the agent-loop author checks scoring. **State:** Planned. **Dependencies:** B10 + working manual/fixed workflow.
+- Run held-out ordinary, compound, counterfactual, infeasible and failure tasks through manual controls, fixed workflow and agent, with identical backend/constraints. Include manual effort and all failures.
+- **Acceptance:** V11; report completion, claim accuracy, corrections, useful analyses and latency without assuming the agent wins. Narrow the claim if evidence does not support superiority.
+- **Evidence:** task definitions, immutable inputs, runs and scoring. **Next consumer:** B12/pitch.
+
+### B12 — Reproducible build and demo candidate
+
+- **Owner:** Ben integration, Alex demonstration, Arnav scientific claims. **State:** Planned. **Dependencies:** B05–B11; event eligibility is additionally required before submission claims/actions.
+- Test clean setup, complete smoke, permissions-safe export and known-good recovery. Record exact dependency/model/data manifest. Set feature freeze against the actual submission deadline once confirmed; use later work for repairs/rehearsal, not unrelated feature expansion.
+- **Acceptance:** V12; another teammate runs the instructions, genuine local-agent evidence exists, no hard-constraint/stale/claim failures remain, fallback labels and limitations are visible.
+- **Evidence:** verified runbook, clean setup output, final demo trace and claim ledger. Remote CI, publication and submission are separate authorised actions, not inferred from local tests.
+
+## 4. Integration gates
+
+- **G1 — truthful portable slice:** B01/B02/B04/B05; baseline → one tree → actual metric → UI → edit makes prior result stale. Synthetic provenance is allowed here.
+- **G2 — defensible real decision:** B03/B06/B07/B08; real-site evidence, reference/search comparison, hard-constraint validation and horizon/winter checks.
+- **G3 — real investigation:** B09/B10; actual local model takes the right tool branch from observed results, then explains verified evidence.
+- **G4 — release candidate:** B11/B12; repeatable end-to-end operation, honest comparative results, recovery and admissible demo material. G4 is not authority to publish or submit.
+
+Owners report the first failed gate rather than declaring the whole product finished. Reuse one working path throughout.
+
+## 5. Decisions and unresolved gates
+
+- **D01 — accepted direction (Ben, 11 November):** documentation then advance development, rather than waiting for the event. Previous team's week of advance work is user-reported precedent. Exact current eligibility remains unknown; maintain prior-work provenance and confirm before representing eligibility.
+- **D02 — working defaults:** opaque axis-aligned ellipsoid/trunk; unweighted additional target shade; upfront GBP-pence budget; explicit winter limits; one primary benefit case; one adaptive agent and deterministic tools. Rationale: testable semantics before richer biology/economics. Arnav/Ben/Alex acknowledge before parallel dependent implementation; local exploratory tests may use this named draft.
+- **D03 — proposed ownership:** responsibilities above. Owners acknowledge or swap lanes explicitly; do not infer agreement from silence.
+- **D04 — contract clarification:** supersession is an orthogonal marker, not a terminal execution state. Rationale: old work may finish into history without becoming current. Review with backend/UI consumers in B01; this supersedes the research draft's combined status list.
+- **D05 — site unresolved:** no real site/geometry/planting permission is certified. B03 owns evidence; synthetic development proceeds honestly while that work runs.
+- **D06 — stack candidate:** Python/FastAPI/Pydantic, React/Three.js, local SQLite/files and one model service. Exact versions/model/native backend require B01/B09 smoke. Warp is a candidate, not a proven dependency; RT-core acceleration is not claimed.
+- **D07 — organiser rules unresolved:** advance-code/assets/AI use, prior-work declarations, exact deadline, demo format, repository/IP requirements and supplied runtime. Ben coordinates an approved sender; no message sent by these docs. Keep the confirmation source and date here.
+- **D08 — repository established (Ben's approval, 11 November):** [bbeennyy860-cyber/sheffield-tree-planner](https://github.com/bbeennyy860-cyber/sheffield-tree-planner) is the private canonical repository; Ben is the owner/admin. Write access is authorised for Alex Kurkar (`akurkar07`) and Arnav Chitriv (`reverez`), verified from the Originator project and their GitHub profiles. Invitation acceptance/live access is determined by GitHub, not inferred from this record. `docs/` is the living specification; earlier local/ZIP copies are historical. This approval covers initial docs publication and those invitations, not arbitrary later pushes, public visibility, licensing, spending, deployments or submission.
+
+Risk triggers and fallback: missing real geometry/rights → another audited site, while synthetic engineering continues; untrusted numerics → analytic CPU reference and reduced supported claims; Spark/model failure → manual product still usable but local-agent gate incomplete; overloaded numerical lane → stable evaluator/mask handoffs; shared-file conflict → stop/reconcile one writer; late UI edit → stale identity guard; undocumented benefit → remove that claim, not invent a model.
+
+## 6. Task changes, evidence and advance-work record
+
+Task states: `Planned → Ready → Active → Review → Integrated → Verified`, with `Blocked`/`Deferred` when appropriate. Before a shared repository exists, record the exact local baseline/files; do not invent a merged commit. Once a tracker is adopted, it becomes the single status home and this file becomes the roadmap with links, not a second live board.
+
+For each active item record inline: human owner; actual writer; agreed spec/schema revision; starting code revision or explicit local-only state; owned paths; shared/forbidden paths; dependency IDs; permitted side effects; acceptance IDs; test commands/results; checks not run; reviewer; final revision; blocker/next action. A model's self-review is not independent acceptance.
+
+Shared contracts, lockfiles and integration files have one writer. Use short branches and isolated worktrees/clones after a repository exists. Coordinated schema changes land with consumers/adapters and compatibility tests. Review the final diff and verify the integrated baseline. No automatic force-push, PR publication/reviewer requests, merge, permission change or deployment authority is conferred here.
+
+**Advance-work entries belong here**, not in a new diary. Record date, author(s), task/change, assets/dependencies, AI assistance, source revision and any event declaration needed. Do not backdate work or conceal reuse.
+
+- **11 November 2026 — documentation only:** existing researched design converted into this living specification by Ben's requested AI-assisted preparation. No project application implementation or Spark run established by this entry. Prior source/audit/arithmetic evidence is in the background handoff; it is not a new site simulation.
+
+- **11 November 2026 — repository bootstrap:** private repository and initial development-doc publication approved by Ben, with write-access invitations authorised for the two verified teammates. Application tasks remain Planned; no remote CI, product tests or Spark run is implied.
+
+**Documentation review:** independent supplied-text contract review found six material gaps; they were corrected and the follow-up returned PASS. The corrections define same-revision result selection/cache delivery, hypothetical-scenario authority, catalogue version identity, deadline outcomes, phase-specific acceptance and the first dependency order. Cross-scenario metric identity and infeasible-comparison handling were also clarified. This is documentation consistency evidence, not implemented software or scientific validation. The earlier distributed documentation archive contains its snapshot integrity manifest; checks must be rerun against each new repository revision.
+
+After the contract/owner acknowledgement, begin B01 and B03 in parallel. B02 integration starts when the relevant B01 models are available; Arnav may independently explore analytic formulas against this named draft before then, but that is not integrated B02 acceptance. Do not hold all engineering hostage to real-site selection or future hardware access.

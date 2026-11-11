@@ -1,0 +1,48 @@
+# Credentials and local configuration
+.env
+.env.*
+*.env
+!*.env.example
+!.env.example
+*.pem
+*.key
+credentials*.json
+secrets*.json
+
+# Local runtimes, model downloads and restricted data
+.venv/
+venv/
+node_modules/
+models/
+*.gguf
+*.safetensors
+data/local/
+data/raw/
+state/
+.local/
+
+# Build, test and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage/
+dist/
+build/
+.next/
+*.log
+
+# Private preparation and generated evidence
+.preparation/
+.artifact-build/
+artifacts/
+reports/
+.codex/
+
+# Editor and OS files
+.idea/
+.DS_Store
+Thumbs.db

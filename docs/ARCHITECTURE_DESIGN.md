@@ -61,7 +61,7 @@ Ben's dossier identified **Weston Park edge/path** as a geometry-audit candidate
 
 ## 3. Logical architecture and ownership of truth
 
-\`\`\`text
+```text
                Browser: CANOPY four-screen decision workbench
            map + target editor + budget + result/evidence panels
                           |
@@ -89,7 +89,7 @@ Ben's dossier identified **Weston Park edge/path** as a geometry-audit candidate
                    |
                    v
             comparison + proposal
-\`\`\`
+```
 
 **System-of-record separation:**
 - **Backend:** site rights/readiness; persisted scenario acceptance; idempotency; job state; selection/currentness; tool permissions; result validation.
@@ -120,11 +120,11 @@ Use [CONTRACTS](CONTRACTS.md) **unchanged as semantic authority**. This section 
 
 **Frames:** original geographic location uses latitude/longitude + known height datum. Imported British National Grid metres require tested projection, grid convergence/true-north handling and vertical reference to produce true ENU. The solar vector uses azimuth clockwise from **true north**, not map pixel up by accident. A viewer-only 4×4 transform must be invertible and checked using control points. Its scale and north are not inferred from an illustration.
 
-**Time:** UTC instants are authoritative; \`Europe/London\` is display/edit interpretation with DST disambiguation. Time-bin midpoints and represented duration, not just slider positions, define numerical totals. Comparing two results with different dates, horizons or receivers must show the changes explicitly; the UI cannot subtract them as if identical.
+**Time:** UTC instants are authoritative; `Europe/London` is display/edit interpretation with DST disambiguation. Time-bin midpoints and represented duration, not just slider positions, define numerical totals. Comparing two results with different dates, horizons or receivers must show the changes explicitly; the UI cannot subtract them as if identical.
 
 **Units:** GBP as integer pence; distances in m; surfaces in m²; geometric additional shade in m²·h. Partial transmission produces *blocking-equivalent* m²·h, and objective-weighted results produce a different weighted utility token. Direct incident energy requires compatible DNI, orientation and kWh conversion. Temperature, AQI, runoff and economic benefit have **no substitute unit derived from shade**.
 
-**Incomplete semantics:** empty polygons mean none supplied, not surveyed absence; a provisional candidate is not legally plantable; \`null\`/absent metrics are not zero. The implementation must preserve the distinct outcomes described in CONTRACTS, including valid zero planting, target miss, unknown readiness, error and proven finite-model infeasibility.
+**Incomplete semantics:** empty polygons mean none supplied, not surveyed absence; a provisional candidate is not legally plantable; `null`/absent metrics are not zero. The implementation must preserve the distinct outcomes described in CONTRACTS, including valid zero planting, target miss, unknown readiness, error and proven finite-model infeasibility.
 
 ## 5. Source, site scene and geospatial processing design
 
@@ -136,7 +136,7 @@ Every source used in the active SiteBundle needs: exact provider and URL, source
 
 ### 5.2 Acquisition to simulation scene
 
-\`\`\`text
+```text
 Source inventory + rights
    → bounded site/context crop
    → CRS/datum normalization + control-point checks
@@ -145,7 +145,7 @@ Source inventory + rights
    → local true-ENU origin + analysis/viewer transform verification
    → versioned SiteBundle and immutable candidate catalogue
    → site readiness decision + reproducible asset manifest
-\`\`\`
+```
 
 **DTM** provides bare-ground height; **DSM** includes surfaces such as buildings and vegetation. The height difference is **not automatically a building mesh or classified crown profile**. Source acquisition in March 2021 or another leaf state changes existing canopy reliability; do not imply current crown accuracy without evidence. A footprint alone cannot supply measured height. Treat missing buildings or vegetation outside the cropped site but within possible shadow reach as a **horizon/context limitation**.
 
@@ -170,13 +170,13 @@ Failure rejects a real-site numerical claim without blocking synthetic analytic 
 
 ### 6.1 Baseline mathematical contract
 
-For receiver/time sample u, define baseline direct transmission \`b_u∈[0,1]\`, candidate-tree transmission \`t_uj∈[0,1]\`, receiver area \`a_u\`, represented time \`Δt_u\`, nonnegative site priority \`w_u\`, and valid direct-illumination indicator \`f_u\`. Then
+For receiver/time sample u, define baseline direct transmission `b_u∈[0,1]`, candidate-tree transmission `t_uj∈[0,1]`, receiver area `a_u`, represented time `Δt_u`, nonnegative site priority `w_u`, and valid direct-illumination indicator `f_u`. Then
 
-\`\`\`math
+```math
 T_u(S) = b_u · ∏_{j∈S} t_uj
 Δ_u(S) = b_u − T_u(S)
 F(S) = Σ_u a_u · Δt_u · w_u · f_u · Δ_u(S)
-\`\`\`
+```
 
 For **opaque** profiles and unit weight, F is additional direct-shaded **m²·h** on declared receivers; it accounts for existing shadows and union of candidate shadows. For partial transmission, label blocking-equivalent m²·h; weighted values are a policy utility, **not physical shaded area**. Morning versus afternoon, summer versus winter and maturity all require separate explicitly stated evaluation cases. The formula is the same as NUMERICS; any numerical revision must be reviewed there with affected owners.
 
@@ -255,21 +255,21 @@ The agent's useful role is to decide *what supported calculation to request next
 
 Only these existing operations are authorised as the model-facing domain surface when implemented:
 
-- \`inspect_site\`
-- \`prepare_scenario\`
-- \`evaluate_layout\`
-- \`search_layouts\`
-- \`compare_locations\`
-- \`compare_scenarios\` (fixed_layout/redesign)
-- \`prepare_proposal\`
+- `inspect_site`
+- `prepare_scenario`
+- `evaluate_layout`
+- `search_layouts`
+- `compare_locations`
+- `compare_scenarios` (fixed_layout/redesign)
+- `prepare_proposal`
 
-Do not assume a prototype \`sensitivity_sweep\` method exists: the UI's static example names it, but it is absent from CONTRACTS. Until a reviewed contract amendment, express supported sensitivity through labelled hypothetical scenarios and \`compare_scenarios\`. “Register tool” does not mean giving Nemotron raw shell, SQL, arbitrary network, filesystem, imports or SSH.
+Do not assume a prototype `sensitivity_sweep` method exists: the UI's static example names it, but it is absent from CONTRACTS. Until a reviewed contract amendment, express supported sensitivity through labelled hypothetical scenarios and `compare_scenarios`. “Register tool” does not mean giving Nemotron raw shell, SQL, arbitrary network, filesystem, imports or SSH.
 
 Backend validates schema, identity, permissions, scenario scope, results, budget and hard constraints. Tool observations are **bound to recorded result/run identities** in the application record, not generated by the LLM; this does not imply a cryptographic signature.
 
 ### 8.3 State machine and transition integrity
 
-\`\`\`text
+```text
 Human brief / accepted scenario
        ↓
 validate site + target + known constraints  ──missing→ specific clarification
@@ -289,7 +289,7 @@ choose informative next action (or stop)
        └─ missing fact / unsupported model → survey question / abstain
        ↓
 claim validation → evidence trace → final answer / proposal draft
-\`\`\`
+```
 
 **First test, then redesign:** when investigating the effect of a crown/strip/time assumption, apply the change to the *same fixed layout* before permitting a revised search. Otherwise the agent might conflate the assumption's effect with a new optimisation result. If the layout is unchanged under tested alternatives, that is a legitimate outcome; do not script a dramatic reversal.
 
@@ -334,7 +334,7 @@ The exported HTML design is a **visual prototype**, not an implemented applicati
 
 The submitted product should remain useful on a portable CPU/manual development environment and run the **local model** on an authorised DGX Spark for B09/V08 proof. The accepted [DGX_SPARK](DGX_SPARK.md) guide documents an intended final single-machine service (application backend, approved assets/jobs, deterministic workers, local vLLM model), with laptop browser over authenticated loopback SSH tunnels. During development an API on a laptop may call Spark inference through a tunnel; that is **remote-local inference**, not proof the whole application ran on Spark.
 
-\`\`\`text
+```text
 Team laptop browser/React/WebGL
        │ approved SSH tunnel → Spark loopback application API
        ▼
@@ -345,7 +345,7 @@ DGX Spark: Python application + allowed local static assets
        ├─ deterministic tool dispatcher + agent state
        └─ loopback OpenAI-compatible vLLM HTTP service
                      └─ pinned local Nemotron weights
-\`\`\`
+```
 
 **No public inference URL, unauthorised Docker changes, external production cloud, model-side network or source assets sent to an unapproved API.** Rendering a 3D map in a browser uses the browser GPU, not Spark's CUDA; do not claim otherwise.
 
@@ -353,7 +353,7 @@ DGX Spark: Python application + allowed local static assets
 
 NVIDIA's [DGX Spark hardware specification](https://docs.nvidia.com/dgx/dgx-spark/hardware.html) describes a Grace–Blackwell GB10 device, 20-core Arm CPU, Blackwell GPU and **128 GB unified LPDDR5X memory** for the reference DGX Spark. Related product families can have different capacities: inspect the **assigned physical unit**, OS, driver, disk, RAM and access permissions before choosing the serving profile. The memory is shared by CPU, GPU, model weights, KV/SSM cache, worker buffers, the OS, browser-independent application and concurrent processes; it is **not 128 GB of dedicated free VRAM**.
 
-The merged B09 guide pins one first candidate: \`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16\`, an exact model revision, an Arm-compatible vLLM image/digest and tool parser. Its inspected weight files total about **63.16 decimal GB (~58.82 GiB)** before runtime caches/buffers. The ~3B active parameter count does not reduce the resident 30B weight footprint. The proposed context, sequence count and GPU utilisation are **test settings**, not measured feasibility. The 30B BF16 recipe is **not a default for a 64 GB configuration**.
+The merged B09 guide pins one first candidate: `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16`, an exact model revision, an Arm-compatible vLLM image/digest and tool parser. Its inspected weight files total about **63.16 decimal GB (~58.82 GiB)** before runtime caches/buffers. The ~3B active parameter count does not reduce the resident 30B weight footprint. The proposed context, sequence count and GPU utilisation are **test settings**, not measured feasibility. The 30B BF16 recipe is **not a default for a 64 GB configuration**.
 
 **Conditional fallback:** use an approved/preloaded local service if present and genuinely compatible; else try the pinned 30B recipe only on a sufficient authorised unit. On memory/latency/tool reliability failure, test a **specific validated smaller checkpoint/runtime/parser combination** (4B and 9B-v2 are different requirements, not drop-in replacements). Choose based on observed task completion, tool-call validity, turnaround and memory, not parameter count or marketing. No hosted-model substitution can count as local Nemotron.
 

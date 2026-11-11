@@ -31,6 +31,8 @@
 
 **Unsupported until distinct science modules exist:** ambient temperature or UTCI change, AQI improvement, avoided runoff/flood losses, electricity savings, biodiversity units, carbon offset, multi-decade discounted ROI and four-axis weighted Heat/Equity/Flood/Air optimisation. The exported Studio's 45/25/15/15 percentages, £75k plan, 46 trees and sample runtime are **illustrations**, not implemented evidence. Disable, qualify or replace unsupported controls with a clearly accepted shade-only interpretation; no silent mapping to invented environmental scores.
 
+**Data-rights rule:** a GIS layer being downloadable is **not** proof that it may be copied into this repository, shown to a public audience or exported in a report. Each source/use combination needs documented local, team-share, display and export permission before use; unknown does not mean permitted.
+
 **Hard constraint rule:** if a scenario requires winter sunlight protection but the winter evaluator/independent validator is not implemented, reject/disable that scenario rather than turning off its constraint or silently violating it. A physically model-feasible site still requires utilities, title, roots/soil, permissions and professional survey.
 
 ## 3. Research adoption and exact evidence boundaries

@@ -56,6 +56,7 @@ CI runs unit/protocol checks, builds wheel/sdist, clean-installs the wheel outsi
 - [Product and architecture](docs/SPEC.md)
 - [Numerical specification](docs/NUMERICS.md)
 - [Sources and evidence boundaries](docs/SOURCES.md)
+- [Agentic architecture, feature review and team inputs](docs/references/AGENTIC_FEATURE_REVIEW.md)
 - [Historical research handoff](docs/references/RESEARCH_HANDOFF.md)
 - [Coding-assistant boundaries](AGENTS.md)
 
@@ -72,3 +73,7 @@ Use small scoped branches and isolated worktrees/clones for concurrent writers. 
 Advance development is planned; retain truthful prior-work/AI/asset provenance and confirm current entry eligibility separately. Do not commit credentials, restricted site assets, model weights, private working logs or generated proof bundles. This private repository has no open-source licence assigned by this setup; visibility/licensing changes require team approval.
 
 Canonical repository: https://github.com/bbeennyy860-cyber/sheffield-tree-planner
+
+## MVP and milestones
+
+The [feature priority and milestone plan](docs/FEATURE_PRIORITIES.md) defines the competitive P0 MVP, P1 enhancements, longer-term P2/P3 scope, and the smaller first vertical slice. BUILD remains the single task-status home; the product capability status is still planned.

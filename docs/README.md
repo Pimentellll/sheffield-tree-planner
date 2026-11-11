@@ -20,6 +20,8 @@ Read only what your task needs:
 - [DGX_SPARK.md](DGX_SPARK.md): event SSH/tunnels, pinned local-inference candidate, executable readiness diagnostic and full-application deployment gates. Prepared locally, not a claimed Spark run.
 - [AGENTS.md](../AGENTS.md): project-specific boundaries for coding assistants, not personal agent configuration.
 - [SOURCES.md](SOURCES.md): researched sources and the status of the advance-development report.
+- [Agentic architecture and feature review](references/AGENTIC_FEATURE_REVIEW.md): comparable projects, source-backed design choices, captured team links and the expanded parallel-build target. Recommendations, not implementation proof; source maintenance remains in SOURCES.
+- [Comprehensive research dossier](references/DEEP_RESEARCH_DOSSIER.md): the fourteen-part research synthesis, 170 annotated source records, concrete benchmark and B01–B12 recommendations. Cutoff 11 November 2026; research proposals, not accepted contract changes or application/Spark proof. Its source numbers are independent of SOURCES.md.
 - [Research handoff](references/RESEARCH_HANDOFF.md): optional detailed background, alternatives and earlier independent reviews. Historical snapshot.
 
 ## Development before the event
@@ -44,3 +46,7 @@ Hardware access gates Spark proof, not CPU development. Dataset rights gate use/
 The first integrated gate is **baseline scene → one proposed tree → computed difference → UI**, including stale-result behaviour. It does not wait for a full optimiser or polished model explanation.
 
 **Authority:** explicit team decisions override draft defaults; CONTRACTS owns wire meaning, NUMERICS owns mathematical meaning, BUILD owns task/decision state. After shared schemas exist, generated OpenAPI/types own serialization and these documents retain semantics. Record the transition; never maintain competing field definitions. Proposed roles and new defaults still require their owners' acknowledgement before parallel work.
+
+- [Feature priorities](FEATURE_PRIORITIES.md): canonical F001–F035 catalogue, P0–P3 boundary, M0–M7 delivery order, ownership lanes, acceptance and risks. Read this before proposing scope; BUILD remains the only task-status home.
+
+Priority reading: use FEATURE_PRIORITIES for delivery tiers and feature acceptance, SPEC for product requirements, CONTRACTS/NUMERICS for interface and mathematical meanings, BUILD for task state, and VALIDATION for evidence. The tiers do not replace requirements or relax hard constraints.

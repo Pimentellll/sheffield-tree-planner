@@ -160,3 +160,17 @@ Examples of **claim boundaries**, not results:
 ## 6. Recovery decisions
 
 If the model fails, manual numerical operation remains available but the live-agent demonstration is incomplete. If acceleration fails, use the validated CPU path and remove acceleration claims. If live computation fails, an exact-input cached result or recorded run may be shown with that label and original provenance; never change the badge to live. If the real site fails its rights/geometry gate, use a different audited site or honestly present a synthetic engineering demonstration without calling it a Sheffield reconstruction. The team decides whether remaining proof satisfies event rules before submission.
+
+## 7. Priority-aware verification and release evidence
+
+This section groups existing acceptance criteria by delivery priority; it does not replace or weaken V01–V12. Apply the mapped V case whenever a feature is demonstrated, regardless of its priority.
+
+**Critical P0 verification:** V01/V05 for schema, producer/consumer compatibility, immutable identity and stale-result rejection; V02 for solar direction and analytic geometry; V03 for a real-site claim and rights; V04/V06 for metrics, cost, hard constraints, independent feasibility and a credible basic search comparison; V10 for the interactive workflow; V08 for the actual local-model tool round-trip; V12 for the end-to-end reproducible candidate. Zero gain, errors, provisional survey conditions, unsupported claims and genuine recomputation need evidence. A synthetic M1/M2 scene is valid engineering input but not a Sheffield reconstruction.
+
+**P1 verification:** V02/V07 for growth/leaf/season comparisons and sensitivity; V07/V09/V11 for controlled relocation, adaptive reasoning, interventions and agent value; V08/V12 for any GPU claim; V04/V07 for lifecycle cost assumptions; V10/V12 for report and comparison usability. P1 does not allow a selected P0 scenario to skip a hard winter or other supported constraint.
+
+**P2/P3 verification:** no extension is enabled by priority alone. Add independent method-specific references, suitable local inputs, rights review, uncertainty/limitations, contract and acceptance criteria before presenting results. Thermal comfort, hydrology, air pollution, carbon, energy/bills, biodiversity and long-term economics require separate models; shade or tree counts are not validation for those effects.
+
+**Submission readiness versus product quality:** M7/demo readiness requires only the scoped, mapped criteria for the actual submission claim and event rules, plus the B12 reproducible path and honest fallback. Broader product quality requires all applicable scenarios, edge cases and research modules; an M7/demo pass is not evidence those modules exist. Reserve integration, evidence capture and pitch time as BUILD specifies.
+
+**Actual DGX/local-model evidence:** V08 requires the actual checkpoint/revision, quantisation, parser, runtime, machine/device, literal model-selected tool arguments, dispatcher result/observation, cold/warm latency and memory conditions with secrets removed. Record physics device separately. A readiness PR, laptop adapter test, scripted answer or fixture does not pass the local-model requirement. GPU claims additionally need equivalent CPU comparison; RT-core claims need direct evidence of that path.

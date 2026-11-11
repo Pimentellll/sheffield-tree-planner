@@ -22,7 +22,7 @@ Read only what your task needs:
 - [SOURCES.md](SOURCES.md): researched sources and the status of the advance-development report.
 - [Agentic architecture and feature review](references/AGENTIC_FEATURE_REVIEW.md): comparable projects, source-backed design choices, captured team links and the expanded parallel-build target. Recommendations, not implementation proof; source maintenance remains in SOURCES.
 - [Comprehensive research dossier](references/DEEP_RESEARCH_DOSSIER.md): the fourteen-part research synthesis, 170 annotated source records, concrete benchmark and B01–B12 recommendations. Cutoff 11 November 2026; research proposals, not accepted contract changes or application/Spark proof. Its source numbers are independent of SOURCES.md.
-- [UI design artifact handoff](UI_DESIGN_REFERENCE.md): Arnav's linked Claude design reference, access limitations and requirement-to-interface mapping; visual/content inspection and implementation verification remain Alex's follow-up.
+- [CANOPY UI export audit and screen-by-screen implementation handoff](UI_DESIGN_REFERENCE.md): inspected HTML exports for four product screens, source/contact sheet, design tokens, actual prototype interactions, known demo-only values and contract/feature/task mapping. The original Claude page was not accessible; implementation and numerical claims are not verified.
 - [Research handoff](references/RESEARCH_HANDOFF.md): optional detailed background, alternatives and earlier independent reviews. Historical snapshot.
 
 ## Development before the event

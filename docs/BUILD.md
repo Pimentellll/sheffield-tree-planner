@@ -180,8 +180,9 @@ The canonical catalogue, feature acceptance, P0–P3 boundaries and M0–M7 gate
 ### Documentation update record
 
 - **Scope/revision:** user-assigned feature-priority documentation update on branch docs/feature-priorities-mvp, based on fetched origin/main revision 14d0ce8. No pre-existing B01–B12 item was assigned to this documentation task; this record is in the existing BUILD plan and does not create an implementation task or change task states.
+- **Implementation commit:** d2ae0aa79eb86eabfc5ed15dad9f59ab3f4ca157; the feature-plan change passed the recorded checks at this revision.
 - **Files:** AGENTS.md, README.md, docs/README.md, docs/SPEC.md, docs/CONTRACTS.md, docs/BUILD.md, docs/VALIDATION.md, and new docs/FEATURE_PRIORITIES.md.
-- **Checks actually run:** local Markdown path/anchor audit (54 local links/anchors; PASS); feature/reference audit (F001–F035 and referenced R/B/V IDs; PASS); git diff --cached --check (PASS before this record; rerun on final diff before commit).
+- **Checks actually run:** local Markdown path/anchor audit (54 local links/anchors; PASS); feature/reference audit (F001–F035 and referenced R/B/V IDs; PASS); git diff --cached --check (PASS on the final staged documentation diff before commit).
 - **Tests not run:** no application tests or runtime/model/site checks; this branch changes documentation only and does not claim numerical, Sheffield-site, DGX, or Nemotron evidence.
 - **Interface impact:** no wire fields, units, states, error codes, revision rules or numerical definitions changed. CONTRACTS only identifies when existing operations enter milestones; NUMERICS and SOURCES were reviewed and left unchanged.
 - **Limits/next dependency:** priorities, owners and event timing remain proposed/unacknowledged; no site, runtime or eligibility gate is resolved. Next: review this scoped PR and any repository checks; teammates acknowledge lanes/contracts before parallel dependent implementation.

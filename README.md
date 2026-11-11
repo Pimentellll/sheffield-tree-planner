@@ -20,6 +20,7 @@ The intended system combines deterministic shade analysis and constrained tree-p
 - [Product and architecture](docs/SPEC.md)
 - [Numerical specification](docs/NUMERICS.md)
 - [Sources and evidence boundaries](docs/SOURCES.md)
+- [Agentic architecture, feature review and team inputs](docs/references/AGENTIC_FEATURE_REVIEW.md)
 - [Historical research handoff](docs/references/RESEARCH_HANDOFF.md)
 - [Coding-assistant boundaries](AGENTS.md)
 

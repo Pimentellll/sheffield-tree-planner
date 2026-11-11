@@ -226,3 +226,7 @@ The six supplied exports now give **enough screen-specific detail for Alex to be
 - Have Ben and Alex accepted the same shared contract revision and roles?
 
 These are approval/integration gates, not reasons to commission another broad research phase. **Do not treat this UI design as implementation evidence, and do not overwrite a functioning app with the exported illustration code.**
+
+## 12. Integrated system design references
+
+The [integrated system architecture](ARCHITECTURE_DESIGN.md) explains authoritative scene/scenario/result/agent relationships underlying these screens, and the [adversarial architecture audit](ARCHITECTURE_AUDIT.md) identifies the highest-risk design mismatches: unsupported four-axis optimisation, Kelham scene provenance, static evidence and fabricated apparent agent outcomes. The actual supplied exports remain the visual reference; this document remains the screen-accurate interaction and component handoff. Alex's implementation must not redefine CONTRACTS or NUMERICS to make the illustrated values appear real.

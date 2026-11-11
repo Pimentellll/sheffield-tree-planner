@@ -16,3 +16,9 @@ These instructions apply to this project only. They do not modify a teammate's p
 Before parallel implementation, the three owners acknowledge the working contract revision. Local exploratory tests can proceed against a clearly named draft; that does not establish team acceptance or entry eligibility. Keep advance-work provenance, and never backdate work.
 
 This file applies to the repository. Future narrower instructions must preserve these safety and evidence boundaries. PRs for teammate review start as drafts with no reviewers requested until the publication/review gate is approved.
+
+## Priority-aware implementation
+
+- Before starting product work, read the canonical [feature priorities and MVP milestones](docs/FEATURE_PRIORITIES.md) and the assigned BUILD item. Prefer dependency-ready P0 work; the M2 vertical slice may proceed before the full P0 feature set.
+- Do not implement P2/P3 work without an explicit assignment and method/data/rights/validation plan. Optional work cannot weaken accepted contracts or consume the protected P0 integration/evidence window.
+- Keep real physical results separate from illustrative views; never present synthetic/site-unverified data or scripted model output as real Sheffield/model evidence. Report actual checks, unrun checks, limits and next dependency in the existing BUILD item.

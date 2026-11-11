@@ -43,3 +43,7 @@ Hardware access gates Spark proof, not CPU development. Dataset rights gate use/
 The first integrated gate is **baseline scene → one proposed tree → computed difference → UI**, including stale-result behaviour. It does not wait for a full optimiser or polished model explanation.
 
 **Authority:** explicit team decisions override draft defaults; CONTRACTS owns wire meaning, NUMERICS owns mathematical meaning, BUILD owns task/decision state. After shared schemas exist, generated OpenAPI/types own serialization and these documents retain semantics. Record the transition; never maintain competing field definitions. Proposed roles and new defaults still require their owners' acknowledgement before parallel work.
+
+- [Feature priorities](FEATURE_PRIORITIES.md): canonical F001–F035 catalogue, P0–P3 boundary, M0–M7 delivery order, ownership lanes, acceptance and risks. Read this before proposing scope; BUILD remains the only task-status home.
+
+Priority reading: use FEATURE_PRIORITIES for delivery tiers and feature acceptance, SPEC for product requirements, CONTRACTS/NUMERICS for interface and mathematical meanings, BUILD for task state, and VALIDATION for evidence. The tiers do not replace requirements or relax hard constraints.

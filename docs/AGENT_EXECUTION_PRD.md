@@ -11,7 +11,7 @@ Build a local-first, evidence-backed Sheffield urban-tree placement workbench. A
 ## 2. Repositories, access, branches and PR policy
 
 - Repository: **[bbeennyy860-cyber/sheffield-tree-planner](https://github.com/bbeennyy860-cyber/sheffield-tree-planner)**. Do not push to forks or another project as a workaround
-- Owner account currently shown by GitHub: `bbeennyy860-cyber`; user-supplied Ben handle `bbeennycyber` is **unverified as having repo permissions**. STP-001 must resolve the account and actual access; do not invent an assignee
+- **Ben's canonical GitHub handle and repository owner:** `bbeennyy860-cyber`, confirmed by the team. The earlier `bbeennycyber` shorthand referred to Ben, not a separately verified repository account. Each agent must still verify the actual authenticated login and permissions before writing; STP-001 records that live access preflight
 - **Ben:** backend, contracts, scenario/jobs, local agent and integration. Initial branch `agent/ben`
 - **Arnav (`reverez`):** site geometry, solar/occlusion, optimisation and scientific verification. Initial branch `agent/arnav`
 - **Alex (`akurkar07`):** source/right audit coordination, 3D UI, editing, results and demo. Initial branch `agent/alex`
@@ -119,7 +119,7 @@ Each issue below is a **single reviewable deliverable**. Its acceptance points a
 
 **Acceptance:**
 - Get Alex/Arnav/Ben acknowledgement on exact CONTRACTS/NUMERICS revision
-- verify Ben's authenticated handle is not assumed to be bbeennycyber
+- Verify Ben's active GitHub session is authenticated as `bbeennyy860-cyber` and has appropriate repository access; his identity is team-confirmed, but session credentials and permissions must still be checked
 - confirm event rules or mark unknown
 - confirm no automatic merges, one shared-file writer
 

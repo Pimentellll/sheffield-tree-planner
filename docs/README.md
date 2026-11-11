@@ -17,6 +17,7 @@ Read only what your task needs:
 - [NUMERICS.md](NUMERICS.md): shading equations, optimisation and modelling limits. Arnav's technical reference; Ben and Alex need the units/conventions.
 - [BUILD.md](BUILD.md): ordered work items, proposed owners, dependencies, decisions and the next integration gate. **Only task-status home.**
 - [VALIDATION.md](VALIDATION.md): test specifications, acceptance matrix, runtime evidence and demo/recovery runbook.
+- [DGX_SPARK.md](DGX_SPARK.md): event SSH/tunnels, pinned local-inference candidate, executable readiness diagnostic and full-application deployment gates. Prepared locally, not a claimed Spark run.
 - [AGENTS.md](../AGENTS.md): project-specific boundaries for coding assistants, not personal agent configuration.
 - [SOURCES.md](SOURCES.md): researched sources and the status of the advance-development report.
 - [Agentic architecture and feature review](references/AGENTIC_FEATURE_REVIEW.md): comparable projects, source-backed design choices, captured team links and the expanded parallel-build target. Recommendations, not implementation proof; source maintenance remains in SOURCES.

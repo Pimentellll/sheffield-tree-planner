@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sheffield-tree-planner-readiness"
+version = "0.1.0"
+description = "Portable local inference transport and tool readiness diagnostic"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+sheffield-readiness = "sheffield_readiness:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sheffield_readiness"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/pyproject.toml", "/src/sheffield_readiness", "/tests/test_readiness.py"]

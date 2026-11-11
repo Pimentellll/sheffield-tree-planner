@@ -1,0 +1,141 @@
+{
+  "status": "candidate_not_device_tested",
+  "metadata_verified_at": "2026-11-11",
+  "model_repository": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+  "model_revision": "bf77c3174f68ad409e1c2aa60daeb46e32d1c606",
+  "precision": "BF16",
+  "license": "nvidia-nemotron-open-model-license",
+  "gated_at_check": false,
+  "model_card_url": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16/blob/bf77c3174f68ad409e1c2aa60daeb46e32d1c606/README.md",
+  "weight_bytes": 63156694272,
+  "weights": [
+    {
+      "file": "model-00001-of-00013.safetensors",
+      "bytes": 4991205008,
+      "sha256": "4c77b0f1717f1fb11791fb62fc57ca56f59fd1427ac466849ef9705ac90729ea"
+    },
+    {
+      "file": "model-00002-of-00013.safetensors",
+      "bytes": 4992601472,
+      "sha256": "2e3de804d8c8bc6607a86d486f47301822a17f274e3c54425e71ff3516cde9b6"
+    },
+    {
+      "file": "model-00003-of-00013.safetensors",
+      "bytes": 4992601824,
+      "sha256": "e113d2a3f81515599744eab31a7ea4f6cb4e6fc2089fedeb22137e14ee792c9f"
+    },
+    {
+      "file": "model-00004-of-00013.safetensors",
+      "bytes": 4995693256,
+      "sha256": "c64af357042231114495897474859e515c7d9ac00a7819ecf57d634ad8753ec5"
+    },
+    {
+      "file": "model-00005-of-00013.safetensors",
+      "bytes": 4980545984,
+      "sha256": "1aa5867c6483ac2d52891e5cdce00ee49840c2c33709f3242b05e4682b39ead0"
+    },
+    {
+      "file": "model-00006-of-00013.safetensors",
+      "bytes": 4999410040,
+      "sha256": "fd411a714fad4954ee87fa76554ef79d3c85d309aff83c88b758061bf46009f1"
+    },
+    {
+      "file": "model-00007-of-00013.safetensors",
+      "bytes": 4992601952,
+      "sha256": "d16bc0bd0521e93b799e66ec913b2548417578a5f290f7023c4045dcd002f647"
+    },
+    {
+      "file": "model-00008-of-00013.safetensors",
+      "bytes": 4992601976,
+      "sha256": "fc0aea38d897f28b9cc506d0fa2c2ae040562c185691d11351478841f1f474cb"
+    },
+    {
+      "file": "model-00009-of-00013.safetensors",
+      "bytes": 4995693256,
+      "sha256": "34b4715b5765fdc8fb496573a4c6c8536ad426c40d266a47d0ce1f22de441c3f"
+    },
+    {
+      "file": "model-00010-of-00013.safetensors",
+      "bytes": 4992601976,
+      "sha256": "4124abfaa922336fa8a6ba1b8f55010caac4d62a24e5990e1a819266cedcd494"
+    },
+    {
+      "file": "model-00011-of-00013.safetensors",
+      "bytes": 4995693256,
+      "sha256": "d3bf1c127982233bef8ac299d5359f30aa0eaf013f8fca0645873b8e29393719"
+    },
+    {
+      "file": "model-00012-of-00013.safetensors",
+      "bytes": 4995693272,
+      "sha256": "4abbf8125860c87189dc4f37625fdba5b0c51af52eb2644f70836d9a4776f169"
+    },
+    {
+      "file": "model-00013-of-00013.safetensors",
+      "bytes": 3239751000,
+      "sha256": "9458d10c7e999db805c5fa6ffa778cc0dc63478ea4210a942759358736bebf1d"
+    }
+  ],
+  "code_and_configuration": {
+    "config.json": {
+      "bytes": 1817,
+      "sha256": "dd9fa380ac107b0477db5a26108db9febe6378e7bb3966a107944853ec4f76f8"
+    },
+    "configuration_nemotron_h.py": {
+      "bytes": 12893,
+      "sha256": "09a3179517667d302068c2f8c96c9f059297418a829bf3cb96273040563b955c"
+    },
+    "modeling_nemotron_h.py": {
+      "bytes": 83779,
+      "sha256": "4d353ce6e8f495d043f2d8c5acd13496a84ba2b2d45da8279797a55f680309d9"
+    },
+    "nano_v3_reasoning_parser.py": {
+      "bytes": 798,
+      "sha256": "aafb12208054504f619cbdd01837e1532a482ad937ed987bfe9a13fb812ae2b7"
+    },
+    "tokenizer_config.json": {
+      "bytes": 188049,
+      "sha256": "3d568e506d0905285ae90a3fdd1482be7b6d0bf0b8ca9514d75dad4257b0827a"
+    }
+  },
+  "image_tag_reference": "nvcr.io/nvidia/vllm:25.12.post1-py3",
+  "image_index_digest": "sha256:19a3cff5116bae8b6bdc00b868c5da4d68dcb4fb7a478843af045a1bc017b2d3",
+  "image_arm64_digest": "sha256:a882cc9a469f6c822801bf367b90fb8a65c543399601398f715658a484b9904f",
+  "image_metadata": {
+    "architecture": "arm64",
+    "os": "linux",
+    "entrypoint": [
+      "/opt/nvidia/nvidia_entrypoint.sh"
+    ],
+    "relevant_env": [
+      "CUDA_VERSION=13.1.0.036",
+      "NVIDIA_REQUIRE_CUDA=cuda>=9.0",
+      "VLLM_VERSION=0.12.0+35a9f223",
+      "NVIDIA_BUILD_ID=247811356"
+    ],
+    "labels": {
+      "com.nvidia.build.id": "247811356",
+      "com.nvidia.build.ref": "ea9ed78162579d58e20db3b31cc7e0c7a263fc1b",
+      "com.nvidia.cublas.version": "13.2.0.9",
+      "com.nvidia.cuda.version": "9.0",
+      "com.nvidia.cudnn.version": "9.17.0.29",
+      "com.nvidia.cufft.version": "12.1.0.31",
+      "com.nvidia.curand.version": "10.4.1.34",
+      "com.nvidia.cusolver.version": "12.0.7.41",
+      "com.nvidia.cusparse.version": "12.7.2.19",
+      "com.nvidia.cusparselt.version": "0.8.1.1",
+      "com.nvidia.nccl.version": "2.28.9+cuda13.0",
+      "com.nvidia.npp.version": "13.0.2.21",
+      "com.nvidia.nvjpeg.version": "13.0.2.28",
+      "com.nvidia.vllm.version": "0.12.0+35a9f223",
+      "org.opencontainers.image.version": "24.04"
+    },
+    "compressed_layer_bytes": 6119871377
+  },
+  "served_model_name": "tree-planner-local",
+  "tool_call_parser": "qwen3_coder",
+  "reasoning_parser": "nano_v3",
+  "max_model_len": 8192,
+  "max_num_seqs": 1,
+  "gpu_memory_utilization": 0.65,
+  "limits": "Initial co-resident-memory settings are proposals, not measurements. Driver compatibility and full-stack runtime must be checked on the assigned Spark. No weights or image layers have been downloaded."
+}

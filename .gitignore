@@ -10,6 +10,11 @@ credentials*.json
 secrets*.json
 
 # Local runtimes, model downloads and restricted data
+*.egg-info/
+ssh_config.local
+sheffield_config
+sheffield_known_hosts*
+sheffield_ed25519*
 .venv/
 venv/
 node_modules/

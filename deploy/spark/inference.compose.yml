@@ -1,0 +1,82 @@
+# Inference service ONLY. The planning application is not implemented here.
+# Candidate for a 128 GB DGX Spark; read docs/DGX_SPARK.md before starting.
+name: sheffield-inference
+services:
+  inference:
+    # NVIDIA's model card names 25.12.post1-py3. This pins its verified ARM64 manifest.
+    image: nvcr.io/nvidia/vllm@sha256:a882cc9a469f6c822801bf367b90fb8a65c543399601398f715658a484b9904f
+    platform: linux/arm64
+    restart: "no"
+    ports:
+      - "127.0.0.1:8000:8000"
+    shm_size: "2gb"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HOME: /cache/huggingface
+      XDG_CACHE_HOME: /cache
+    volumes:
+      - type: bind
+        source: ../../models/nemotron-nano
+        target: /models/nemotron-nano
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ../../state/vllm-cache
+        target: /cache
+        bind:
+          create_host_path: false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command:
+      - python3
+      - -m
+      - vllm.entrypoints.openai.api_server
+      - --model
+      - /models/nemotron-nano
+      - --tokenizer
+      - /models/nemotron-nano
+      - --served-model-name
+      - tree-planner-local
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --trust-remote-code
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - qwen3_coder
+      - --reasoning-parser-plugin
+      - /models/nemotron-nano/nano_v3_reasoning_parser.py
+      - --reasoning-parser
+      - nano_v3
+      - --dtype
+      - bfloat16
+      - --tensor-parallel-size
+      - "1"
+      - --max-num-seqs
+      - "1"
+      - --max-model-len
+      - "8192"
+      - --gpu-memory-utilization
+      - "0.65"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 8

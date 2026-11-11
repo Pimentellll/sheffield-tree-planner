@@ -64,6 +64,8 @@ For controlled relocation, assert all other placements, profiles, cases and cons
 
 ### V08 — actual local inference and hardware
 
+Use the [Spark runbook](DGX_SPARK.md) and `sheffield-readiness inference` for preliminary transport/tool-observation diagnostics. The synthetic HTTP test fixture is not a model. Even a live `inspect_runtime` pass does not complete V08: the real product dispatcher and domain path below must work on the selected local model.
+
 **Requirements:** R04/R09. **Tasks:** B09.
 
 Record model checkpoint revision, quantisation, parser, serving/runtime version, machine/device and one literal model-selected domain tool → real dispatch → observation. Measure cold start, warm turn/tool latency and memory with co-resident physics. Record physics device separately. Test model unavailability and malformed tool arguments. GPU/RT-core/acceleration claims require actual evidence for that path and an equivalent CPU workload; documentation of hardware features alone is insufficient.

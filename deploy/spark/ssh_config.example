@@ -1,0 +1,16 @@
+# Example only: copy to a private SSH config and replace host/user.
+# Each teammate keeps their own private key; never commit the configured copy.
+Host sheffield-spark
+    HostName spark.example.invalid
+    User replace_with_assigned_user
+    Port 22
+    IdentityFile ~/.ssh/sheffield_ed25519
+    IdentitiesOnly yes
+    ForwardAgent no
+    ForwardX11 no
+    GatewayPorts no
+    StrictHostKeyChecking ask
+    UserKnownHostsFile ~/.ssh/sheffield_known_hosts
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+    ExitOnForwardFailure yes

@@ -18,6 +18,18 @@ The working stack is a proposal. NVIDIA hardware capabilities and Warp/platform 
 
 **Feasibility decision:** suitable for an *offline, site-sized preprocessing pilot* supporting the local deterministic simulator, with a good chance of meeting R01 if audited. It is not necessary to reconstruct all Sheffield, provide a live nationwide data feed, or couple the model to Defra at runtime. Before selection under B03, demonstrate a reproducible cropped import; acceptable survey recency; independently checked ground/building heights and scene semantics; a tractable mesh and visual/solver transform; lawful use and export flags; and a fallback site/source if any blocking gap remains. No tiles, meshes or Sheffield numerical results were downloaded/validated as part of this desk audit. The [Defra download FAQ](https://environment.data.gov.uk/support/faqs/275808874/275809211) [27] documents selecting an area of interest and available product/year/resolution tiles.
 
+## User-supplied reference shortlist (11 November 2026)
+
+These user-provided links are **research/design comparators or possible spatial data sources, not automatically downloadable environmental measurements**. They were added before the follow-on traffic/CO2/water dataset search. Treat relevance, API/data availability, access terms and model validity as separate questions; audit before importing or making numerical claims. The TreePlanter link was supplied twice (including a tracking-parameter variant) but was **already recorded as [1]**, so it is not duplicated.
+
+- **[1] TreePlanter (already cited)**: numerical/optimisation precedent for siting trees and analysing shading; not Sheffield monitoring data.
+- **[28] PlanIT Geo TreePlotter Projects**: product/example gallery; investigate workflow/data-display ideas, not assume access to project records.
+- **[29] UK Tree Equity Score**: possible equity/context and canopy-prioritisation comparator; verify downloadable geography, resolution, update date and reuse rights before any scored feature.
+- **[30] ShadeMap**: visual sun/shadow comparison reference; not verified to supply reusable geometry or quantitative simulation input.
+- **[31] arXiv 2310.05691 PDF**: preprint supplied for methodological review; exact scope and scientific claims require paper inspection before adoption.
+- **[32] Autodesk Forma site-design overview (August 2026)**: planning/visualisation/workflow comparator; no assumed access to proprietary analysis layers or algorithms.
+- **[33] Ordnance Survey OS Open Zoomstack**: potential open base-map vector layers to give geographic context; assess feature types and licensing. Not a substitute for metre-resolved LiDAR geometry or planting/flood/traffic measurements.
+
 Sources:
 
 [1] [TreePlanter paper, SOLWEIG-based tree-location optimisation and algorithm comparison](https://gmd.copernicus.org/articles/15/1107/2022)
@@ -73,3 +85,15 @@ Sources:
 [26] [Environment Agency LiDAR Composite DTM 1 m metadata](https://environment.data.gov.uk/dataset/13787b9a-26a4-4775-8523-806d13af58fc)
 
 [27] [Official Defra FAQ: downloading survey data, tile sizes and formats](https://environment.data.gov.uk/support/faqs/275808874/275809211)
+
+[28] [PlanIT Geo TreePlotter Projects](https://planitgeo.com/library/treeplotter-projects/)
+
+[29] [UK Tree Equity Score](https://uk.treeequityscore.org/)
+
+[30] [ShadeMap interactive shadow map](https://shademap.app/@47.608,-122.339,6z,1794418525924t,0b,0p,0m)
+
+[31] [arXiv preprint 2310.05691 (PDF)](https://arxiv.org/pdf/2310.05691)
+
+[32] [Autodesk Forma: site-design tools overview (28 August 2026)](https://blogs.autodesk.com/forma/2026/08/28/forma-site-design-tools-overview/)
+
+[33] [Ordnance Survey OS Open Zoomstack](https://www.ordnancesurvey.co.uk/products/os-open-zoomstack)

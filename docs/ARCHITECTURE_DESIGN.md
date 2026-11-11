@@ -483,3 +483,42 @@ Possible modules, in order of decision value and data availability rather than m
 This document specifies **system responsibilities, model authority, data meaning, scientific/agentic behaviour, runtime placement, interactions, failure modes, validation and extension rules**. It deliberately does **not** provide exact source file trees, dependencies pinned before smoke, endpoint implementation pseudocode, database migrations, JSX/component state machines, Git task packets, CI script changes or ownership of individual implementation files. Those are Alex's implementation-level handoff, derived from BUILD B01–B12 after team decisions.
 
 Before parallel coding, each work packet must be scoped to an already agreed contract and a real testable milestone. The design-to-implementation acceptance gate is satisfied by **acknowledgement of the relevant meaning and owner**, not by reading this document alone.
+
+## 17. Sponsor value, public-sector deployability and pilot qualification
+
+The project has two audiences that must not be conflated: **the actual decision owner** (estate manager, council arboricultural/planning team, school operator or professional consultant) and **a sponsor/funder** evaluating public benefit or technical transfer. A competition demonstration is neither a signed municipal customer nor an accepted procurement workflow.
+
+### 17.1 Value the system can responsibly offer
+
+| Decision stakeholder | Their real question | Evidence-bearing output | Not yet promised |
+| --- | --- | --- | --- |
+| Council parks / urban forestry | Which provisional planting arrangement uses the available budget effectively while respecting known exclusions? | Feasible-candidate map, cost, useful new shade, survey restrictions and competing alternatives | Planting approval, tree survival, whole-city value |
+| Public-health / school estate planner | Where could shade fall during actual public-use hours? | Target/path/period-specific direct shade and visible geometry assumptions | Heat-related mortality avoided or verified °C cooling |
+| Flood and green-infrastructure team | Which candidate areas coincide with known flood exposure or potential SuDS interest? | Source-dated contextual flood overlay and site evidence gaps | Modelled avoided inundation or monetary damage unless hydrology/appraisal modules exist |
+| Finance / grant sponsor | What is funded, what is estimated, what decision is still unverified? | Estimated capital cost, units/price scope, alternatives, evidence/rights and uncertainties | Cash ROI, payback and multi-decade savings derived from canopy alone |
+| Environmental / community organisations | Which needs are and are not represented by the objective? | Transparent site selection, target-area weighting and separate contextual equity layers | Automatically fair outcomes or an empirically validated distributional benefit |
+
+**Primary sponsor pitch:** the system could reduce the *time and ambiguity of early-stage site-option screening* by making numerical trade-offs, unsupported assumptions and required surveys visible. That is a proposed workflow advantage to test, **not a measured saving** or proof that a council will deploy it.
+
+### 17.2 Reporting and financial safeguards
+
+A proposal should separate: source-authorised **capital planting spend**; user-supplied or sourced establishment costs; optional maintenance schedules; future inflation/price year and discount basis; modelled environmental quantities; indicative contextual opportunity; and genuinely *unquantified* benefits. Cost categories must be additive only within the same declared basis and time horizon. If the municipality supplies a per-tree estimate or grant envelope, record its source/author and VAT treatment. A selected layout can be budget-compliant under **upfront** cost while still having substantial future maintenance obligations—do not mask that caveat with a single positive score.
+
+An impact report should include an explicit **counterfactual** (no additional trees / competently feasible comparison), who bears cost, who receives shade, which case/time horizon was evaluated, what remains unknown, and which next professional survey is recommended. Avoid double counting canopy carbon *stock* with an overlapping sequestration *flow*, or public amenity welfare with hypothetical cash savings. Formal Green Book/ENCA-style appraisal is a later module with validated costs/benefits and coherent discounting.
+
+### 17.3 Deployment maturity ladder
+
+1. **Design/demo:** reproducible geometry, modelled shade and provisional costs on a labelled site; UI/agent evidence demonstrates an early decision workflow.
+2. **Technical pilot:** lawful current site data, source-update plan, reproducible installation, controlled operator access, user feedback, full test/failure reporting and validated field checks of crucial site features.
+3. **Professional decision support:** tree officer/engineer review of soil, utilities, access, protected trees, permissions, spacing and species; documented acceptance criteria; recorded workflow changes after practitioner feedback.
+4. **Maintained service:** defined responsible organisation, update cadence for site/price/biological/solar models, migration and version retention, backup/restore, accessibility, security review and incident process.
+5. **Multi-area/city product:** site-bundle ingestion adapters with reproducibility/rights and cross-site comparability rules; no unsupported automatic generalisation of crown models, economic prices or flood risk.
+
+**Public deployment proof not available yet:** verified use by a professional planner, contracted demand, service level, source maintenance agreement, measured planning-time savings or independently observed climate impact. Treat these as pilot hypotheses rather than hackathon claims.
+
+### 17.4 Acceptance criteria for an eventual external user
+
+The prospective user should be able to explain the supported objective, identify what changed between two evaluated alternatives, verify the cost basis, inspect source rights/data age and reproduce a run. They should be able to reject a result because a survey/permission is unresolved **without losing the calculation**. The team should then test whether the proposed evidence packet is genuinely useful in a representative decision, including competing feasible options—not just whether its map looks convincing.
+
+No runtime workflow may silently notify a council, publish reports externally, order planting, spend grant funds or upload protected site data. Those are separate human-authorised actions and possible future service integrations, outside this system's current domain-tool permissions.
+

@@ -46,7 +46,7 @@ CI runs unit/protocol checks, builds wheel/sdist, clean-installs the wheel outsi
 
 ## Start developing
 
-1. Read the [development entry point](docs/README.md).
+1. Read the [development entry point](docs/README.md). The [three-agent execution PRD](docs/AGENT_EXECUTION_PRD.md) provides issue-sized handoffs, initial agent branches and integration rules.
 2. Use [BUILD.md](docs/BUILD.md) as the single task/decision home. Begin B01 (shared schemas and portable application foundation) with B03 (site/rights audit) in parallel; B02 integration follows the required B01 models.
 3. Agree the producer/consumer meaning in [CONTRACTS.md](docs/CONTRACTS.md) before parallel implementation. The first integrated target is **baseline → one proposed tree → computed difference → UI**, with stale-result rejection.
 4. Implement and test against the [validation criteria](docs/VALIDATION.md). Application setup/run commands follow actual implementation; the readiness commands above cover only the diagnostic.

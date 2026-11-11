@@ -233,3 +233,7 @@ All sources below were read on 11 November 2026. Live vendor pages may move; the
 - **S6:** [NVIDIA vLLM container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/vllm?version=25.12.post1-py3), [base release notes](https://docs.nvidia.com/deeplearning/frameworks/vllm-release-notes/rel-25-12.html), and registry manifest/config metadata retained in the profile — distinguish base from post1.
 - **S7:** [Hugging Face download CLI](https://huggingface.co/docs/huggingface_hub/guides/cli#hf-download) — pinned download and local directory.
 - **S8:** [vLLM tool calling](https://docs.vllm.ai/en/latest/features/tool_calling/) — API/parser concepts, not assurance that every model/server combination works.
+
+## Architecture relationship
+
+The [integrated architecture design](ARCHITECTURE_DESIGN.md) explains how local model inference, the portable deterministic CPU reference, optional target-verified GPU kernels, site/revision/job authority and the four-screen UI fit together. The [adversarial architecture audit](ARCHITECTURE_AUDIT.md) records unresolved model/worker contention and hardware claims. **This DGX guide remains the operational authority for the pinned readiness recipe**; design synthesis has not changed image digests, parser, model revision, ports, permissions or acceptance. The reference 128 GB unified-memory configuration and proposed BF16 setup are not device-access, model-loading or co-residency proof.

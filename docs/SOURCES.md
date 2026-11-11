@@ -8,6 +8,60 @@ These sources were inspected during the preceding research preparation, not fres
 
 The working stack is a proposal. NVIDIA hardware capabilities and Warp/platform documentation do not prove this application's runtime, RT-core use or acceleration. TreePlanter is relevant prior art; our intended agent value still needs the same-tools comparison in VALIDATION.
 
+## Research papers: direct full-text or publisher article links
+
+**Start here for scientific literature.** These are published research articles, systematic reviews and one clearly marked arXiv preprint, **not dataset metadata, ArcGIS records or product landing pages**. The links go to the paper's publisher article, DOI landing page, open full text or PDF. Some journals may restrict full-text access. Relevance is judged against [SPEC](SPEC.md) and [NUMERICS](NUMERICS.md), not a hypothetical completed carbon/water model.
+
+The two studies already present in the source index are **[1] [Wallenberg et al. (2022), TreePlanter](https://gmd.copernicus.org/articles/15/1107/2022/)** (peer-reviewed, open full article) and **[31] [Schrodi et al. (2023), Climate-sensitive Urban Planning through Optimization of Tree Placements](https://arxiv.org/pdf/2310.05691)** (arXiv **preprint**, not independently verified here as journal peer reviewed). Both are **High** relevance for search/model comparison. [1] uses radiant-temperature reduction rather than this project's initial direct-shade units.
+
+### Direct shade, 3D geometry and tree placement
+
+| Paper (direct article link) | Application to the Sheffield Tree Planner | Relevance | Access |
+| --- | --- | --- | --- |
+| **[1] [Wallenberg et al. (2022), TreePlanter](https://gmd.copernicus.org/articles/15/1107/2022/)** | Benchmark greedy vs hill-climbing and multi-tree shadow overlap, without mislabelling radiant-temperature benefits as direct shade | **High** | Open full article |
+| **[31] [Schrodi et al. (2023), Climate-sensitive Urban Planning](https://arxiv.org/pdf/2310.05691)** | Compare local-search strategy and surrogate thermal modelling only as a separate approach | **High** | Open arXiv preprint PDF |
+| **[63] [Tree shade coverage optimization in an urban residential environment](https://doi.org/10.1016/j.buildenv.2017.01.036)** | Design 3D façade/ground shade placement and test budget-aware spatial optimisation against existing baseline; unlike this project's ground target, paper also evaluates façades and roofs | **High** | Publisher article; open accepted manuscript available via University of Glasgow |
+| **[64] [Optimal representation of tree foliage for local urban climate modeling](https://doi.org/10.1016/j.scs.2024.105857)** | Compare ellipsoid/other crown representations against measured 3D foliage and shadow extents before claiming physical accuracy | **High** | Open-access journal article |
+| **[65] [Strategic tree placement for urban cooling: A novel optimisation approach for desired microclimate outcomes](https://doi.org/10.1016/j.uclim.2024.102084)** | Consider multi-objective optimisation alternatives and controlled benchmark comparisons only after shared objective and constraints are defined | **Medium** | Open-access journal article |
+| **[66] [Towards climate-responsible tree positioning: Detailed effects of trees on heat exposure in complex urban environments](https://doi.org/10.1016/j.ufug.2024.128500)** | Check placement sensitivity to existing buildings, time of day and sun exposure, particularly missing context and scenario comparison | **High** | Publisher article; full-text access may vary |
+
+### Urban stormwater, flood mitigation and tree hydrology
+
+| Paper (direct article link) | Application to the Sheffield Tree Planner | Relevance | Access |
+| --- | --- | --- | --- |
+| **[67] [Towards optimized runoff reduction by urban tree cover: A review of key physical tree traits, site conditions, and management strategies](https://doi.org/10.1016/j.landurbplan.2023.104849)** | Define which crown and soil properties a future stormwater-interception or infiltration module would actually need | **Medium** | Open-access review |
+| **[68] [A comparative analysis of urban forests for storm-water management](https://www.nature.com/articles/s41598-023-28629-6)** | Review interception, transpiration and infiltration mechanisms and sensitivity to species; avoid copying aggregate outcomes to one Sheffield planting site | **Medium** | Open-access full article |
+| **[69] [Quantifying the stormwater runoff volume reduction benefits of urban street tree canopy](https://doi.org/10.1016/j.scitotenv.2021.151296)** | Use measured catchment runoff outcomes to plan a future model validation, including the distinction between total runoff and peak discharge | **Medium** | Publisher article; full text may require access |
+| **[70] [How robust is the evidence for beneficial hydrological effects of urban tree planting?](https://doi.org/10.1080/02626667.2021.1922692)** | Set standards for future hydrology claims and controls, highlighting weak field validation and uncertain scaling from individual trees to catchments | **High** | Journal article with full-text publisher link |
+| **[78] [Benefits of an urban isolated tree combined with ground covers for stormwater management through interception–infiltration–runoff processes](https://doi.org/10.1016/j.ufug.2026.129366)** | Consider coupled canopy/ground-cover modelling and how an isolated tree interacts with permeable ground in a possible later SWMM-style feature | **Low** | Open-access journal article |
+| **[79] [Rainfall interception by urban trees: Event characteristics and tree morphological traits](https://doi.org/10.1002/hyp.15146)** | Study event-specific interception and crown morphology relationships for later stormwater parameterisation and seasonal cases | **Medium** | Open-access research article |
+
+### Irrigation, drought and water balance
+
+| Paper (direct article link) | Application to the Sheffield Tree Planner | Relevance | Access |
+| --- | --- | --- | --- |
+| **[71] [Supporting Growth and Transpiration of Newly Planted Street Trees With Passive Irrigation Systems](https://doi.org/10.1029/2020WR029526)** | Inform future design of rain-fed passive irrigation and tree establishment cases, with explicit limits on transfer of field results across climates | **Medium** | Free full-text research article |
+| **[72] [Urban tree drought stress: Sap flow measurements, model validation, and water management simulations](https://doi.org/10.1016/j.scitotenv.2024.177221)** | Use measured sap flow and soil moisture to identify parameters and failure cases for future drought/watering scenarios | **Medium** | Open-access journal article |
+| **[73] [Ecohydrology of street trees: design and irrigation requirements for sustainable water use](https://doi.org/10.1002/eco.1369)** | Use its soil–tree water-balance formulation as a future research starting point; do not equate rainfall or reference grass PET with tree-specific watering volumes | **Medium** | Publisher article; access may require subscription |
+
+### Traffic, air quality and carbon accounting
+
+| Paper (direct article link) | Application to the Sheffield Tree Planner | Relevance | Access |
+| --- | --- | --- | --- |
+| **[74] [Air pollution abatement performances of green infrastructure in open road and built-up street canyon environments – A review](https://doi.org/10.1016/j.atmosenv.2017.05.014)** | Review why roadside trees sometimes reduce or increase local pollutant exposure depending on geometry and ventilation; avoid CO2-versus-NO2/PM confusion | **Medium** | Open-access review |
+| **[75] [Air pollution removal by urban forests in Canada and its effect on air quality and human health](https://doi.org/10.1016/j.ufug.2017.10.019)** | Examine pollutant-removal modelling and evidence needs if a future pollution module is proposed; cannot estimate vehicle CO2 removal from these results | **Low** | Research paper; open USDA hosted paper also available |
+| **[76] [Carbon storage and sequestration by trees in urban and community areas of the United States](https://doi.org/10.1016/j.envpol.2013.03.019)** | Understand measurement, biomass assumptions and distinction between carbon stock and annual sequestration before any CO2-offset comparison | **Medium** | Journal article; free USFS paper available |
+
+### Public-health motivation (not a current output)
+
+| Paper (direct article link) | Application to the Sheffield Tree Planner | Relevance | Access |
+| --- | --- | --- | --- |
+| **[77] [The potential of urban trees to reduce heat-related mortality in London](https://pmc.ncbi.nlm.nih.gov/articles/PMC11009716/)** | Explain UK heat-health motivation and potential future evaluation targets, but not translate current m2·h shade into prevented deaths | **Low** | Open-access full article |
+
+**Paper/source distinction:** data.gov.uk, the Environment Agency, council feature services, DfT, Met Office and similar pages below remain important **dataset acquisition and provenance records**, but are not academic papers and do not themselves justify physical carbon, rainfall or flood benefits. Spark/API/GitHub documentation and competitor product galleries are **engineering or UX references**, not research evidence. Avoid treating a publisher paper's modelled impacts as measured Sheffield outcomes.
+
+---
+
 ## Candidate site geometry source: Environment Agency LiDAR (11 November 2026 desk audit)
 
 **Status: candidate for B03, not an accepted Sheffield site asset.** The [Defra Survey Data Download](https://environment.data.gov.uk/survey) [24] offers Environment Agency 1 m composite [DSM](https://environment.data.gov.uk/dataset/9ba4d5ac-d596-445a-9056-dae3ddec0178) [25] and [DTM](https://environment.data.gov.uk/dataset/13787b9a-26a4-4775-8523-806d13af58fc) [26]. Publisher metadata describes approximately 99% coverage of England, GeoTIFF elevation rasters provided in 5 km National Grid tiles, horizontal CRS EPSG:27700, heights in metres relative to Ordnance Datum Newlyn, and Open Government Licence terms with Environment Agency attribution. The 2022 composite may use surveys acquired between 2000 and April 2022; check the survey index for the selected Sheffield location rather than assuming a 2022 capture or current canopy. The publisher's ±15 cm RMSE statement concerns underlying survey vertical accuracy, not validated tree or roof reconstruction.
@@ -84,7 +138,7 @@ These user-provided links are **research/design comparators or possible spatial 
 
 ## Complete source-by-source application and relevance register
 
-This table covers **every numbered link [1]–[62]**, including research papers, datasets, official technical documentation, licence terms, products and project-workflow references. Every HTTPS link elsewhere in this file resolves to one of those numbered sources; it does not create an unassessed extra source. **Relevance is assessed against the currently documented product** (site-specific direct-sun shade analysis, credible tree placement, inspectable evidence and the local-agent/Spark demonstration), not an invented carbon, irrigation or flood-reduction model.
+This table covers **every numbered link [1]–[79]**, including research papers, datasets, official technical documentation, licence terms, products and project-workflow references. Every HTTPS link elsewhere in this file resolves to one of those numbered sources; it does not create an unassessed extra source. **Relevance is assessed against the currently documented product** (site-specific direct-sun shade analysis, credible tree placement, inspectable evidence and the local-agent/Spark demonstration), not an invented carbon, irrigation or flood-reduction model.
 
 - **Core**: necessary to a required calculation, data-rights gate, or event/compliance requirement, where applicable
 - **High**: directly informs planned delivery, real-site validity, search quality or required local runtime
@@ -157,8 +211,28 @@ These are **project-fit judgements, not verified ingestion status or a ranking o
 | **[60] Water rights trading/abstraction data** | Investigate permitted water abstraction only if a future irrigation-supply feature explicitly needs it; obey special location/use restrictions. | **Low**: out of initial scope, restricted |
 | **[61] EA abstraction assessment points** | Identify catchment-level water-resource pressure for future planning, not park irrigation supply. | **Low**: indirect catchment context |
 | **[62] WFD Cycle 4 management catchments** | Map current management catchment geography for optional long-term water strategy/context, not park runoff predictions. | **Low**: broad future context |
+| **[63] Tree shade coverage optimization in an urban residential environment** | Design 3D façade/ground shade placement and test budget-aware spatial optimisation against existing baseline; unlike this project's ground target, paper also evaluates façades and roofs | **High**: Direct quantitative shade-optimisation precedent |
+| **[64] Optimal representation of tree foliage for local urban climate modeling** | Compare ellipsoid/other crown representations against measured 3D foliage and shadow extents before claiming physical accuracy | **High**: Direct check on simplified crown geometry |
+| **[65] Strategic tree placement for urban cooling: A novel optimisation approach for desired microclimate outcomes** | Consider multi-objective optimisation alternatives and controlled benchmark comparisons only after shared objective and constraints are defined | **Medium**: Algorithmic comparator but models more than direct solar shade |
+| **[66] Towards climate-responsible tree positioning: Detailed effects of trees on heat exposure in complex urban environments** | Check placement sensitivity to existing buildings, time of day and sun exposure, particularly missing context and scenario comparison | **High**: Directly justifies real-building shadow context |
+| **[67] Towards optimized runoff reduction by urban tree cover: A review of key physical tree traits, site conditions, and management strategies** | Define which crown and soil properties a future stormwater-interception or infiltration module would actually need | **Medium**: Direct evidence framework for a separately validated hydrology feature |
+| **[68] A comparative analysis of urban forests for storm-water management** | Review interception, transpiration and infiltration mechanisms and sensitivity to species; avoid copying aggregate outcomes to one Sheffield planting site | **Medium**: Hydrology evidence synthesis, not a tree-by-tree simulator |
+| **[69] Quantifying the stormwater runoff volume reduction benefits of urban street tree canopy** | Use measured catchment runoff outcomes to plan a future model validation, including the distinction between total runoff and peak discharge | **Medium**: Field evidence for future runoff model validation |
+| **[70] How robust is the evidence for beneficial hydrological effects of urban tree planting?** | Set standards for future hydrology claims and controls, highlighting weak field validation and uncertain scaling from individual trees to catchments | **High**: Critical review helps prevent unjustified flood-reduction claims |
+| **[71] Supporting Growth and Transpiration of Newly Planted Street Trees With Passive Irrigation Systems** | Inform future design of rain-fed passive irrigation and tree establishment cases, with explicit limits on transfer of field results across climates | **Medium**: Experimental water-use/establishment data; outside current objective |
+| **[72] Urban tree drought stress: Sap flow measurements, model validation, and water management simulations** | Use measured sap flow and soil moisture to identify parameters and failure cases for future drought/watering scenarios | **Medium**: Direct study of tree water balance, but site- and species-dependent |
+| **[73] Ecohydrology of street trees: design and irrigation requirements for sustainable water use** | Use its soil–tree water-balance formulation as a future research starting point; do not equate rainfall or reference grass PET with tree-specific watering volumes | **Medium**: Direct irrigation model precedent requiring new calibration and tests |
+| **[74] Air pollution abatement performances of green infrastructure in open road and built-up street canyon environments – A review** | Review why roadside trees sometimes reduce or increase local pollutant exposure depending on geometry and ventilation; avoid CO2-versus-NO2/PM confusion | **Medium**: Useful constraints for future traffic air-quality modelling |
+| **[75] Air pollution removal by urban forests in Canada and its effect on air quality and human health** | Examine pollutant-removal modelling and evidence needs if a future pollution module is proposed; cannot estimate vehicle CO2 removal from these results | **Low**: Broader urban forest impact, unrelated to core direct shade |
+| **[76] Carbon storage and sequestration by trees in urban and community areas of the United States** | Understand measurement, biomass assumptions and distinction between carbon stock and annual sequestration before any CO2-offset comparison | **Medium**: Methodological reference only; US per-area factors are not Sheffield estimates |
+| **[77] The potential of urban trees to reduce heat-related mortality in London** | Explain UK heat-health motivation and potential future evaluation targets, but not translate current m2·h shade into prevented deaths | **Low**: UK impacts context; health modelling outside current scope |
+| **[78] Benefits of an urban isolated tree combined with ground covers for stormwater management through interception–infiltration–runoff processes** | Consider coupled canopy/ground-cover modelling and how an isolated tree interacts with permeable ground in a possible later SWMM-style feature | **Low**: Optional future hydrology; Tokyo findings not Sheffield outputs |
+| **[79] Rainfall interception by urban trees: Event characteristics and tree morphological traits** | Study event-specific interception and crown morphology relationships for later stormwater parameterisation and seasonal cases | **Medium**: Measured rain-event evidence but not a validated Sheffield runoff model |
 
-Sources:
+## Source index: papers, datasets, technical guidance, licensing and contextual links
+
+**Numbers [1]–[62] are retained** to preserve cross-references elsewhere in the documentation. They include many **non-paper** entries, which are maintained for original dataset/rights/engineering provenance only. **[63]–[79] add actual research-paper links**; use the research-paper tables at the top for literature reading. Some links below may need a subscription to access full text. The project must not make new modelling claims based on a paper without implementing and validating the relevant physics.
+
 
 [1] [TreePlanter paper, SOLWEIG-based tree-location optimisation and algorithm comparison](https://gmd.copernicus.org/articles/15/1107/2022)
 
@@ -283,3 +357,37 @@ Sources:
 [61] [EA Catchment Abstraction Management Strategy Assessment Points](https://environment.data.gov.uk/dataset/394cde56-5cf9-42bf-8d20-86c182f9ce68)
 
 [62] [EA WFD Surface Water Management Catchments Cycle 4](https://environment.data.gov.uk/dataset/2ccc5b58-685d-433e-a613-2d91166a0526)
+
+[63] [Zhao, Wentz & Murray (2017): Tree shade coverage optimization in an urban residential environment](https://doi.org/10.1016/j.buildenv.2017.01.036)
+
+[64] [Rodriguez et al. (2024): Optimal representation of tree foliage for local urban climate modeling](https://doi.org/10.1016/j.scs.2024.105857)
+
+[65] [Shaamala et al. (2024): Strategic tree placement for urban cooling: A novel optimisation approach for desired microclimate outcomes](https://doi.org/10.1016/j.uclim.2024.102084)
+
+[66] [Urban Forestry & Urban Greening study (2024): Towards climate-responsible tree positioning: Detailed effects of trees on heat exposure in complex urban environments](https://doi.org/10.1016/j.ufug.2024.128500)
+
+[67] [Dowtin et al. (2023): Towards optimized runoff reduction by urban tree cover: A review of key physical tree traits, site conditions, and management strategies](https://doi.org/10.1016/j.landurbplan.2023.104849)
+
+[68] [Rahman et al. (2023): A comparative analysis of urban forests for storm-water management](https://www.nature.com/articles/s41598-023-28629-6)
+
+[69] [Selbig et al. (2022): Quantifying the stormwater runoff volume reduction benefits of urban street tree canopy](https://doi.org/10.1016/j.scitotenv.2021.151296)
+
+[70] [Baker, Hutchins & Miller (2021): How robust is the evidence for beneficial hydrological effects of urban tree planting?](https://doi.org/10.1080/02626667.2021.1922692)
+
+[71] [Thom et al. (2022): Supporting Growth and Transpiration of Newly Planted Street Trees With Passive Irrigation Systems](https://doi.org/10.1029/2020WR029526)
+
+[72] [Tams, Paton & Kluge (2024): Urban tree drought stress: Sap flow measurements, model validation, and water management simulations](https://doi.org/10.1016/j.scitotenv.2024.177221)
+
+[73] [Vico, Revelli & Porporato (2014): Ecohydrology of street trees: design and irrigation requirements for sustainable water use](https://doi.org/10.1002/eco.1369)
+
+[74] [Abhijith et al. (2017): Air pollution abatement performances of green infrastructure in open road and built-up street canyon environments – A review](https://doi.org/10.1016/j.atmosenv.2017.05.014)
+
+[75] [Nowak et al. (2018): Air pollution removal by urban forests in Canada and its effect on air quality and human health](https://doi.org/10.1016/j.ufug.2017.10.019)
+
+[76] [Nowak, Greenfield, Hoehn & Lapoint (2013): Carbon storage and sequestration by trees in urban and community areas of the United States](https://doi.org/10.1016/j.envpol.2013.03.019)
+
+[77] [Taylor et al. (2024): The potential of urban trees to reduce heat-related mortality in London](https://pmc.ncbi.nlm.nih.gov/articles/PMC11009716/)
+
+[78] [Zhao & Asawa (2026): Benefits of an urban isolated tree combined with ground covers for stormwater management through interception–infiltration–runoff processes](https://doi.org/10.1016/j.ufug.2026.129366)
+
+[79] [Hydrological Processes study (2024): Rainfall interception by urban trees: Event characteristics and tree morphological traits](https://doi.org/10.1002/hyp.15146)

@@ -21,6 +21,9 @@ Read only what your task needs:
 - [AGENTS.md](../AGENTS.md): project-specific boundaries for coding assistants, not personal agent configuration.
 - [SOURCES.md](SOURCES.md): researched sources and the status of the advance-development report.
 - [Agentic architecture and feature review](references/AGENTIC_FEATURE_REVIEW.md): comparable projects, source-backed design choices, captured team links and the expanded parallel-build target. Recommendations, not implementation proof; source maintenance remains in SOURCES.
+
+- [Integrated system architecture](ARCHITECTURE_DESIGN.md): authoritative-doc-aligned analysis/design synthesis across problem framing, domain model, Sheffield data, physics, constrained optimisation, agentic decisions, four-screen UI, DGX Spark, security and validation. **Design proposal, not implementation evidence.**
+- [Adversarial architecture audit and research reconciliation](ARCHITECTURE_AUDIT.md): research-to-design dispositions, 25 architectural risks, ten cross-system paper tests, iterative review and remaining team sign-off gates. Not a separate task tracker.
 - [Comprehensive research dossier](references/DEEP_RESEARCH_DOSSIER.md): the fourteen-part research synthesis, 170 annotated source records, concrete benchmark and B01–B12 recommendations. Cutoff 11 November 2026; research proposals, not accepted contract changes or application/Spark proof. Its source numbers are independent of SOURCES.md.
 - [CANOPY UI export audit and screen-by-screen implementation handoff](UI_DESIGN_REFERENCE.md): inspected HTML exports for four product screens, source/contact sheet, design tokens, actual prototype interactions, known demo-only values and contract/feature/task mapping. The original Claude page was not accessible; implementation and numerical claims are not verified.
 - [Research handoff](references/RESEARCH_HANDOFF.md): optional detailed background, alternatives and earlier independent reviews. Historical snapshot.

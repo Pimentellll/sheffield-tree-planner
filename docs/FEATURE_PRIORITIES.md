@@ -41,6 +41,10 @@ Priority is delivery order, not scientific permission. Metrics need deterministi
 | F017 GPU: measure NVIDIA performance value. | Equivalent CPU/GPU work/device → comparison. | B09/B12 · Ben+Arnav · R09 · V08/V12 | Actual device/fair comparison; no unverified speedup/CUDA/RT claim. Planned. |
 | F018 Evidence report: package review. | Validated results/rights/limits → report. | B08/B12 · Alex+Ben · R08/R10 · V03/V12 | Reproducible, rights-cleared, professional checks; not approval. Planned. |
 
+
+**Research-informed P1 demo target (Arnav product-direction acceptance, BUILD D13):** Prefer one working F013 challenge → actual controlled comparison → evidence → repair-or-explain interaction after the stable P0 path. The user may challenge a placement strip, time window or crown assumption only when the implemented tools support that test. Fixed-layout comparison should isolate the concern before an optional redesign. Show accepted/hypothetical identity and known/unknown feasibility. Full F013, B10 and V11 acceptance remains unchanged; the three owners must explicitly agree before this target becomes a mandatory P0 gate. See [SPEC section 10](SPEC.md) and [UI design reference](UI_DESIGN_REFERENCE.md).
+
+
 ## P2 — Optional environmental extensions
 
 | ID / feature | Inputs → outputs | Dependencies · owner · R | Acceptance/limit · status |

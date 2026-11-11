@@ -82,6 +82,82 @@ These user-provided links are **research/design comparators or possible spatial 
 
 **Recommended scoped progression:** keep B01/B02/B04/B05 and the LiDAR B03 site audit as planned. For the first real Sheffield SiteBundle, optionally overlay a small OGL city drainage/EA flood layer and DfT traffic points **as attributed contextual evidence**, not as new objective terms. Design any CO2, irrigation, runoff, interception, stormwater or tree carbon-benefit calculation as a separately reviewed and benchmarked requirement with units, calibrated inputs and V03/V07-style acceptance tests. No verified street-scale CO2 monitoring or a public Sheffield park-specific tree irrigation-volume dataset was established in this search. No record proves construction-ready planting, flooding averted, air pollution removed, or CO2 offset by planting.
 
+## Complete source-by-source application and relevance register
+
+This table covers **every numbered link [1]–[62]**, including research papers, datasets, official technical documentation, licence terms, products and project-workflow references. Every HTTPS link elsewhere in this file resolves to one of those numbered sources; it does not create an unassessed extra source. **Relevance is assessed against the currently documented product** (site-specific direct-sun shade analysis, credible tree placement, inspectable evidence and the local-agent/Spark demonstration), not an invented carbon, irrigation or flood-reduction model.
+
+- **Core**: necessary to a required calculation, data-rights gate, or event/compliance requirement, where applicable
+- **High**: directly informs planned delivery, real-site validity, search quality or required local runtime
+- **Medium**: credible optional map/site context, supporting engineering reference, or design precedent
+- **Low**: largely historical, indirect or only useful if a separately validated future feature is approved
+
+These are **project-fit judgements, not verified ingestion status or a ranking of dataset quality**. Conditional references still require appropriate licences, available data, real-site checks and V03 validation. References that support similar purposes are not automatically interchangeable. References cited through the same URL in the narrative or source list inherit the matching entry below.
+
+| Ref / source | Concrete application to this project | Relevance and reason |
+| --- | --- | --- |
+| **[1] TreePlanter paper** | Use its greedy and hill-climbing placement methods as scientific comparators for the deterministic reference and search; examine joint shading, crown sizes and seasonal cases, without equating its radiant-temperature objective to our direct-shade metric. | **High**: directly informs B06 search design, scientific comparison and limitations |
+| **[2] DGX Spark hardware** | Plan device-memory, CPU/GPU and potential RT-core experiments; record what actually ran instead of inferring acceleration from specifications. | **High**: supports R09/B09 device-proof work, not an achieved benchmark |
+| **[3] NeMo-Ray agent source** | Study the implemented model–tool–observation loop and trace design as an agent integration reference; adapt only compatible ideas to the registered domain dispatcher. | **High**: direct design comparator for B09/B10, not reusable project data |
+| **[4] Nemotron on Spark** | Evaluate a local model/serving candidate for interpreting briefs, selecting approved tools and explaining result-backed observations. | **High, conditional**: B09 local-model candidate requiring compatibility tests |
+| **[5] NVIDIA Nemotron Spark playbook** | Guide reproducible inference setup and model/tool-call smoke tests if this serving approach is chosen. | **Medium**: implementation aid conditional on selected model/runtime |
+| **[6] Official Sheffield hackathon page** | Check event eligibility, Spark/model obligations, dates, prior-code/AI rules, entry format and permitted demonstration materials. | **Core**: participation and release gate D07; confirm actual current rules |
+| **[7] pvlib solar position documentation** | Implement/test sun azimuth and elevation from geolocation plus timezone-aware timestamps, then verify against independent references. | **Core**: R02/B02 solar computation input |
+| **[8] NVIDIA Warp mesh-ray API** | Investigate an optional GPU ray-query implementation for static obstruction meshes against the CPU reference. | **Medium**: optional acceleration; correctness first |
+| **[9] NVIDIA Warp project** | Assess Warp APIs and execution model for an optional ray-tracing kernel; do not require it for the MVP. | **Medium**: conditional performance engineering |
+| **[10] Warp installation/platform guide** | Check version, architecture and device compatibility on actual laptop/Spark before relying on GPU ray tracing. | **Medium**: conditional deployment feasibility and reproducibility |
+| **[11] Warp FAQ and limitations** | Anticipate kernel/platform limitations and fallback conditions; maintain validated CPU behaviour. | **Medium**: conditional risk and fallback reference |
+| **[12] Community Forestry Trees metadata** | Identify candidate existing-tree records/species/locations for a Sheffield site and compare them with imagery/field evidence; do not infer crown dimensions or survival. | **High**: site semantics for B03, subject to coverage and rights |
+| **[13] Street Trees metadata** | Locate possible street-tree obstructions and candidate context; independently verify position, size and INSPIRE-linked reuse limitations. | **High, conditional**: B03 tree context with rights/accuracy gate |
+| **[14] Historical planting areas metadata** | Provide historical planting-activity context and possible site leads, never automatic future plantability or permission. | **Low**: research background, not an eligible-planting mask |
+| **[15] Parks and Countryside Sites metadata** | Find candidate parks and provisional boundary polygons for site selection; establish layer rights before display/export. | **High, conditional**: B03 site leads but INSPIRE restrictions |
+| **[16] School Localities metadata** | Use only to identify administrative locality names or further research leads; it is not a map of school grounds/buildings. | **Low**: avoids an incorrect site-selection assumption |
+| **[17] Council parks FeatureServer layer** | Test whether the mapped park boundaries can delimit a pilot site after rights, currentness and geometry checks. | **High, conditional**: convenient B03 input, no unapproved redistribution |
+| **[18] INSPIRE End User Licence** | Determine whether relevant council/OS-derived layers may be used, team-shared, publicly displayed or exported; reject prohibited actions. | **Core where applicable**: a legal/source-readiness gate under R01/R08 |
+| **[19] GitHub MCP server** | Understand the repository-connector workflow for scoped file reads/updates and constrained collaboration. | **Medium**: development tooling rather than simulation data |
+| **[20] GitHub pull-request documentation** | Use scoped draft PRs, reviews and safe integration of physics, UI and agent changes. | **Medium**: collaboration and integration quality |
+| **[21] GitHub Projects guidance** | Consider small dependency-ready tasks and one source of truth if the team adopts a task board; do not duplicate BUILD. | **Low**: optional team organisation aid |
+| **[22] GitHub branch protection guidance** | Evaluate review/merge restrictions if the team later configures shared branch governance. | **Low**: repository administration, not product functionality |
+| **[23] UCL previous winner report** | Understand hackathon precedent and possible presentation style; do not infer current eligibility or required technical features. | **Low**: historical context only |
+| **[24] Defra survey download** | Select/download bounded Sheffield LiDAR tiles for an auditable local site-bundle pilot. | **High**: practical B03 acquisition route |
+| **[25] EA 1 m LiDAR DSM** | Model approximate roofs, tree crowns and other surface obstructions after classifying, cropping and validating raw elevations. | **High**: candidate static scene geometry; not semantic by itself |
+| **[26] EA 1 m LiDAR DTM** | Build ground terrain, surface sample heights and height-above-ground comparisons with co-registered DSM. | **High**: candidate terrain foundation for B03/B08 |
+| **[27] Defra survey download FAQ** | Use area-of-interest/tile/product/resolution instructions to perform reproducible source retrieval. | **Medium**: practical download support |
+| **[28] TreePlotter project gallery** | Review visualisation, inventory and tree-management workflows when designing project comparison and provenance panels. | **Medium**: product/UX inspiration, not an open data feed |
+| **[29] Tree Equity Score UK** | Compare neighbourhood canopy gaps and equity indicators when prioritising Sheffield demonstration sites; evaluate downloadable LSOA-scale data separately. | **Medium**: useful prioritisation context, not a per-tree shade metric or planting permission |
+| **[30] ShadeMap** | Compare intuitive sun/shadow controls and time-slider interaction with the planned UI; do not treat service visuals as solver geometry. | **Medium**: UI comparator only |
+| **[31] Schrodi et al. tree-placement optimisation** | Review learned radiant-temperature surrogates and iterated local search as prior art; benchmark only under equivalent inputs and keep radiant comfort distinct from direct-beam shade. | **High for research comparison; future surrogate modelling is outside current validation** |
+| **[32] Autodesk Forma site-design tools** | Review site exploration, alternatives and trade-off presentation patterns; no assumed export of proprietary simulations. | **Medium**: UX/workflow comparator |
+| **[33] OS Open Zoomstack** | Supply a rights-checked map baselayer for roads, green space and context behind the 3D site view. | **Medium**: helpful display layer, not measurement-grade 3D terrain |
+| **[34] DESNZ local-authority greenhouse gases** | Show historical Sheffield road-transport CO2/CO2e totals as city context or future emissions module validation baseline. | **Low in current shade scope; no roadside or tree-offset estimate** |
+| **[35] DfT Sheffield road traffic** | Overlay traffic-count points and vehicle classes to contextualise busy roads when discussing sites or exposure; do not derive CO2 without a separate model. | **Medium**: optional local prioritisation overlay |
+| **[36] NAEI gridded emissions** | Investigate sector/pollutant gridded inventory for coarse transport/emissions context; verify CO2 coverage/year before importing. | **Low**: later emissions analysis, coarse relative to park |
+| **[37] NAEI major-road emissions** | Assess a road-link emissions inventory if downloadable and relevant pollutants/CO2 fields and geometries exist. | **Low, conditional**: later road-emissions context; file not yet checked |
+| **[38] EA planning Flood Zones** | Overlay mapped river/sea floodplain zones to flag site risk and prompt survey/authority review; not a tree-flood-benefit model. | **Medium**: useful optional site-risk context |
+| **[39] EA surface-water flood risk** | Overlay likelihood/depth information for rain-driven surface flooding near a park; label model assumptions and resolution. | **Medium**: useful optional planning context |
+| **[40] EA surface-water planning extents/depths** | Use likelihood/depth-band scenario layers to inform flood-risk warnings, not estimate planting-caused reduction. | **Medium**: optional risk overlay |
+| **[41] Recorded Flood Outlines** | Compare historical recorded flood events with proposed site; absence of an outline cannot be treated as safety evidence. | **Low–Medium**: corroborating history, not exhaustive |
+| **[42] Sheffield Strategic Flood Risk Assessment** | Provide Sheffield-specific planning interpretation and references for flood-risk decisions; check currency against newer EA maps. | **Medium**: supplementary local planning reference |
+| **[43] EA Flood Zones plus Climate Change** | Show potential future floodplain exposure for long-horizon site context, without attributing changes to proposed trees. | **Low–Medium**: later resilience scenario context |
+| **[44] Sheffield SuDS Regions** | Overlay mapped sustainable-drainage system regions and identify possible compatibility or evidence gaps. | **Medium**: actionable site context, not permission/benefit proof |
+| **[45] Sheffield SuDS Links** | Overlay mapped drainage links to inform potential planting conflicts and site observations. | **Medium**: contextual site-screening layer |
+| **[46] Sheffield Highway Drain Links** | Flag possible conflicts near road drainage and roots/planting locations; require on-site utility checks. | **Medium–High**: site-screening evidence, not excavation clearance |
+| **[47] Sheffield Open Watercourse Links** | Show stream corridors and riparian context, guiding preliminary location/exclusion review. | **Medium**: optional physical site context |
+| **[48] Sheffield Watercourse Culvert Links** | Flag mapped culverts and potential root-clearance constraints; do not assume positions are surveyed. | **Medium–High**: site-screening evidence |
+| **[49] Sheffield Section 21 flood-asset register** | Check mapped flood/drainage assets for provisional planting conflicts or opportunities for site inspection. | **Medium–High**: site-screening evidence, incomplete asset coverage |
+| **[50] OS Open Rivers** | Use vector rivers and channels as an OGL geographic context layer, especially if more specific council data is restricted. | **Medium**: alternate contextual basemap |
+| **[51] Met Office HadUK-Grid rainfall** | Provide historical rainfall/dry-season context and potential future climate inputs for an irrigation/moisture model. | **Low in current scope; useful future water-demand input** |
+| **[52] EA potential evapotranspiration** | Inform a later water-balance and atmospheric evaporative-demand model; grass-reference PET is not tree irrigation volume. | **Low in current scope; useful future modelling input** |
+| **[53] EA rainfall API** | Plot recent local rain-gauge observations alongside the study site for explanatory context and future validation. | **Low–Medium**: optional recent weather overlay |
+| **[54] ISRIC SoilGrids** | Provide coarse soil-texture/properties context for candidate evaluation and a list of survey uncertainties, not pit-scale certainty. | **Medium**: preliminary site uncertainty input only |
+| **[55] UKCEH modelled soil moisture** | Explore past drought and moisture patterns for a future tree-establishment model; not field measurement. | **Low**: future seasonal context |
+| **[56] EA flood-monitoring API** | Display nearby river stage/flow observations and alerts separately from flood risk models and planning constraints. | **Low**: optional live context, not core |
+| **[57] UK Water Resources Portal** | Research drought, rainfall and flow context for Sheffield; verify datasets and export rights for any reuse. | **Low**: supplementary future hydrology context |
+| **[58] WFD Cycle 3 river catchments** | Identify larger drainage catchments and ecological status context; too coarse for tree-scale hydrology. | **Low**: broader geographic context |
+| **[59] Sheffield SuDS research datasets** | Use experimental bioretention/green-roof evidence to inform a future hydrology validation plan; do not transfer parameters to trees without tests. | **Low**: future research comparator |
+| **[60] Water rights trading/abstraction data** | Investigate permitted water abstraction only if a future irrigation-supply feature explicitly needs it; obey special location/use restrictions. | **Low**: out of initial scope, restricted |
+| **[61] EA abstraction assessment points** | Identify catchment-level water-resource pressure for future planning, not park irrigation supply. | **Low**: indirect catchment context |
+| **[62] WFD Cycle 4 management catchments** | Map current management catchment geography for optional long-term water strategy/context, not park runoff predictions. | **Low**: broad future context |
+
 Sources:
 
 [1] [TreePlanter paper, SOLWEIG-based tree-location optimisation and algorithm comparison](https://gmd.copernicus.org/articles/15/1107/2022)
@@ -144,7 +220,7 @@ Sources:
 
 [30] [ShadeMap interactive shadow map](https://shademap.app/@47.608,-122.339,6z,1794418525924t,0b,0p,0m)
 
-[31] [arXiv preprint 2310.05691 (PDF)](https://arxiv.org/pdf/2310.05691)
+[31] [Schrodi et al., Climate-sensitive Urban Planning through Optimization of Tree Placements (arXiv PDF)](https://arxiv.org/pdf/2310.05691)
 
 [32] [Autodesk Forma: site-design tools overview (28 August 2026)](https://blogs.autodesk.com/forma/2026/08/28/forma-site-design-tools-overview/)
 

@@ -41,6 +41,15 @@ class RayDraftTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ray_ellipsoid_distance((0, 0, 0), (1, 0, 0), (0, 0, 0), (1, 0, 1))
 
+    def test_near_grazing_hit_and_miss(self):
+        y = 1 - 1e-6
+        expected = 2 - math.sqrt(1 - y * y)
+        observed = ray_ellipsoid_distance((-2, y, 0), (1, 0, 0), (0, 0, 0), (1, 1, 1))
+        self.assertAlmostEqual(observed, expected, delta=1e-12)
+        self.assertIsNone(
+            ray_ellipsoid_distance((-2, 1 + 1e-6, 0), (1, 0, 0), (0, 0, 0), (1, 1, 1))
+        )
+
     def test_vertical_trunk_side_tangent_and_caps(self):
         trunk = (0.0, 0.0, 0.0, 1.0, 2.0)
         self.assertAlmostEqual(

@@ -68,7 +68,7 @@ CI runs unit/protocol checks, builds wheel/sdist, clean-installs the wheel outsi
 
 Invited collaborators must accept GitHub's invitation before their write access is active. Proposed implementation responsibilities remain in BUILD; repository access does not establish agreement to every technical default.
 
-Use small scoped branches and isolated worktrees/clones for concurrent writers. Update the relevant docs and tests with interface changes. Open teammate-facing PRs as drafts without requesting reviewers until the agreed review gate is cleared. No CODEOWNERS auto-review requests or automated deployment is configured by this bootstrap.
+Use small scoped branches and isolated worktrees/clones for concurrent writers. Update the relevant docs and tests with interface changes. PRs open ready (not draft) with no reviewers and auto-merge when required CI passes; there are no sign-off gates (see AGENTS.md, Merge policy). No CODEOWNERS auto-review requests or automated deployment is configured by this bootstrap.
 
 Advance development is planned; retain truthful prior-work/AI/asset provenance and confirm current entry eligibility separately. Do not commit credentials, restricted site assets, model weights, private working logs or generated proof bundles. This private repository has no open-source licence assigned by this setup; visibility/licensing changes require team approval.
 

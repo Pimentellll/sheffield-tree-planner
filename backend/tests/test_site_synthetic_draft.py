@@ -1,11 +1,13 @@
 """Labelled synthetic STP-006 transform and raster failure checks."""
 
 import math
+import os
 import sys
 import unittest
 from pathlib import Path
 
-from pyproj import Geod, Transformer
+from pyproj import Geod, Transformer, datadir
+from pyproj.transformer import TransformerGroup
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from tree_planner.site.synthetic_import import (
@@ -115,6 +117,21 @@ class SyntheticSitePilotTests(unittest.TestCase):
             self.assertAlmostEqual(
                 math.dist(viewer, (0, 0, 0)), math.dist(point, (0, 0, 0))
             )
+
+    def test_official_os_control_with_grid_when_supplied(self):
+        """Official OS Transform README control, requiring an explicit local OSTN15 grid."""
+        grid_dir = os.environ.get("CANOPY_TEST_PROJ_GRID_DIR")
+        if not grid_dir:
+            self.skipTest(
+                "set CANOPY_TEST_PROJ_GRID_DIR to a SHA-checked OSTN15 grid directory"
+            )
+        datadir.append_data_dir(os.path.abspath(grid_dir))
+        group = TransformerGroup("EPSG:27700", "EPSG:4326", always_xy=True)
+        self.assertTrue(group.best_available)
+        lon, lat = group.transformers[0].transform(337297, 503695)
+        # https://github.com/OrdnanceSurvey/os-transform/blob/main/README.md
+        self.assertAlmostEqual(lat, 54.42480998276385, delta=1e-8)
+        self.assertAlmostEqual(lon, -2.96793742245737, delta=1e-8)
 
 
 if __name__ == "__main__":

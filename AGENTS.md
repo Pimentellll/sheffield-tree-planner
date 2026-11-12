@@ -17,7 +17,7 @@ These instructions apply to this project only. They do not modify a teammate's p
 
 There are no human sign-off or acknowledgement gates. Whatever is on `main` is the working baseline for everyone, including CONTRACTS and NUMERICS; nobody needs to acknowledge a revision before building against it.
 
-- Open PRs ready for review (not draft), with no reviewers requested, and enable auto-merge. A PR merges when the required CI checks pass.
+- Open PRs ready for review (not draft), with no reviewers requested. The `auto-merge on green CI` workflow squash-merges any non-draft PR once `readiness checks` passes on its head commit. Keep a PR in draft, or label it `do-not-merge`, only while it is genuinely unfinished.
 - Every PR must keep CI green and include tests for what it changes. CI is the review.
 - Ownership stays as the lane split in BUILD (Ben backend/API/jobs/dispatcher, Arnav numerics/geometry, Alex frontend/site sources). Edit another lane's files only to keep a contract change consistent, and say so in the PR.
 - Never force-push or rewrite another person's branch. Rebase your own branch on `main` and resolve conflicts yourself.

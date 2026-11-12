@@ -18,4 +18,4 @@ Declare major/minor/patch/none, the canonical version or reason for none, built 
 
 Known gaps, data/permission implications, and a reversible recovery path where applicable.
 
-Open ready for review with no reviewers requested and enable auto-merge; it merges when required CI passes.
+Open ready for review with no reviewers requested; the auto-merge workflow merges it when CI passes. Use draft or the `do-not-merge` label only while unfinished.

@@ -38,6 +38,20 @@ jobs:
           python -m build
           python -m pip install .
           python -m unittest discover -s tests -v
+      - name: Test synthetic job-control probe when present
+        shell: python
+        run: |
+          import pathlib, unittest
+          probe = pathlib.Path('experiments/stp004_job_control')
+          if probe.is_dir():
+              suite = unittest.defaultTestLoader.discover(str(probe), pattern='test_*.py')
+              if suite.countTestCases() == 0:
+                  raise RuntimeError('Job-control probe exists but no tests were discovered')
+              result = unittest.TextTestRunner(verbosity=2).run(suite)
+              if not result.wasSuccessful():
+                  raise SystemExit(1)
+          else:
+              print('No synthetic job-control probe on this revision')
       - name: Validate inference configuration, without starting containers
         if: runner.os == 'Linux'
         run: docker compose -f deploy/spark/inference.compose.yml config --quiet

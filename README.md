@@ -1,4 +1,4 @@
-# Sheffield Tree Planner
+# CANOPY Sheffield · tree-planning workbench
 
 An urban tree-planning project for NVIDIA Hack for Impact Sheffield, 13 November 2026.
 
@@ -6,7 +6,11 @@ The intended system combines deterministic shade analysis and constrained tree-p
 
 ## Status
 
-**Application implementation has not started.** This branch adds an installable **readiness diagnostic**, a pinned inference-service candidate and a [DGX Spark access/integration runbook](docs/DGX_SPARK.md). It is not a simulator, product agent or verified Spark deployment. Protocol tests exercise a labelled synthetic HTTP fixture, not a model; hosted checks likewise do not provide GPU evidence.
+**Active development; the integrated application is not yet verified.** Backend experiments, frontend and numerical foundations are being developed in isolated draft PRs. [BUILD.md](docs/BUILD.md) is the canonical record of exact revisions, tests, dependencies and approvals, not this overview.
+
+- This branch contains the installable **readiness diagnostic**, a pinned inference-service candidate and a [DGX Spark runbook](docs/DGX_SPARK.md). The diagnostic has clean-install evidence; it is not the simulator, product agent or verified Spark deployment. Its synthetic HTTP tests do not prove model inference or GPU execution.
+- Ben's [validation-boundary draft (#35)](https://github.com/Tempest-Research/sheffield-tree-planner/pull/35) and [durable job-control draft (#42)](https://github.com/Tempest-Research/sheffield-tree-planner/pull/42) have separate test and independent-review evidence. They are labelled synthetic experiments, not accepted production schemas or a complete executor. Alex's frontend/site-audit and Arnav's numerical drafts are linked from BUILD; their existence does not establish integrated acceptance.
+- Shared implementation awaits the documented contract/owner gate and reconciliation of [PR #4](https://github.com/Tempest-Research/sheffield-tree-planner/pull/4) with [PR #34](https://github.com/Tempest-Research/sheffield-tree-planner/pull/34). The M2 evaluator-to-UI slice, accepted real site, genuine local-model/domain-tool round-trip and Spark execution remain unverified. Rights and organiser eligibility remain separate gates; they do not prevent unrelated synthetic engineering.
 
 ## Run the readiness diagnostic
 
@@ -70,10 +74,10 @@ Invited collaborators must accept GitHub's invitation before their write access 
 
 Use small scoped branches and isolated worktrees/clones for concurrent writers. Update the relevant docs and tests with interface changes. Open teammate-facing PRs as drafts without requesting reviewers until the agreed review gate is cleared. No CODEOWNERS auto-review requests or automated deployment is configured by this bootstrap.
 
-Advance development is planned; retain truthful prior-work/AI/asset provenance and confirm current entry eligibility separately. Do not commit credentials, restricted site assets, model weights, private working logs or generated proof bundles. This private repository has no open-source licence assigned by this setup; visibility/licensing changes require team approval.
+Advance development is underway; retain truthful prior-work/AI/asset provenance and confirm current entry eligibility separately. Do not commit credentials, restricted site assets, model weights, private working logs or generated proof bundles. This private repository has no open-source licence assigned by this setup; visibility/licensing changes require team approval.
 
-Canonical repository: https://github.com/bbeennyy860-cyber/sheffield-tree-planner
+Canonical repository: https://github.com/Tempest-Research/sheffield-tree-planner. The original owner locator, https://github.com/bbeennyy860-cyber/sheffield-tree-planner, redirects to the same repository.
 
 ## MVP and milestones
 
-The [feature priority and milestone plan](docs/FEATURE_PRIORITIES.md) defines the competitive P0 MVP, P1 enhancements, longer-term P2/P3 scope, and the smaller first vertical slice. BUILD remains the single task-status home; the product capability status is still planned.
+The [feature priority and milestone plan](docs/FEATURE_PRIORITIES.md) defines the competitive P0 MVP, P1 enhancements, longer-term P2/P3 scope, and the smaller first vertical slice. Development is active; BUILD remains the single task-status home. Draft components and passing isolated tests do not complete a milestone or establish product capability acceptance.

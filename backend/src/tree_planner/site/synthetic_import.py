@@ -214,3 +214,43 @@ def import_synthetic_pair(
         tuple(missing),
         "Synthetic crop only; outside shadow-casting context and planting conditions are unknown.",
     )
+
+
+# Provisional matrix copied from Alex's STP-007 frontend/README.md draft.
+# CONTRACTS gives the SiteBundle authority to publish the accepted matrix.
+ANALYSIS_TO_VIEWER_DRAFT: tuple[float, ...] = (
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+    0.0,
+    0.0,
+    -1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+)
+
+
+def enu_to_provisional_viewer(
+    point_enu_m: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Apply Alex's provisional row-major 4x4 display matrix to a column point."""
+    _finite3(point_enu_m)
+    e, n, u = point_enu_m
+    return e, u, -n
+
+
+def provisional_viewer_to_enu(
+    point_viewer_m: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Invert the provisional unit-scale, true-north-preserving display mapping."""
+    _finite3(point_viewer_m)
+    x, y, z = point_viewer_m
+    return x, -z, y

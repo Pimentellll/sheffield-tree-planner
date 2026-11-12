@@ -9,9 +9,12 @@ from pyproj import Geod, Transformer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from tree_planner.site.synthetic_import import (
+    ANALYSIS_TO_VIEWER_DRAFT,
     BngEnuTransform,
     SyntheticRaster,
+    enu_to_provisional_viewer,
     import_synthetic_pair,
+    provisional_viewer_to_enu,
 )
 
 
@@ -90,6 +93,19 @@ class SyntheticSitePilotTests(unittest.TestCase):
         below = SyntheticRaster(((100.0, 99.0), (100.0, 100.0)), 430000, 387000, 1)
         with self.assertRaises(ValueError):
             import_synthetic_pair(dtm, below, self.transform)
+
+    def test_provisional_viewer_known_points_and_metres(self):
+        self.assertEqual(
+            ANALYSIS_TO_VIEWER_DRAFT, (1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1)
+        )
+        self.assertEqual(enu_to_provisional_viewer((1, 2, 3)), (1, 3, -2))
+        self.assertEqual(enu_to_provisional_viewer((0, 1, 0)), (0, 0, -1))
+        for point in ((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (12.5, -7, 3)):
+            viewer = enu_to_provisional_viewer(point)
+            self.assertEqual(provisional_viewer_to_enu(viewer), point)
+            self.assertAlmostEqual(
+                math.dist(viewer, (0, 0, 0)), math.dist(point, (0, 0, 0))
+            )
 
 
 if __name__ == "__main__":

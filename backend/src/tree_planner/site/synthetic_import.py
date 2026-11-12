@@ -31,9 +31,12 @@ class BngEnuTransform:
     origin_height_m: float
     height_datum: str = "WGS84_ELLIPSOIDAL"
     source_crs: str = "EPSG:27700"
+    site_kind: str = "synthetic_test"
 
     def __post_init__(self) -> None:
         _finite3((self.origin_easting_m, self.origin_northing_m, self.origin_height_m))
+        if self.site_kind != "synthetic_test":
+            raise ValueError("pilot transform is synthetic-only")
         if self.source_crs != "EPSG:27700":
             raise ValueError("source CRS must be EPSG:27700")
         if self.height_datum != "WGS84_ELLIPSOIDAL":
@@ -49,6 +52,12 @@ class BngEnuTransform:
         if not all(isfinite(v) for v in (*xyz, lon, lat)):
             raise ValueError("origin could not be transformed")
         return lon, lat, *xyz
+
+    def selected_horizontal_operation(self) -> tuple[str, float]:
+        """Report the PROJ operation and stated accuracy actually used here."""
+        self._origin()
+        operation = _BNG_TO_GEO.get_last_used_operation()
+        return operation.description, operation.accuracy
 
     def to_enu(
         self, easting_m: float, northing_m: float, height_m: float
@@ -103,6 +112,7 @@ class SyntheticRaster:
     cell_size_m: float
     height_datum: str = "WGS84_ELLIPSOIDAL"
     source_crs: str = "EPSG:27700"
+    site_kind: str = "synthetic_test"
 
     def __post_init__(self) -> None:
         if not self.heights_m or not self.heights_m[0]:
@@ -116,6 +126,8 @@ class SyntheticRaster:
             raise ValueError("grid coordinates must be finite")
         if self.cell_size_m <= 0:
             raise ValueError("cell size must be positive")
+        if self.site_kind != "synthetic_test":
+            raise ValueError("pilot transform is synthetic-only")
         if self.source_crs != "EPSG:27700":
             raise ValueError("source CRS must be EPSG:27700")
         if self.height_datum != "WGS84_ELLIPSOIDAL":
@@ -161,6 +173,7 @@ def import_synthetic_pair(
             dtm.cell_size_m,
             dtm.height_datum,
             dtm.source_crs,
+            dtm.site_kind,
         )
         != (
             dsm.centre_easting_m,
@@ -168,8 +181,11 @@ def import_synthetic_pair(
             dsm.cell_size_m,
             dsm.height_datum,
             dsm.source_crs,
+            dsm.site_kind,
         )
         or dtm.height_datum != transform.height_datum
+        or dtm.source_crs != transform.source_crs
+        or dtm.site_kind != transform.site_kind
     ):
         raise ValueError("DTM/DSM grid, transform or vertical datum mismatch")
     if not isfinite(height_tolerance_m) or height_tolerance_m < 0:

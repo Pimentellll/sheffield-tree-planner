@@ -55,6 +55,10 @@ class SyntheticSitePilotTests(unittest.TestCase):
             BngEnuTransform(430000, 387000, 100, "ODN")
         with self.assertRaises(ValueError):
             SyntheticRaster(((100.0,),), 430000, 387000, 1, "unknown")
+        with self.assertRaises(ValueError):
+            BngEnuTransform(430000, 387000, 100, site_kind="real_site")
+        with self.assertRaises(ValueError):
+            SyntheticRaster(((100.0,),), 430000, 387000, 1, site_kind="real_site")
 
     def test_aligned_raster_mesh_and_semantic_unknown(self):
         dtm = SyntheticRaster(
@@ -93,6 +97,11 @@ class SyntheticSitePilotTests(unittest.TestCase):
         below = SyntheticRaster(((100.0, 99.0), (100.0, 100.0)), 430000, 387000, 1)
         with self.assertRaises(ValueError):
             import_synthetic_pair(dtm, below, self.transform)
+
+    def test_horizontal_operation_is_reported(self):
+        description, stated_accuracy_m = self.transform.selected_horizontal_operation()
+        self.assertIn("British National Grid", description)
+        self.assertTrue(math.isfinite(stated_accuracy_m))
 
     def test_provisional_viewer_known_points_and_metres(self):
         self.assertEqual(

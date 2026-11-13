@@ -146,7 +146,8 @@ async function online() {
         const jobFailed = status === 'Failed'
         check('changed input asset fails closed (rejected at admission or failed job)', Boolean(rejected) || jobFailed, rejected ? `submission rejected: ${rejected}` : `job ${status}`)
         const card = await page.locator('.result-section').innerText()
-        check('no new number is produced from the changed asset', (await metric(page).textContent()) === '0' && !/Live computation[\s\S]*rev 3/.test(card))
+        // The card must still describe the revision-2 run: no new revision and no new number from the changed asset.
+        check('no new number is produced from the changed asset', (await metric(page).textContent()) === '0' && /Scenario rev\s+2 \(accepted\)/.test(card) && !/Scenario rev\s+3/.test(card), card.match(/Scenario rev\s+\S+/)?.[0])
         await shot(page, '05-failure')
       } finally {
         writeFileSync(asset, original)

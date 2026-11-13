@@ -231,3 +231,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
 .result-stale-draft .metric,.result-stale-draft .kpi-row,.result-stale-draft .target-bars{opacity:.55}
 .result-stale-draft .currentness-detail{background:var(--edit-bg);border:1px solid var(--warn-border);color:var(--warn-text);border-radius:9px;padding:8px 10px;font-size:12px}
 .ed-future-tag{white-space:nowrap;flex:none}
+/* a card that is not CURRENT dims all its figures, not only the struck headline; its mode badge goes neutral */
+.result-superseded .metric,.result-superseded .kpi-row,.result-superseded .target-bars,
+.result-not-selected .metric,.result-not-selected .kpi-row,.result-not-selected .target-bars{opacity:.55}
+.result-superseded .kpi-value,.result-not-selected .kpi-value,.result-stale-draft .kpi-value{text-decoration:line-through;text-decoration-thickness:2px;color:var(--superseded-ink)}
+.mode-badge-muted{background:var(--muted-bg);color:var(--muted-on-light);border-color:var(--card-border)}
+.headline-missing{display:grid;gap:3px;padding:10px;border-radius:9px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-fg);margin:6px 0}
+.headline-missing strong{font:600 13px var(--font-ui)}

@@ -7,7 +7,7 @@ import {
   primaryMetric, progressView, unitLabel, type Currentness, type ProgressView,
 } from '../planning/evaluation'
 import type { RunRecord, Workspace } from '../planning/useWorkspace'
-import { latestEvaluation, metricTitle, MODE_BADGE, resultSummary } from '../planning/shell'
+import { headlineMetric, latestEvaluation, metricTitle, MODE_BADGE, resultSummary } from '../planning/shell'
 import { FOCUS_TARGET, focusAfterRender } from './focus'
 
 function describeAttenuation(a: unknown): string {
@@ -184,7 +184,6 @@ export function ResultCard({ ws }: { ws: Workspace }) {
   // The backend-selected run wins over arrival order (a late older job must not displace it).
   const record = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
   const latestFailure = evaluations[0] && !evaluations[0].result ? evaluations[0] : null
-  const primaryCase = ws.scenario?.input.objective.primary_case_id ?? null
   if (!record?.result) {
     return (
       <section className="detail-section result-section result-card" aria-labelledby="result-title">
@@ -199,7 +198,7 @@ export function ResultCard({ ws }: { ws: Workspace }) {
   const failureNewer = latestFailure !== null && evaluations.indexOf(latestFailure) < evaluations.indexOf(record)
   return (
     <section className={`detail-section result-section result-card result-${currentness}`} aria-labelledby="result-title">
-      <ResultBody result={result} inputScenario={record.inputScenario} delivery={record.job.delivery} currentness={currentness} primaryCase={primaryCase} />
+      <ResultBody result={result} inputScenario={record.inputScenario} delivery={record.job.delivery} currentness={currentness} />
       {failureNewer && latestFailure && <p className="error-box">A later job {latestFailure.job.status}: {describeJob(latestFailure.job).detail}</p>}
     </section>
   )
@@ -212,17 +211,20 @@ function constraintSummary(result: Result) {
   return (['fail', 'unknown', 'pass'] as const).filter(k => counts[k]).map(k => `${counts[k]} ${k}`).join(' · ')
 }
 
-function ResultBody({ result, inputScenario, delivery, currentness, primaryCase }: {
-  result: Result; inputScenario: Scenario | null; delivery: Job['delivery']; currentness: Currentness; primaryCase: string | null
+function ResultBody({ result, inputScenario, delivery, currentness }: {
+  result: Result; inputScenario: Scenario | null; delivery: Job['delivery']; currentness: Currentness
 }) {
-  const metric = primaryMetric(result, primaryCase)
+  // Primary case from the run's own snapshot, aggregate first; never another case's or metric's value.
+  const headline = headlineMetric(result, inputScenario)
+  const metric = headline.metric
   const layout = result.layouts[0]
   const zero = metric?.value === 0
   // How THIS job was delivered (a cache hit is cached even if the stored run was originally live).
   const delivered = delivery?.execution_mode ?? result.provenance.execution_mode
   const original = result.provenance.execution_mode
   const summary = resultSummary(result, inputScenario, metric)
-  const weighted = result.metrics.find(m => m.metric_id === 'weighted_shade_utility' && (!metric || m.case_id === metric.case_id)) ?? null
+  const weighted = result.metrics.find(m => m.metric_id === 'weighted_shade_utility' && m.case_id === headline.primaryCaseId && m.target_id === null) ?? null
+  const current = currentness === 'current'
   const largest = Math.max(...summary.targets.map(t => t.value), 0)
   return (
     <>
@@ -236,7 +238,7 @@ function ResultBody({ result, inputScenario, delivery, currentness, primaryCase 
       {currentness !== 'current' && <p className="caption currentness-detail">{CURRENTNESS_LABEL[currentness].detail}</p>}
       {metric ? (
         <>
-          <p className="hero-label">{metricTitle(metric.metric_id)}{metric.target_id ? ` on target ${metric.target_id}` : ''} <span className={`mode-badge${delivered === 'live' ? '' : ' mode-badge-warn'}`}>{MODE_BADGE[delivered]}</span></p>
+          <p className="hero-label">{metricTitle(metric.metric_id)}{metric.target_id ? ` on target ${metric.target_id}` : ''} <span className={`mode-badge${!current ? ' mode-badge-muted' : delivered === 'live' ? '' : ' mode-badge-warn'}`}>{MODE_BADGE[delivered]}</span></p>
           <div className={`metric${currentness !== 'current' ? ' metric-stale' : ''}`}>
             <span className="metric-value" data-testid="metric-value">{formatValue(metric.value)}</span>
             <span className="metric-unit">{unitLabel(metric.unit)}</span>
@@ -245,7 +247,10 @@ function ResultBody({ result, inputScenario, delivery, currentness, primaryCase 
           </div>
         </>
       ) : (
-        <p className="fine-print text-warning">The result contains no metric.</p>
+        <div className="headline-missing" data-testid="headline-missing">
+          <strong>Primary metric not computed</strong>
+          <span className="caption">{headline.primaryCaseId ? `No additional shade for primary case ${headline.primaryCaseId} in this run.` : 'The primary case of this run is not known.'}{headline.missingReasons.length ? ` Backend: ${headline.missingReasons.join('; ')}.` : ''}</span>
+        </div>
       )}
       {result.missing_metrics.length > 0 && <p className="fine-print text-warning">Missing: {result.missing_metrics.map(m => `${m.metric_id} (${m.reason})`).join('; ')}</p>}
       <div className="kpi-row">
@@ -281,7 +286,7 @@ function ResultBody({ result, inputScenario, delivery, currentness, primaryCase 
         <Row label="Scenario rev" value={`${result.scenario_revision} (${result.scope})`} />
         {layout && <Row label="Feasibility" value={layout.feasibility.replace('_', ' ')} warn={layout.feasibility !== 'feasible'} />}
         <Row label="Constraints" value={constraintSummary(result)} warn={result.constraints.length === 0 || result.constraints.some(c => c.status !== 'pass')} />
-        {weighted && <Row label="Weighted utility" value={`${formatValue(weighted.value)} ${unitLabel(weighted.unit)} (not physical shade)`} />}
+        <Row label="Weighted utility" value={weighted ? `${formatValue(weighted.value)} ${unitLabel(weighted.unit)} (not physical shade)` : 'not computed in this run'} />
       </div>
       <details className="evidence-details">
         <summary>Run evidence &amp; assumptions</summary>

@@ -1,6 +1,6 @@
 # CANOPY SHEFFIELD — FRONTEND IMPLEMENTATION MASTER HANDOFF
 
-> **Provenance:** written by Arnav on 13 November 2026 as the brief for implementing [Product Vision v2](README.md) in the existing frontend. Reproduced as given. "The attachment" below is [CANOPY_Sheffield_Product_Vision_v2.html](CANOPY_Sheffield_Product_Vision_v2.html) in this folder. This is an assignment brief, not a record of completed work.
+> **Provenance:** written by Arnav on 13 November 2026 as the brief for implementing [Product Vision v2](README.md) in the existing frontend. Reproduced as given. "The attachment" below is `CANOPY_Sheffield_Product_Vision_v2.html`, kept on the reference branch `ref/arnav/product-vision-v2-design` (see the [README](README.md) for the link and why it is not on `main`). This is an assignment brief, not a record of completed work.
 
 ## ROLE
 

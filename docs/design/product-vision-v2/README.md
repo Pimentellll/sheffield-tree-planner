@@ -6,10 +6,10 @@
 
 | File | What it is |
 |---|---|
-| [CANOPY_Sheffield_Product_Vision_v2.html](CANOPY_Sheffield_Product_Vision_v2.html) | The design artifact: one self-contained HTML gallery of eight 1600 × 1000 artboards. Open it in a browser to view. |
+| [CANOPY_Sheffield_Product_Vision_v2.html](https://github.com/Pimentellll/sheffield-tree-planner/blob/ref/arnav/product-vision-v2-design/docs/design/product-vision-v2/CANOPY_Sheffield_Product_Vision_v2.html) | The design artifact: one self-contained HTML gallery of eight 1600 × 1000 artboards. **Kept on the reference branch `ref/arnav/product-vision-v2-design`, not on `main`**, because at 7.3 MB it would be about 22 times the largest file in the repository. Download it from that branch and open it in a browser to view. |
 | [IMPLEMENTATION_HANDOFF.md](IMPLEMENTATION_HANDOFF.md) | Arnav's brief for implementing the design in the existing React/Three.js frontend: priorities, safeguards, tests and completion criteria. |
 
-The artifact was supplied as `CANOPY Sheffield — Product Vision v2.html` and is stored here byte-for-byte under an ASCII file name.
+The artifact was supplied as `CANOPY Sheffield — Product Vision v2.html` and is stored on the reference branch byte-for-byte under an ASCII file name. Do not delete that branch: it is the only copy in the repository.
 
 - **Size:** 7,285,888 bytes
 - **SHA-256:** `0c26555446b0654d53bd30f1d714ccb5e0e310e5efa5952bbf2eaab1a80ece04`
@@ -54,4 +54,4 @@ The implementation handoff lists these and further points (shadow footprint over
 
 ## Status of the implementation
 
-Not started at the time this folder was added. Progress is reported on the implementation pull request and in BUILD, not here.
+The first slice (application shell, design tokens and the B07 Studio layout on existing state) was merged in PR #80 on 13 November 2026. The tree inspector (B08), the alternatives redesign (C05) and the compare restyle (C06) were not built at that point. Later progress is reported on the implementation pull requests and in BUILD, not here.

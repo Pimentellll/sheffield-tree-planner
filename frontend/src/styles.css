@@ -163,5 +163,35 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .main-content.screen-studio .studio{flex:1 1 auto;height:auto;min-height:0}
   .studio-left{top:var(--gutter)}
 }
+/* compact B07 result card */
+.result-card .card-title-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.result-card .card-title-row .kicker{color:var(--muted-on-light)}
+.result-card .currentness{margin:0;display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:11px;grid-template-columns:none}
+.result-card .currentness strong{font:600 10px/1 var(--font-mono);letter-spacing:.05em}
+.result-card .currentness span{font:600 10px/1 var(--font-mono);opacity:.85}
+.currentness-detail{margin:0 0 8px}
+.empty-title{font-size:15px;margin:6px 0}
+.hero-label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11.5px;color:var(--muted-on-light);margin:4px 0 2px}
+.mode-badge{font:600 9.5px/1 var(--font-mono);letter-spacing:.05em;padding:3px 6px;border-radius:4px;background:var(--ok-bg);color:var(--ok-fg);border:1px solid var(--ok-border)}
+.mode-badge-warn{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-border)}
+.result-card .metric{margin:4px 0 6px}
+.result-card .metric-label{font-family:var(--font-mono);font-size:10.5px;color:var(--faint-on-light)}
+.kpi-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-top:1px solid var(--rule);padding:10px 0 4px;margin-top:6px}
+.kpi-row>div{display:grid;align-content:start;gap:2px;min-width:0}
+.kpi-label{font-size:11px;color:var(--muted-on-light)}
+.kpi-value{font:600 18px/1.2 var(--font-mono);color:var(--ink)}
+.kpi-value small{font:500 11px var(--font-mono);color:var(--muted-on-light)}
+.kpi-none{color:var(--faint-on-light)}
+.kpi-caption{font-size:10.5px;color:var(--faint-on-light);line-height:1.35}
+.target-bars{display:grid;gap:5px;border-top:1px solid var(--rule);padding:10px 0 2px}
+.target-bars .kpi-label{font-weight:600;font-size:10px;letter-spacing:.1em}
+.target-bar{display:grid;grid-template-columns:110px 1fr 56px;align-items:center;gap:8px;font-size:11.5px}
+.target-bar .mono{text-align:right}
+.bar-track{height:9px;border-radius:3px;background:var(--track);overflow:hidden}
+.bar-track i{display:block;height:100%;background:var(--target)}
+.result-card .evidence-grid{border-top:1px solid var(--rule);margin-top:8px}
+.result-card .readiness-row{padding:7px 0}
 /* 1101-1320 px: the scene's duplicate synthetic pill can sit behind the open editor; the header pill and site notice still state it */
 @media (min-width:1101px) and (max-width:1320px){.studio .scene-topline .pill{display:none}}
+/* the legacy .detail-section h2 (Manrope 24px) must not restyle the card's kicker heading */
+.result-card .card-title-row h2.kicker{font:600 10px/1.2 var(--font-ui);letter-spacing:.1em;text-transform:uppercase;margin:0;color:var(--muted-on-light)}

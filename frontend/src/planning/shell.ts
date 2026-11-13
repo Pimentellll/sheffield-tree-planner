@@ -155,6 +155,58 @@ export function provenanceItems(
   return items
 }
 
+const METRIC_TITLE: Record<Result['metrics'][number]['metric_id'], string> = {
+  additional_shade: 'Additional direct shade',
+  weighted_shade_utility: 'Weighted shade utility',
+  winter_sun_loss: 'Winter sun loss',
+  direct_incident_energy_change: 'Direct incident energy change',
+}
+export const metricTitle = (id: Result['metrics'][number]['metric_id']) => METRIC_TITLE[id] ?? id.replace(/_/g, ' ')
+
+/** Badge beside the hero value: how this run's numbers were produced, never upgraded. */
+export const MODE_BADGE: Record<Result['provenance']['execution_mode'], string> = {
+  live: 'COMPUTED · LIVE', cached: 'CACHED RESULT', recorded: 'RECORDED, NOT RECOMPUTED', fixture: 'FIXTURE · NOT COMPUTED',
+}
+
+export interface ResultSummary {
+  readonly treeCount: number | null
+  /** Stored upfront cost of the evaluated layout, integer pence. */
+  readonly costPence: number | null
+  /** Budget of the scenario snapshot the run was computed from (not the current draft or head). */
+  readonly budgetPence: number | null
+  /** Winter sun loss for the run, with the backend's own constraint verdict when one exists. */
+  readonly winter: { readonly value: number; readonly unit: Result['metrics'][number]['unit']; readonly caseId: string; readonly limit: number | null; readonly status: 'pass' | 'fail' | 'unknown' | null } | null
+  /** Per-target values of the hero metric (only when the run reports more than one target). */
+  readonly targets: readonly { readonly targetId: string; readonly value: number }[]
+}
+
+/**
+ * The compact result card's figures. Every number is a stored Result value or a field of the
+ * run's own scenario snapshot; the winter verdict is the backend's constraint record, not a
+ * comparison done here.
+ */
+export function resultSummary(
+  result: Pick<Result, 'layouts' | 'metrics' | 'constraints'>,
+  inputScenario: Pick<Scenario, 'input'> | null,
+  hero: Pick<Result['metrics'][number], 'metric_id' | 'case_id'> | null,
+): ResultSummary {
+  const layout = result.layouts[0] ?? null
+  const winterMetric = result.metrics.find(m => m.metric_id === 'winter_sun_loss') ?? null
+  const limit = winterMetric && inputScenario ? inputScenario.input.constraints.winter_limits.find(w => w.case_id === winterMetric.case_id)?.maximum_loss_m2_h ?? null : null
+  const winterRecord = winterMetric ? result.constraints.find(c => c.case_id === winterMetric.case_id && /winter/i.test(c.rule)) ?? null : null
+  const targets = hero
+    ? result.metrics.filter(m => m.metric_id === hero.metric_id && m.case_id === hero.case_id && m.target_id !== null)
+      .map(m => ({ targetId: m.target_id as string, value: m.value }))
+    : []
+  return {
+    treeCount: layout ? layout.tree_count : null,
+    costPence: layout ? layout.cost_pence : null,
+    budgetPence: inputScenario ? inputScenario.input.constraints.budget_pence : null,
+    winter: winterMetric ? { value: winterMetric.value, unit: winterMetric.unit, caseId: winterMetric.case_id, limit, status: winterRecord ? winterRecord.status : null } : null,
+    targets: targets.length > 1 ? targets : [],
+  }
+}
+
 /**
  * Feasibility of an evaluation from its layouts. evaluate_layout reports analytical_outcome
  * "comparison_completed" (feasibility per layout), so the outcome alone cannot say.

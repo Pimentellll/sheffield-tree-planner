@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Result, Scenario } from '../api/types'
 import {
-  dataPillLabel, draftBannerText, formatPounds, headerStatus, latestEvaluation, layoutsFeasible, provenanceItems, provenanceStatus, scenarioSummary,
+  dataPillLabel, draftBannerText, formatPounds, headerStatus, latestEvaluation, layoutsFeasible, provenanceItems, provenanceStatus, resultSummary, scenarioSummary,
 } from './shell'
 
 // LABELLED SYNTHETIC TEST INPUT: shaped like the generated contracts to exercise pure view logic.
@@ -127,6 +127,34 @@ describe('provenanceItems', () => {
     expect(items).toContain('cached result (exact same inputs)')
     expect(items).toContain('originally live computation')
     expect(items).not.toContain('live computation')
+  })
+})
+
+describe('resultSummary (compact card)', () => {
+  const m = (metric_id: string, case_id: string, value: number, target_id: string | null = null) => ({ metric_id, case_id, value, target_id, unit: 'm2_h' })
+  const result = {
+    layouts: [{ tree_count: 2, cost_pence: 20_000 }],
+    metrics: [m('additional_shade', 'summer', 23, 't1'), m('additional_shade', 'summer', 4.75, 't2'), m('winter_sun_loss', 'winter', 4.35)],
+    constraints: [{ rule: 'winter_limit', case_id: 'winter', status: 'pass' }],
+  } as unknown as Result
+  const snapshot = { input: { constraints: { budget_pence: 20_000, winter_limits: [{ case_id: 'winter', maximum_loss_m2_h: 100 }] } } } as unknown as Scenario
+  it('takes every figure from the stored result and the run\'s own snapshot', () => {
+    expect(resultSummary(result, snapshot, { metric_id: 'additional_shade', case_id: 'summer' })).toEqual({
+      treeCount: 2, costPence: 20_000, budgetPence: 20_000,
+      winter: { value: 4.35, unit: 'm2_h', caseId: 'winter', limit: 100, status: 'pass' },
+      targets: [{ targetId: 't1', value: 23 }, { targetId: 't2', value: 4.75 }],
+    })
+  })
+  it('reports no winter verdict without a backend constraint record, and no budget without a snapshot', () => {
+    const s = resultSummary({ ...result, constraints: [] } as unknown as Result, null, null)
+    expect(s.winter?.status).toBeNull()
+    expect(s.winter?.limit).toBeNull()
+    expect(s.budgetPence).toBeNull()
+    expect(s.targets).toEqual([])
+  })
+  it('shows no per-target bars for a single target', () => {
+    const one = { ...result, metrics: [m('additional_shade', 'summer', 23, 't1')] } as unknown as Result
+    expect(resultSummary(one, snapshot, { metric_id: 'additional_shade', case_id: 'summer' }).targets).toEqual([])
   })
 })
 

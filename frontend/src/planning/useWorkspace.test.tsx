@@ -27,6 +27,8 @@ interface Fake {
   selected: Job | null
   pollJob: () => Promise<Job>
   calls: string[]
+  /** When set, each selections() reply waits for this promise (lets a test deliver replies out of order). */
+  selectionsHook?: () => Promise<Job | null>
 }
 
 function fakeClient(state: Fake): CanopyClient {
@@ -40,7 +42,8 @@ function fakeClient(state: Fake): CanopyClient {
     profile: async () => ({ profile_id: 'prof', states: {} }),
     selections: async () => {
       state.calls.push('selections')
-      return { evaluation: { current_job: state.selected }, search: { current_job: null }, comparison: { current_job: null } }
+      const selected = state.selectionsHook ? await state.selectionsHook() : state.selected
+      return { evaluation: { current_job: selected }, search: { current_job: null }, comparison: { current_job: null } }
     },
     result: async (runId: string) => (runId === 'r1' ? r1 : result(runId, 'j2')),
     submitJob: async () => { state.calls.push('submitJob'); return job('j2', 'queued', null) },
@@ -86,5 +89,25 @@ describe('useWorkspace job following (-51 review of #84)', () => {
     await waitFor(() => expect(ws.current.currentness(previous)).toBe('not-selected'), { timeout: 3000 })
     expect(state.calls.indexOf('selections', state.calls.indexOf('submitJob'))).toBeGreaterThan(-1)
     expect(ws.current.activeJob?.status).toBe('queued') // the new job is still running: nothing finished
+  })
+
+  it('drops a selection reply older than the last one applied (overlapping refreshes, -51 ordering guard)', async () => {
+    const state: Fake = { selected: job('j1', 'completed', 'r1'), pollJob: async () => job('j2', 'completed', 'r2'), calls: [] }
+    const { result: ws } = await connected(state)
+    // From here every selections() reply waits until the test releases it.
+    const releases: Array<(selected: Job | null) => void> = []
+    state.selectionsHook = () => new Promise<Job | null>(resolve => { releases.push(resolve) })
+    await act(async () => { void ws.current.evaluate() })
+    // Read 1 is the early refresh after submit; read 2 is the refresh after the job completed and was recorded.
+    await waitFor(() => expect(releases.length).toBe(2), { timeout: 3000 })
+    await act(async () => { releases[1](job('j2', 'completed', 'r2')) })
+    await waitFor(() => expect(ws.current.currentRunIds.evaluation).toBe('r2'), { timeout: 3000 })
+    const newest = ws.current.runs[0].result!
+    expect(ws.current.currentness(newest)).toBe('current')
+    // The older reply arrives last, describing the job while it was still queued (no run yet): it must be dropped.
+    await act(async () => { releases[0](job('j2', 'queued', null)) })
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(ws.current.currentRunIds.evaluation).toBe('r2')
+    expect(ws.current.currentness(newest)).toBe('current')
   })
 })

@@ -1,5 +1,7 @@
 # Build plan, task state and decisions
 
+**Active 13 November event-day overlay:** [Team execution board — Ben/Arnav/Alex owners, dependencies, Spark proof gates, 15:00–16:00 engineering freeze and presentation handoff](EVENT_DAY_EXECUTION_2026-11-13.md). The board describes current priorities and proposed checkpoints, not historical completion of B01–B12. Record acceptance evidence here using the existing task IDs after real verification.
+
 **This is the only task-status/decision home until a shared tracker is explicitly adopted.**  
 Documentation baseline 0.1. Application implementation remains **Planned**; B09 separately records completed readiness preparation without claiming device/domain acceptance. Named owners are proposed and must acknowledge their lane; they can use scoped coding assistants without giving away scientific or integration accountability.
 

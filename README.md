@@ -19,9 +19,9 @@ The integrated source contains:
 - Finite-catalogue search with upfront costs in integer pence, overlap-aware marginal gains and a separate final-layout constraint checker. Results are best evaluated alternatives, not claimed global optima.
 - Controlled relocation and scenario comparisons, with exact inputs, run IDs, units and source hashes.
 - Immutable SQLite scenarios, asynchronous jobs, generated API types, rights-checked assets and current-selection/cache safeguards.
-- A bounded local-model adapter and domain-tool loop. A small local-model round trip has been demonstrated, but reliable autonomous investigation and an AI advantage have **not** been established.
+- A bounded local-model adapter and domain-tool loop. In a local development test (laptop/WSL, not the DGX Spark), a small Qwen model (not Nemotron) selected `evaluate_layout` and cited the stored run; tiny-model metadata completion still fails safely. Nemotron tool use on the DGX, reliable autonomous investigation and an AI advantage have **not** been established.
 
-The full product is not finished. Real Sheffield geometry/rights/parity, target-model execution on the DGX, complete autonomous planning, independent manual-versus-AI evaluation and full-system acceptance remain open. SSH access to the assigned DGX is verified; that is not a model or application deployment result. [BUILD](docs/BUILD.md) records current issue-level evidence and the next gates.
+The full product is not finished. Real Sheffield geometry/rights/parity, target-model tool use on the DGX, complete autonomous planning, independent manual-versus-AI evaluation and full-system acceptance remain open. SSH access to the assigned DGX is verified. Ben reports ([#54](https://github.com/Pimentellll/sheffield-tree-planner/issues/54), team-reported) a loopback-only SSH preview of the CI-built release wheel (frontend built on the DGX) in which a browser click completed an evaluation on synthetic flat-ground geometry; it is a controlled baseline, not a deployment, and his hands-on acceptance is pending. A single Nemotron API smoke returned a response without a tool call. [BUILD](docs/BUILD.md) records issue-level evidence and the next gates; the #54 report is newer than BUILD's DGX entries.
 
 ### A concrete run
 

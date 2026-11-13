@@ -19,6 +19,7 @@ Read only what your task needs:
 - [Site desk audit](site-audit/STP-005-desk-audit.md): Alex’s sources, candidate coverage and pending asset/context controls; not an accepted site.
 - [Architecture design](ARCHITECTURE_DESIGN.md) and [audit](ARCHITECTURE_AUDIT.md): preserved design references, not new completion or owner-approval evidence.
 - [UI reference](UI_DESIGN_REFERENCE.md) and [pre-implementation baseline](PRE_IMPLEMENTATION_READINESS.md): historical visual and analysis inputs; BUILD supersedes their old status and merge sequencing.
+- [Product Vision v2](design/product-vision-v2/README.md): the newer visual direction as eight design artboards, with its implementation brief. Design reference only; every figure and picture in it is an example, not a result.
 - [VALIDATION.md](VALIDATION.md): test specifications, acceptance matrix, runtime evidence and demo/recovery runbook.
 - [DGX_SPARK.md](DGX_SPARK.md): event SSH/tunnels, pinned local-inference candidate, executable readiness diagnostic and full-application deployment gates. Prepared locally, not a claimed Spark run.
 - [AGENTS.md](../AGENTS.md): project-specific boundaries for coding assistants, not personal agent configuration.

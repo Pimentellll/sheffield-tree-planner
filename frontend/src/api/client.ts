@@ -70,7 +70,14 @@ export class CanopyClient {
         throw new ApiError(response.status, null, `Backend returned non-JSON (HTTP ${response.status})`)
       }
     }
-    if (!response.ok) throw new ApiError(response.status, isContractError(parsed) ? parsed : null, `HTTP ${response.status}`)
+    if (!response.ok) {
+      const contract = isContractError(parsed) ? parsed : null
+      // A 5xx without a contract error body comes from the dev proxy or gateway, not the evaluator: the backend
+      // process is not answering. Say so instead of a bare status code (#56 failure states).
+      throw new ApiError(response.status, contract, !contract && response.status >= 500
+        ? `The local backend did not answer (HTTP ${response.status}). Nothing was computed. Check that the backend is running, then reload this page.`
+        : `HTTP ${response.status}`)
+    }
     return parsed as T
   }
 

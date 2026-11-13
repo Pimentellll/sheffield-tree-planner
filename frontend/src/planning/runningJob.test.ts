@@ -76,25 +76,30 @@ describe('runningJobView', () => {
 })
 
 describe('supersededView', () => {
-  const old = { scenario_revision: 3, superseded_by_revision: 4, run_id: 'run-3f81c2' }
+  const old = { scenario_id: 'scn-wp-014', scope: 'accepted' as const, scenario_revision: 3, superseded_by_revision: 4, run_id: 'run-3f81c2' }
+  const head = (revision: number, over: Partial<{ scenario_id: string; scope: 'accepted' | 'hypothetical' }> = {}) =>
+    ({ scenario_id: 'scn-wp-014', scope: 'accepted' as const, revision, ...over })
   it('names the superseding revision from the backend job field first, with the project\'s words', () => {
-    const v = supersededView(old, 5, true)
+    const v = supersededView(old, head(5), true)
     expect(v && [v.revision, v.supersededBy, v.source, v.pill, v.meta]).toEqual([3, 4, 'job', 'REV 3 RUN · SUPERSEDED', 'run-3f81c2 · kept in history'])
-    expect(v?.body).toBe(`Revision 3: ${CURRENTNESS_LABEL.superseded.detail} Superseded by revision 4.`)
+    expect(v?.body).toBe(`${CURRENTNESS_LABEL.superseded.detail} Superseded by revision 4.`)
   })
-  it('falls back to a newer accepted head, and says so', () => {
-    const v = supersededView({ ...old, superseded_by_revision: null }, 4, true)
+  it('falls back to a newer accepted head of the same scenario and scope, and says so', () => {
+    const v = supersededView({ ...old, superseded_by_revision: null }, head(4), true)
     expect(v && [v.supersededBy, v.source]).toEqual([4, 'head'])
   })
-  it('does not name a revision it cannot know (another scenario or scope)', () => {
-    const v = supersededView({ ...old, scenario_revision: 7, superseded_by_revision: null }, 4, true)
-    expect(v && [v.supersededBy, v.source, v.body]).toEqual([null, null, `Revision 7: ${CURRENTNESS_LABEL.superseded.detail}`])
+  it('does not name a revision it cannot know: another scenario, another scope, or an older head', () => {
+    const unknown = { ...old, superseded_by_revision: null }
+    for (const h of [head(5, { scenario_id: 'scn-other' }), head(5, { scope: 'hypothetical' }), head(2), null]) {
+      const v = supersededView(unknown, h, true)
+      expect(v && [v.supersededBy, v.source, v.body]).toEqual([null, null, CURRENTNESS_LABEL.superseded.detail])
+    }
   })
   it('follows the project\'s currentness rule: nothing unless the caller says superseded', () => {
-    expect(supersededView(old, 5, false)).toBeNull()
-    expect(supersededView(null, 4, true)).toBeNull()
+    expect(supersededView(old, head(5), false)).toBeNull()
+    expect(supersededView(null, head(4), true)).toBeNull()
   })
   it('never carries a metric value', () => {
-    expect(JSON.stringify(supersededView(old, 4, true))).not.toMatch(/m²|m2_h|£|\d{3,}/)
+    expect(JSON.stringify(supersededView(old, head(4), true))).not.toMatch(/m²|m2_h|£|\d{3,}/)
   })
 })

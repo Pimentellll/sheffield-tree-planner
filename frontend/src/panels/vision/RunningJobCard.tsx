@@ -72,7 +72,7 @@ export function RunningJobCard({ ws }: { ws: Workspace }) {
 export function SupersededResultBanner({ ws }: { ws: Workspace }) {
   const record = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
   const isSuperseded = record?.result ? ws.currentness(record.result) === 'superseded' : false
-  const v = supersededView(record?.job ?? null, ws.scenario?.revision ?? null, isSuperseded)
+  const v = supersededView(record?.job ?? null, ws.scenario, isSuperseded)
   if (!v) return null
   return (
     <div className="rjc-superseded glass-light" role="status" data-testid="rjc-superseded">

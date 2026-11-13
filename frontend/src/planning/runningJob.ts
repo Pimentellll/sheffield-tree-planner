@@ -1,4 +1,4 @@
-import type { Job } from '../api/types'
+import type { Job, ScenarioRef } from '../api/types'
 import { CURRENTNESS_LABEL, describeJob, progressView, type ProgressView } from './evaluation'
 
 /**
@@ -139,13 +139,17 @@ export interface SupersededView {
  * metric value.
  */
 export function supersededView(
-  job: Pick<Job, 'scenario_revision' | 'superseded_by_revision' | 'run_id'> | null,
-  headRevision: number | null,
+  job: Pick<Job, 'scenario_id' | 'scope' | 'scenario_revision' | 'superseded_by_revision' | 'run_id'> | null,
+  head: Pick<ScenarioRef, 'scenario_id' | 'revision' | 'scope'> | null,
   isSuperseded: boolean,
 ): SupersededView | null {
   if (!job || !isSuperseded) return null
   const fromJob = job.superseded_by_revision
-  const fromHead = headRevision !== null && headRevision > job.scenario_revision ? headRevision : null
+  // The head can only be named when it is the same scenario and scope (classifyResult also calls a
+  // result from another scenario or scope superseded, but no revision of that scenario replaced it).
+  const fromHead = head !== null && head.scenario_id === job.scenario_id && head.scope === job.scope && head.revision > job.scenario_revision
+    ? head.revision
+    : null
   const supersededBy = fromJob ?? fromHead
   const r = job.scenario_revision
   return {
@@ -156,6 +160,7 @@ export function supersededView(
     // Same words as the provenance strip (shell.ts provenanceStatus): REV N RUN · SUPERSEDED.
     pill: `REV ${r} RUN · SUPERSEDED`,
     meta: `${job.run_id ?? 'no run id'} · kept in history`,
-    body: `Revision ${r}: ${CURRENTNESS_LABEL.superseded.detail}${supersededBy !== null ? ` Superseded by revision ${supersededBy}.` : ''}`,
+    // The pill already names revision r; the body reuses the project's own superseded wording.
+    body: `${CURRENTNESS_LABEL.superseded.detail}${supersededBy !== null ? ` Superseded by revision ${supersededBy}.` : ''}`,
   }
 }

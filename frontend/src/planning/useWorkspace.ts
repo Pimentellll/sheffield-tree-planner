@@ -62,6 +62,12 @@ export interface Workspace {
   readonly notice: string | null
   readonly error: string | null
   readonly canEvaluate: boolean
+  /**
+   * A requirement field holds typed text that is invalid or not yet applied to the draft. While true,
+   * nothing can be accepted, so a click never accepts an older draft than the one on screen.
+   */
+  readonly editPending: boolean
+  readonly setEditPending: (pending: boolean) => void
   readonly review: ProposalReview | null
   readonly currentness: (result: Result) => Currentness
   readonly setDraftPosition: (p: Vec3) => void
@@ -107,6 +113,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [review, setReview] = useState<ProposalReview | null>(null)
+  const [editPending, setEditPending] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const scenarioRef = useRef<Scenario | null>(null)
   const activeJobId = useRef<string | null>(null)
@@ -303,6 +310,8 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     const head = scenarioRef.current
     if (!head || !layout || !placement || !draftPosition) return
     if (requirementErrors.length) { setError(requirementErrors.join(' ')); return }
+    // Never accept an older draft than the one on screen: typed text must be valid and applied first.
+    if (editPending) { setError('A requirement field has a typed value that is invalid or not yet applied. Press Enter to apply it, or fix it, before accepting.'); return }
     setError(null)
     setNotice(null)
     try {
@@ -320,7 +329,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     } catch (err) {
       await handleFailure(err)
     }
-  }, [client, draftPosition, draftRequirements, draftDirty, layout, placement, requirementErrors, adoptHead, submit, handleFailure, site])
+  }, [client, draftPosition, draftRequirements, draftDirty, layout, placement, requirementErrors, editPending, adoptHead, submit, handleFailure, site])
 
   const cancel = useCallback(async () => {
     const id = activeJobId.current
@@ -403,7 +412,9 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     placementId: placement?.placement_id ?? null,
     committedPosition, draftPosition, positionDirty, acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors,
     draftChanges, draftDirty, activeJob, jobStatusLost, runs, currentRunId, currentRunIds, busy, notice, error, review,
-    canEvaluate: connectedOk && requirementErrors.length === 0 && !(jobRunning && !draftDirty),
+    canEvaluate: connectedOk && requirementErrors.length === 0 && !editPending && !(jobRunning && !draftDirty),
+    editPending,
+    setEditPending,
     currentness,
     setDraftPosition: (p: Vec3) => setDraft(p),
     setDraftRequirements: (r: Requirements) => setDraftRequirements(r),
@@ -416,5 +427,5 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     reload: () => setAttempt(a => a + 1),
   }), [connection, session, declaration, site, profile, scenario, layout, placement, committedPosition, draftPosition, positionDirty,
     acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors, draftChanges, draftDirty, activeJob, jobStatusLost, runs, currentRunId, currentRunIds,
-    busy, notice, error, review, connectedOk, jobRunning, currentness, evaluate, submit, cancel, recheckJob, loadProposal, acceptProposal])
+    busy, notice, error, review, connectedOk, jobRunning, editPending, currentness, evaluate, submit, cancel, recheckJob, loadProposal, acceptProposal])
 }

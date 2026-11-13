@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Result, Scenario } from '../api/types'
 import {
-  dataPillLabel, draftBannerText, formatPounds, headerStatus, latestEvaluation, layoutsFeasible, provenanceItems, provenanceStatus, resultSummary, scenarioSummary,
+  dataPillLabel, draftBannerText, formatPounds, headerStatus, headlineMetric, latestEvaluation, layoutsFeasible, provenanceItems, provenanceStatus, resultSummary, scenarioSummary,
 } from './shell'
 
 // LABELLED SYNTHETIC TEST INPUT: shaped like the generated contracts to exercise pure view logic.
@@ -135,9 +135,9 @@ describe('resultSummary (compact card)', () => {
   const result = {
     layouts: [{ tree_count: 2, cost_pence: 20_000 }],
     metrics: [m('additional_shade', 'summer', 23, 't1'), m('additional_shade', 'summer', 4.75, 't2'), m('winter_sun_loss', 'winter', 4.35)],
-    constraints: [{ rule: 'winter_limit', case_id: 'winter', status: 'pass' }],
+    constraints: [{ rule: 'winter loss:aggregate', case_id: 'winter', status: 'pass' }],
   } as unknown as Result
-  const snapshot = { input: { constraints: { budget_pence: 20_000, winter_limits: [{ case_id: 'winter', maximum_loss_m2_h: 100 }] } } } as unknown as Scenario
+  const snapshot = { input: { constraints: { budget_pence: 20_000, winter_limits: [{ case_id: 'winter', maximum_loss_m2_h: 100, target_id: null }, { case_id: 'winter', maximum_loss_m2_h: 7, target_id: 't1' }] } } } as unknown as Scenario
   it('takes every figure from the stored result and the run\'s own snapshot', () => {
     expect(resultSummary(result, snapshot, { metric_id: 'additional_shade', case_id: 'summer' })).toEqual({
       treeCount: 2, costPence: 20_000, budgetPence: 20_000,
@@ -155,6 +155,49 @@ describe('resultSummary (compact card)', () => {
   it('shows no per-target bars for a single target', () => {
     const one = { ...result, metrics: [m('additional_shade', 'summer', 23, 't1')] } as unknown as Result
     expect(resultSummary(one, snapshot, { metric_id: 'additional_shade', case_id: 'summer' }).targets).toEqual([])
+  })
+})
+
+describe('resultSummary winter matching (-51 review of #88, item 3)', () => {
+  const m = (case_id: string, value: number, target_id: string | null) => ({ metric_id: 'winter_sun_loss', case_id, value, target_id, unit: 'm2_h' })
+  const snapshot = { input: { constraints: { budget_pence: 1, winter_limits: [{ case_id: 'w', maximum_loss_m2_h: 100, target_id: null }, { case_id: 'w', maximum_loss_m2_h: 7, target_id: 't1' }] } } } as unknown as Scenario
+  it('uses the aggregate limit and the backend rule id for the aggregate metric, not a per-target record', () => {
+    const r = { layouts: [], metrics: [m('w', 9, 't1'), m('w', 4, null)], constraints: [{ rule: 'winter loss:t1', case_id: 'w', status: 'fail' }, { rule: 'winter loss:aggregate', case_id: 'w', status: 'pass' }] } as unknown as Result
+    expect(resultSummary(r, snapshot, null).winter).toEqual({ value: 4, unit: 'm2_h', caseId: 'w', limit: 100, status: 'pass' })
+  })
+  it('matches a single per-target metric to its own target limit and record', () => {
+    const r = { layouts: [], metrics: [m('w', 9, 't1')], constraints: [{ rule: 'winter loss:t1', case_id: 'w', status: 'fail' }] } as unknown as Result
+    expect(resultSummary(r, snapshot, null).winter).toEqual({ value: 9, unit: 'm2_h', caseId: 'w', limit: 7, status: 'fail' })
+  })
+  it('ignores a record whose rule merely mentions winter', () => {
+    const r = { layouts: [], metrics: [m('w', 4, null)], constraints: [{ rule: 'winter_something_else', case_id: 'w', status: 'pass' }] } as unknown as Result
+    expect(resultSummary(r, snapshot, null).winter?.status).toBeNull()
+  })
+})
+
+describe('headlineMetric (-51 review of #88, item 1)', () => {
+  const shade = (case_id: string, value: number, target_id: string | null = null) => ({ metric_id: 'additional_shade', case_id, value, target_id, unit: 'm2_h' })
+  const snap = (primary: string) => ({ input: { objective: { primary_case_id: primary } } }) as unknown as Scenario
+  it("takes the aggregate for the primary case of the run's own snapshot", () => {
+    const r = { metrics: [shade('summer', 9, 't1'), shade('summer', 16)], missing_metrics: [] } as unknown as Result
+    expect(headlineMetric(r, snap('summer')).metric?.value).toBe(16)
+  })
+  it("follows the run's snapshot when the head's primary case has changed since", () => {
+    const r = { metrics: [shade('summer', 16), shade('winter', 4)], missing_metrics: [] } as unknown as Result
+    expect(headlineMetric(r, snap('winter')).metric?.value).toBe(4)
+  })
+  it('reports "not computed" with the backend reasons instead of substituting another case or metric', () => {
+    const r = { metrics: [shade('winter', 4), { ...shade('summer', 32), metric_id: 'weighted_shade_utility' }], missing_metrics: [{ metric_id: 'additional_shade', case_id: 'summer', reason: 'no receiver' }] } as unknown as Result
+    const h = headlineMetric(r, snap('summer'))
+    expect(h.metric).toBeNull()
+    expect(h.missingReasons).toEqual(['additional_shade: no receiver'])
+  })
+  it('uses a lone per-target value, but not when several targets make it ambiguous', () => {
+    expect(headlineMetric({ metrics: [shade('s', 2, 'only')], missing_metrics: [] } as unknown as Result, snap('s')).metric?.value).toBe(2)
+    expect(headlineMetric({ metrics: [shade('s', 2, 'a'), shade('s', 3, 'b')], missing_metrics: [] } as unknown as Result, snap('s')).metric).toBeNull()
+  })
+  it("has no headline when the run's snapshot is unknown", () => {
+    expect(headlineMetric({ metrics: [shade('s', 2)], missing_metrics: [] } as unknown as Result, null)).toEqual({ metric: null, primaryCaseId: null, missingReasons: [] })
   })
 })
 

@@ -166,6 +166,17 @@ describe('requirements drafts (STP-021)', () => {
     expect(parsePounds('abc')).toBeNull()
     expect(parsePounds('1e3')).toBeNull()
   })
+  it('accepts thousands separators only in their proper places (-51 review of #91)', () => {
+    expect(parsePounds('75,000')).toBe(7_500_000)
+    expect(parsePounds('£1,234,567.89')).toBe(123_456_789)
+    expect(parsePounds('75000')).toBe(7_500_000)
+    expect(parsePounds('7,5,0,0,0')).toBeNull()
+    expect(parsePounds('75,0x0')).toBeNull()
+    expect(parsePounds('7500,00')).toBeNull()
+    expect(parsePounds(',75,000')).toBeNull()
+    expect(parsePounds('75,000,')).toBeNull()
+    expect(parsePounds('1,23')).toBeNull()
+  })
   it('validates count, budget and exclusion ids', () => {
     expect(validateRequirements({ budgetPence: 100, maxTreeCount: null, excludedRegionIds: [] }, [])).toEqual([])
     expect(validateRequirements({ budgetPence: -1, maxTreeCount: 2.5, excludedRegionIds: ['x'] }, ['y'])).toHaveLength(3)

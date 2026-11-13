@@ -180,6 +180,38 @@ export interface ResultSummary {
   readonly targets: readonly { readonly targetId: string; readonly value: number }[]
 }
 
+type MetricRow = Result['metrics'][number]
+
+/** The aggregate (target_id null) when present; a single per-target value only when it is unambiguous. */
+function pickAggregate<T extends Pick<MetricRow, 'target_id'>>(rows: readonly T[]): T | null {
+  return rows.find(m => m.target_id === null) ?? (rows.length === 1 ? rows[0] : null)
+}
+
+export interface Headline {
+  /** The primary case's additional shade, or null when the run did not compute it (never a substitute). */
+  readonly metric: MetricRow | null
+  /** The primary case the run was computed for (from its own scenario snapshot), or null when unknown. */
+  readonly primaryCaseId: string | null
+  /** The backend's stated reasons for missing metrics of that case. */
+  readonly missingReasons: readonly string[]
+}
+
+/**
+ * The card's headline: additional shade for the PRIMARY CASE OF THE RUN'S OWN SNAPSHOT (not the head
+ * scenario, whose primary case may have changed since), aggregate first. It never falls back to
+ * another case's or another metric's value.
+ */
+export function headlineMetric(
+  result: Pick<Result, 'metrics' | 'missing_metrics'>,
+  inputScenario: Pick<Scenario, 'input'> | null,
+): Headline {
+  const primaryCaseId = inputScenario?.input.objective.primary_case_id ?? null
+  if (primaryCaseId === null) return { metric: null, primaryCaseId, missingReasons: [] }
+  const metric = pickAggregate(result.metrics.filter(m => m.metric_id === 'additional_shade' && m.case_id === primaryCaseId))
+  const missingReasons = metric ? [] : result.missing_metrics.filter(m => m.case_id === primaryCaseId).map(m => `${m.metric_id}: ${m.reason}`)
+  return { metric, primaryCaseId, missingReasons }
+}
+
 /**
  * The compact result card's figures. Every number is a stored Result value or a field of the
  * run's own scenario snapshot; the winter verdict is the backend's constraint record, not a
@@ -191,9 +223,14 @@ export function resultSummary(
   hero: Pick<Result['metrics'][number], 'metric_id' | 'case_id'> | null,
 ): ResultSummary {
   const layout = result.layouts[0] ?? null
-  const winterMetric = result.metrics.find(m => m.metric_id === 'winter_sun_loss') ?? null
-  const limit = winterMetric && inputScenario ? inputScenario.input.constraints.winter_limits.find(w => w.case_id === winterMetric.case_id)?.maximum_loss_m2_h ?? null : null
-  const winterRecord = winterMetric ? result.constraints.find(c => c.case_id === winterMetric.case_id && /winter/i.test(c.rule)) ?? null : null
+  const winterMetric = pickAggregate(result.metrics.filter(m => m.metric_id === 'winter_sun_loss'))
+  // Limits may be per target: match the shown metric's own case and target (null = aggregate).
+  const limit = winterMetric && inputScenario
+    ? inputScenario.input.constraints.winter_limits.find(w => w.case_id === winterMetric.case_id && (w.target_id ?? null) === winterMetric.target_id)?.maximum_loss_m2_h ?? null
+    : null
+  // The backend's own verdict, by its stable rule id ("winter loss:aggregate" / "winter loss:<target_id>").
+  const winterRule = winterMetric ? `winter loss:${winterMetric.target_id ?? 'aggregate'}` : null
+  const winterRecord = winterMetric ? result.constraints.find(c => c.case_id === winterMetric.case_id && c.rule === winterRule) ?? null : null
   const targets = hero
     ? result.metrics.filter(m => m.metric_id === hero.metric_id && m.case_id === hero.case_id && m.target_id !== null)
       .map(m => ({ targetId: m.target_id as string, value: m.value }))

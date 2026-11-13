@@ -10,6 +10,7 @@ import ReportScreen from './panels/ReportScreen'
 import OverviewScreen from './panels/OverviewScreen'
 import { AgentPanel, ContextHeader, DraftBanner, EvidenceChainDetails, MapKey, NavigationRail, ProvenanceStrip, SCREENS, ScenarioStrip, type Screen } from './panels/Shell'
 import { layoutRows } from './planning/alternatives'
+import { FOCUS_TARGET, focusAfterRender } from './panels/focus'
 import type { Vec3 } from './api/types'
 import { nearestCandidate, samePosition, stepCandidate } from './planning/evaluation'
 
@@ -61,20 +62,26 @@ function App() {
             <h1 className="sr-only">Planting studio</h1>
             {/* DOM order is the reading and keyboard order: scenario first, then the scene, then results. */}
             <div className="studio-left">
-              <ScenarioStrip ws={ws} editorOpen={editorOpen} onToggle={() => setEditorOpen(open => !open)} />
-              <DraftBanner ws={ws} editorOpen={editorOpen} onReview={() => setEditorOpen(true)} />
-              {(synthetic || !connected) && (
-                <div className="notice glass-light" role="status" data-testid="site-notice">
-                  <span className="notice-icon" aria-hidden="true">ⓘ</span>
-                  <div><strong>{connected ? 'Synthetic test site: not Sheffield' : 'Not connected to an evaluator'}</strong><p>{connected
-                    ? `Every metric is computed live by the local backend on this authored synthetic geometry and the assumptions listed with each result. It is not a surveyed site or a forecast of real benefit. Available here: ${ops.join(', ') || 'no operations'}. Each result states which constraints were evaluated and which remain unknown.`
-                    : 'Start the local backend (see frontend/README.md). No metric is shown without a backend run.'}</p></div>
-                </div>
-              )}
-              {editorOpen && (
+              {/* C01: the open editor replaces the scenario strip and the draft banner (it shows the draft itself). */}
+              {editorOpen ? (
                 <aside id="scenario-editor" className="scenario-editor glass-light" aria-label="Scenario editor">
-                  <RequirementsPanel ws={ws} />
+                  <RequirementsPanel ws={ws} onClose={() => { setEditorOpen(false); focusAfterRender(FOCUS_TARGET.editorToggle) }} />
                 </aside>
+              ) : (
+                <>
+                  <ScenarioStrip ws={ws} editorOpen={editorOpen} onToggle={() => setEditorOpen(open => !open)} />
+                  <DraftBanner ws={ws} editorOpen={editorOpen} onReview={() => setEditorOpen(true)} />
+                </>
+              )}
+              {(synthetic || !connected) && (
+                <div className={`notice glass-light${editorOpen ? ' notice-compact' : ''}`} role="status" data-testid="site-notice">
+                  <span className="notice-icon" aria-hidden="true">ⓘ</span>
+                  <div><strong>{connected ? 'Synthetic test site: not Sheffield' : 'Not connected to an evaluator'}</strong>{editorOpen
+                    ? (connected && <p>Authored geometry, not a surveyed site. Available here: {ops.join(', ') || 'no operations'}.</p>)
+                    : <p>{connected
+                      ? `Every metric is computed live by the local backend on this authored synthetic geometry and the assumptions listed with each result. It is not a surveyed site or a forecast of real benefit. Available here: ${ops.join(', ') || 'no operations'}. Each result states which constraints were evaluated and which remain unknown.`
+                      : 'Start the local backend (see frontend/README.md). No metric is shown without a backend run.'}</p>}</div>
+                </div>
               )}
             </div>
 

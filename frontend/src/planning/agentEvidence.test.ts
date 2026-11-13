@@ -1,66 +1,94 @@
 import { describe, expect, it } from 'vitest'
 import type { Metric } from '../api/types'
 import {
-  AGENT_API_UNAVAILABLE_REASON, MODEL_INTERPRETATION_LABEL, agentPanelState, evidenceChain, linkageProblems, metricText, narrativeFigures, narrativeView,
-  type ChainJob, type ChainResult,
+  AGENT_API_UNAVAILABLE_REASON, MODEL_INTERPRETATION_LABEL, agentPanelState, evidenceChain, linkageProblems, metricLabel, metricText, narrativeFigures,
+  narrativeView, type ChainJob, type ChainResult,
 } from './agentEvidence'
 
-// Labelled synthetic test inputs shaped like the backend wire types. Not runtime results.
+// Labelled synthetic test inputs shaped like the backend wire types (metric fixtures satisfy the
+// backend registry in contracts/results.py). Not runtime results.
+type Delivery = NonNullable<ChainJob['delivery']>
 const ref = { scenario_id: 's1', revision: 3, scope: 'accepted' as const }
 const metric = (over: Partial<Metric> = {}): Metric => ({
   case_id: 'summer', horizon_years: 10, layout_id: 'L1', metric_id: 'additional_shade', metric_instance_id: 'm1',
-  quantity_kind: 'geometric', scenario_ref: ref, target_id: null, unit: 'm2_h', value: 12.34, weighting: 'none', ...over,
+  quantity_kind: 'geometric', scenario_ref: ref, target_id: null, unit: 'm2_h', value: 12.34, weighting: 'unweighted', ...over,
+})
+const energy = (unit: 'kWh' | 'kWh_per_m2', value: number): Metric =>
+  metric({ metric_id: 'direct_incident_energy_change', quantity_kind: 'direct_incident_energy', unit, value, weighting: 'unweighted', area_basis: 'surface', aggregation_basis: 'sum' })
+const delivery = (over: Partial<Delivery> = {}): Delivery => ({
+  delivered_at_utc: '2026-11-13T12:00:00Z', execution_mode: 'live', input_fingerprint: 'fp-1', job_id: 'job-1', run_id: 'run-1',
+  scenario_id: 's1', scenario_revision: 3, scope: 'accepted', selection_seq: 1, source_job_id: 'job-1', view_slot: 'evaluation', ...over,
 })
 const job = (over: Partial<ChainJob> = {}): ChainJob => ({
-  job_id: 'job-1', status: 'completed', run_id: 'run-1', input_fingerprint: 'fp-1', scenario_id: 's1', scenario_revision: 3, scope: 'accepted',
-  operation: 'evaluate_layout', ...over,
+  job_id: 'job-1', status: 'completed', operation: 'evaluate_layout', scenario_id: 's1', scenario_revision: 3, scope: 'accepted', delivery: delivery(), ...over,
 })
 const result = (over: Partial<ChainResult> = {}): ChainResult => ({
-  run_id: 'run-1', source_job_id: 'job-1', input_fingerprint: 'fp-1', scenario_id: 's1', scenario_revision: 3, scope: 'accepted', operation: 'evaluate_layout',
+  run_id: 'run-1', source_job_id: 'job-1', input_fingerprint: 'fp-1', input_snapshot_ref: ref, operation: 'evaluate_layout',
   metrics: [metric()], missing_metrics: [], layouts: [{ cost_pence: 45000, selected: true }, { cost_pence: 99900, selected: false }],
   limitations: ['Synthetic flat site; one-hour sample.'], provenance: { execution_mode: 'live' }, ...over,
 })
 
 describe('agentPanelState (no agent API before #73)', () => {
-  it('is explicitly unavailable and never offers a transcript', () => {
-    const state = agentPanelState(null)
-    expect(state).toEqual({ kind: 'unavailable', reason: AGENT_API_UNAVAILABLE_REASON, manualEvaluateAvailable: false })
-  })
-  it('reports the manual fallback only when the backend offers evaluate_layout', () => {
-    expect(agentPanelState({ available_operations: ['evaluate_layout', 'search_layouts'] }).manualEvaluateAvailable).toBe(true)
+  it('is explicitly unavailable and only promises manual evaluation when the backend offers it', () => {
+    const none = agentPanelState(null)
+    expect(none.kind).toBe('unavailable')
+    expect(none.manualEvaluateAvailable).toBe(false)
+    expect(none.reason.startsWith(AGENT_API_UNAVAILABLE_REASON)).toBe(true)
+    expect(none.reason).toContain('not offered by this backend')
+    const ok = agentPanelState({ available_operations: ['evaluate_layout', 'search_layouts'] })
+    expect(ok.manualEvaluateAvailable).toBe(true)
+    expect(ok.reason).toContain('Manual evaluation is unaffected')
     expect(agentPanelState({ available_operations: ['search_layouts'] }).manualEvaluateAvailable).toBe(false)
   })
 })
 
 describe('evidenceChain (backend values only)', () => {
-  it('links job → result → metric, cost and limitation with the supplied currentness', () => {
+  const byKind = (chain: ReturnType<typeof evidenceChain>, kind: string) => (chain.ok ? chain.steps.filter(s => s.kind === kind).map(s => s.value) : null)
+
+  it('links job → delivery → result → metric, cost and limitation with the supplied currentness', () => {
     const chain = evidenceChain(job(), result(), 'current')
     expect(chain.ok).toBe(true)
-    if (!chain.ok) return
-    const byKind = (kind: string) => chain.steps.filter(s => s.kind === kind).map(s => s.value)
-    expect(byKind('job')).toEqual(['job-1'])
-    expect(byKind('result')).toEqual(['run-1 · Live computation'])
-    expect(byKind('currentness')).toEqual(['CURRENT'])
-    expect(byKind('metric')).toEqual(['12.34 m²·h'])
-    expect(byKind('cost')).toEqual(['£450.00']) // selected layout only, converted from pence once
-    expect(byKind('limitation')).toEqual(['Synthetic flat site; one-hour sample.'])
+    expect(byKind(chain, 'job')).toEqual(['job-1'])
+    expect(byKind(chain, 'result')).toEqual(['run-1 · delivered as: Live computation'])
+    expect(byKind(chain, 'provenance')).toEqual(['job job-1 · Live computation'])
+    expect(byKind(chain, 'currentness')).toEqual(['CURRENT'])
+    expect(byKind(chain, 'metric')).toEqual(['12.34 m²·h'])
+    expect(byKind(chain, 'cost')).toEqual(['£450.00']) // selected layout only, converted from pence once
+    expect(byKind(chain, 'limitation')).toEqual(['Synthetic flat site; one-hour sample.'])
+  })
+  it('accepts a cache hit and shows it as cached, keeping the original live computation as provenance', () => {
+    const cached = job({ job_id: 'job-2', delivery: delivery({ job_id: 'job-2', execution_mode: 'cached', source_job_id: 'job-1' }) })
+    expect(linkageProblems(cached, result())).toEqual([])
+    const chain = evidenceChain(cached, result(), 'current')
+    expect(byKind(chain, 'result')).toEqual(['run-1 · delivered as: Cached result (exact same inputs)'])
+    expect(byKind(chain, 'provenance')).toEqual(['job job-1 · Live computation'])
   })
   it('never upgrades currentness: a superseded result stays SUPERSEDED', () => {
-    const chain = evidenceChain(job(), result(), 'superseded')
-    expect(chain.ok && chain.steps.find(s => s.kind === 'currentness')?.value).toBe('SUPERSEDED')
+    expect(byKind(evidenceChain(job(), result(), 'superseded'), 'currentness')).toEqual(['SUPERSEDED'])
+  })
+  it('labels per-target and aggregate rows of the same metric distinctly', () => {
+    const r = result({ metrics: [metric(), metric({ metric_instance_id: 'm2', target_id: 'bench-1', value: 5 })] })
+    const chain = evidenceChain(job(), r, 'current')
+    const labels = chain.ok ? chain.steps.filter(s => s.kind === 'metric').map(s => s.label) : []
+    expect(labels).toEqual([
+      'additional_shade · case summer · all targets · layout L1 · geometric',
+      'additional_shade · case summer · bench-1 · layout L1 · geometric',
+    ])
+    expect(metricLabel(metric({ target_id: 'bench-1' }))).toContain('bench-1')
   })
   it('shows missing metrics as not computed instead of dropping them', () => {
-    const chain = evidenceChain(job(), result({ metrics: [], missing_metrics: [{ metric_id: 'winter_sun_loss', case_id: 'winter', reason: 'no winter case' }] }), 'current')
-    expect(chain.ok && chain.steps.filter(s => s.kind === 'missing-metric').map(s => s.value)).toEqual(['Not computed: no winter case'])
+    const r = result({ metrics: [], missing_metrics: [{ metric_id: 'winter_sun_loss', case_id: 'winter', layout_id: 'L1', reason: 'no winter case' }] })
+    expect(byKind(evidenceChain(job(), r, 'current'), 'missing-metric')).toEqual(['Not computed: no winter case'])
   })
-  it('refuses a result that does not belong to the job', () => {
-    expect(linkageProblems(job(), result())).toEqual([])
+  it('refuses a result that the job did not deliver', () => {
     for (const [j, r] of [
+      [job({ delivery: null }), result()],
+      [job({ status: 'running', delivery: null }), result()],
+      [job({ delivery: delivery({ job_id: 'job-9' }) }), result()],
+      [job({ delivery: delivery({ run_id: 'run-2' }) }), result()],
       [job(), result({ source_job_id: 'job-2' })],
       [job(), result({ input_fingerprint: 'fp-2' })],
-      [job({ run_id: 'run-2' }), result()],
-      [job({ status: 'running', run_id: null }), result()],
-      [job(), result({ scenario_revision: 2 })],
+      [job(), result({ input_snapshot_ref: { ...ref, revision: 2 } })],
       [job(), result({ operation: 'search_layouts' })],
     ] as const) {
       const chain = evidenceChain(j, r, 'current')
@@ -106,9 +134,13 @@ describe('narrativeFigures (untrusted model text)', () => {
     expect(only('45000 pence')).toEqual(['appears-in-result'])
     expect(only('45000p')).toEqual(['appears-in-result'])
   })
-  it('applies currency scale words instead of reading £450k as £450', () => {
+  it('applies currency scales and signs instead of reading them as £450', () => {
     expect(statuses('£450k')).toEqual([['£450k', 'money', 'unverified']])
     expect(statuses('£1.2m')).toEqual([['£1.2m', 'money', 'unverified']])
+    expect(statuses('£450mn')).toEqual([['£450mn', 'money', 'unverified']])
+    expect(statuses('£450-million')).toEqual([['£450-million', 'money', 'unverified']])
+    expect(statuses('£450 trillion')).toEqual([['£450 trillion', 'money', 'unverified']])
+    expect(statuses('−£450')).toEqual([['−£450', 'money', 'unverified']])
   })
   it('flags every common way of writing a temperature', () => {
     for (const text of ['2 deg C', '2℃', '2 ºC', '2 °Celsius', '2 degrees F', '2 kelvin']) {
@@ -122,20 +154,21 @@ describe('narrativeFigures (untrusted model text)', () => {
     expect(statuses('30 degrees')).toEqual([['30 degrees', 'unknown', 'unverified']])
     expect(statuses('2 K')).toEqual([['2 K', 'unknown', 'unverified']])
   })
-  it('recognises the other units the backend computes', () => {
+  it('recognises the other units in the wire Metric unit union', () => {
     const r = result({ metrics: [
-      metric({ unit: 'h', value: 3.5 }), metric({ unit: 'm', value: 4.2 }),
-      metric({ metric_id: 'weighted_shade_utility', quantity_kind: 'weighted_utility', unit: 'weighted_m2_h', value: 12.34 }),
-      metric({ metric_id: 'direct_incident_energy_change', quantity_kind: 'direct_incident_energy', unit: 'kWh_per_m2', value: 0.8 }),
+      metric(),
+      metric({ metric_id: 'weighted_shade_utility', quantity_kind: 'weighted_utility', unit: 'weighted_m2_h', value: 12.34, weighting: 'pedestrian_hours_v1' }),
+      energy('kWh_per_m2', 0.8),
     ] })
-    expect(statuses('3.5 h', r)).toEqual([['3.5 h', 'hours', 'appears-in-result']])
-    expect(statuses('4.2 m', r)).toEqual([['4.2 m', 'length_m', 'appears-in-result']])
     expect(statuses('12.3 weighted m²·h', r)).toEqual([['12.3 weighted m²·h', 'weighted_shade', 'appears-in-result']])
     expect(statuses('0.8 kWh/m²', r)).toEqual([['0.8 kWh/m²', 'energy_kWh_per_m2', 'appears-in-result']])
+    // No registered metric currently emits h or m (contracts/results.py), so these can only be unverified.
+    expect(statuses('3.5 h', r)).toEqual([['3.5 h', 'hours', 'unverified']])
+    expect(statuses('4.2 m', r)).toEqual([['4.2 m', 'length_m', 'unverified']])
   })
   it('reads ranges and unicode minus signs without inventing negatives', () => {
     expect(statuses('10-12 m²·h')).toEqual([['12 m²·h', 'shade_m2_h', 'appears-in-result']])
-    const r = result({ metrics: [metric({ metric_id: 'direct_incident_energy_change', quantity_kind: 'direct_incident_energy', unit: 'kWh', value: -2.5 })] })
+    const r = result({ metrics: [energy('kWh', -2.5)] })
     expect(statuses('changes incident energy by −2.5 kWh', r)).toEqual([['−2.5 kWh', 'energy_kWh', 'appears-in-result']])
     // Signs are compared strictly: noisy but safe.
     expect(statuses('reduces energy by 2.5 kWh', r)).toEqual([['2.5 kWh', 'energy_kWh', 'unverified']])
@@ -148,6 +181,13 @@ describe('narrativeView', () => {
     expect(mixed.label).toBe(MODEL_INTERPRETATION_LABEL)
     expect(mixed.needsWarning).toBe(true)
     expect(narrativeView('adds 12.3 m²·h for £450.00', result()).needsWarning).toBe(false)
-    expect(narrativeView('I cannot estimate cooling in °C from a shade model.', result()).needsWarning).toBe(false)
+  })
+  it('lets a correct abstention through but catches temperatures the parser cannot read', () => {
+    const abstain = narrativeView('I cannot estimate cooling in °C from a shade model.', result())
+    expect([abstain.temperatureMentioned, abstain.needsWarning]).toEqual([false, false])
+    for (const text of ['cools by .5 °C', 'about 12,3 °C cooler', 'roughly 2°C']) {
+      const v = narrativeView(text, result())
+      expect([text, v.temperatureMentioned, v.needsWarning]).toEqual([text, true, true])
+    }
   })
 })

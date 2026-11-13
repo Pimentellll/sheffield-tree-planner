@@ -13,6 +13,8 @@ dependencies = [
     "uvicorn==0.54.0",
     "httpx==0.28.1",
     "tzdata==2026.6",
+    "pvlib==0.15.2",
+    "pyproj==3.7.2",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +27,7 @@ sheffield-readiness = "sheffield_readiness:main"
 packages = ["src/sheffield_readiness", "backend/src/tree_planner"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/pyproject.toml", "/uv.lock", "/src/sheffield_readiness", "/backend", "/generated", "/scripts", "/tests", "/frontend", "/docs/REFERENCE_RUNTIME.md", "/README.md", "/CHANGELOG.md"]
+include = ["/pyproject.toml", "/uv.lock", "/src/sheffield_readiness", "/backend", "/generated", "/scripts", "/tests", "/frontend", "/docs/REFERENCE_RUNTIME.md", "/docs/PHYSICAL_RUNTIME.md", "/README.md", "/CHANGELOG.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "backend/tests"]

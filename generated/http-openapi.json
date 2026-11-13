@@ -187,12 +187,28 @@
       },
       "Attenuation": {
         "additionalProperties": false,
-        "description": "Only validated opaque mode is currently serializable for execution.",
+        "description": "takeover-v1 adds a bounded, explicitly assumed fixed-crossing scenario.",
         "properties": {
           "mode": {
-            "const": "opaque",
+            "enum": [
+              "opaque",
+              "fixed_crossing"
+            ],
             "title": "Mode",
             "type": "string"
+          },
+          "transmission": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transmission"
           }
         },
         "required": [

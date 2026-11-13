@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
 from .base import (
     Array,
@@ -29,6 +29,13 @@ class Attenuation(ContractModel):
         if (self.mode == "fixed_crossing") != (self.transmission is not None):
             raise ValueError("only fixed_crossing requires an explicit transmission")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize_attenuation(self, handler):
+        data = handler(self)
+        if self.mode == "opaque":
+            data.pop("transmission", None)
+        return data
 
 
 class TreeState(ContractModel):

@@ -1,0 +1,8 @@
+/* C05 alternatives panel (Product Vision v2). Values come only from the :root tokens in styles.css.
+   styles.css loads after this file, so each rule here outranks its .layout-table counterpart by specificity. */
+.c05-outcome{margin-top:10px;border-radius:8px;padding:9px 11px;display:grid;gap:3px;font-size:11px;line-height:1.45}
+.c05-outcome strong{font-size:12px}
+.layout-table.c05-table td{white-space:normal}
+.layout-table.c05-table .c05-row-shown>th,.layout-table.c05-table .c05-row-shown>td{background:var(--progress-bg)}
+.layout-table.c05-table .status-pill{margin-bottom:2px}
+.section-title.c05-ranking{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule)}

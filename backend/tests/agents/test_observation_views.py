@@ -1,0 +1,674 @@
+"""Model-facing observation views (#68).
+
+Every successful observation here is produced at test time by the real synthetic physical
+runtime (real jobs, real Results), in the exact shape AgentLoop sends to the model. Inputs
+derived from them for edge cases (failed, superseded, missing metric, non-ASCII text,
+scaled-up search) are labelled SYNTHETIC where they are built and are passed as NOT
+validated at delivery. No successful runtime result is hand-authored and nothing here is
+model evidence.
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+import threading
+import time
+import uuid
+
+import pytest
+
+from tree_planner.agents import AgentLoop
+from tree_planner.agents.observation_views import (
+    JOB_ONLY_LEVEL,
+    LEVELS,
+    VIEW_SCHEMA,
+    ObservationBudgetError,
+    ObservationViewError,
+    compact_async_observation,
+    observation_bytes,
+    view_sizes,
+)
+from tree_planner.api.service import AgentDispatcher
+from tree_planner.contracts import Job, JobRequest, Result, ScenarioInput
+from tree_planner.evaluators.physical_runtime import create_physical_runtime
+
+BIG = 10_000_000
+REAL = ("evaluate", "search", "compare", "compare_scenarios")
+
+
+# --------------------------------------------------------------------------- real inputs
+
+
+def _runtime(path):
+    runtime = create_physical_runtime(path, start_worker=False, winter=True)
+    return runtime, runtime.app.state.service
+
+
+def _submit(runtime, service, operation, arguments):
+    request = JobRequest.model_validate(
+        {
+            "request_id": f"obs-view-{uuid.uuid4().hex}",
+            "scenario_ref": runtime.scenario_ref.model_dump(mode="json"),
+            "operation": operation,
+            "arguments": arguments,
+        }
+    )
+    return service.submit(request)
+
+
+def _completed(runtime, service, operation, arguments):
+    """Run one real job synchronously; return it as AgentLoop's async observation."""
+    job = _submit(runtime, service, operation, arguments)
+    runtime.app.state.run_one()
+    job = service.jobs.get_job(job.job_id)
+    assert job.status == "completed", job
+    result = service.jobs.read_run(job.run_id)
+    # Same construction as AgentLoop._dispatch for a delivered async result.
+    return {"job": job.model_dump(mode="json"), "result": result.model_dump(mode="json")}
+
+
+def _context(service, runtime):
+    scenario = service.scenarios.get_scenario(runtime.scenario_ref)
+    inp = scenario.input
+    layout_ref = inp.proposed_layout_ref.model_dump(mode="json")
+    layout = service.scenarios.get_layout(
+        inp.proposed_layout_ref.layout_id, inp.proposed_layout_ref.revision
+    )
+    site = service.scenarios.get_site(inp.site_id, inp.scene_revision, inp.semantic_revision)
+    return layout_ref, layout.placements[0], site.candidate_catalogue
+
+
+@pytest.fixture(scope="module")
+def real(tmp_path_factory):
+    runtime, service = _runtime(tmp_path_factory.mktemp("obs-views") / "runtime")
+    layout_ref, placement, catalogue = _context(service, runtime)
+    other = next(
+        c
+        for c in catalogue
+        if tuple(c.position_enu_m) != tuple(placement.position_enu_m)
+        and c.plantability_status != "excluded"
+    )
+    move = {"layout_ref": layout_ref, "placement_id": placement.placement_id}
+    observations = {
+        "evaluate": _completed(runtime, service, "evaluate_layout", {"layout_ref": layout_ref}),
+        "search": _completed(runtime, service, "search_layouts", {}),
+        "compare": _completed(
+            runtime,
+            service,
+            "compare_locations",
+            {**move, "alternative_position_enu_m": list(other.position_enu_m)},
+        ),
+        "compare_same_position": _completed(
+            runtime,
+            service,
+            "compare_locations",
+            {**move, "alternative_position_enu_m": list(placement.position_enu_m)},
+        ),
+    }
+    # A real two-scenario comparison, prepared as test_physical_runtime.py does.
+    base = service.scenarios.get_scenario(runtime.scenario_ref)
+    data = copy.deepcopy(base.input.model_dump(mode="json"))
+    data["constraints"]["budget_pence"] = 0
+    alternative = service.scenarios.prepare_scenario(
+        ScenarioInput.model_validate(data), base_ref=runtime.scenario_ref
+    )
+    observations["compare_scenarios"] = _completed(
+        runtime,
+        service,
+        "compare_scenarios",
+        {
+            "base_scenario_ref": runtime.scenario_ref.model_dump(mode="json"),
+            "alternative_scenario_ref": {
+                "scenario_id": alternative.scenario_id,
+                "revision": alternative.revision,
+                "scope": alternative.scope,
+            },
+            "layout_refs": [layout_ref],
+            "mode": "fixed_layout",
+        },
+    )
+    return observations
+
+
+def view(observation, budget=BIG, validated=None):
+    if validated is None:
+        validated = "result" in observation
+    return compact_async_observation(
+        observation, budget_bytes=budget, result_validated_at_delivery=validated
+    )
+
+
+def rows(table):
+    return [dict(zip(table["columns"], row)) for row in table["rows"]]
+
+
+def assert_omissions_reference_the_record(v, observation):
+    holders = [{"job_id": observation["job"]["job_id"]}]
+    if "result" in observation:
+        holders.append({"run_id": observation["result"]["run_id"]})
+    for entry in v["omitted"]:
+        assert entry["authoritative"] in holders, entry
+        assert type(entry["count"]) is int and entry["count"] > 0, entry
+
+
+# --------------------------------------------------------------------------- SYNTHETIC derivations
+
+
+def synthetic_scaled_search(observation, extra_layouts):
+    """SYNTHETIC: add copies of the real non-selected search layout under new IDs.
+
+    Values are copied from the real Result, never invented; the outcome is re-validated
+    against the Result contract so the view sees a contract-valid input.
+    """
+    data = copy.deepcopy(observation)
+    result = data["result"]
+    source = next(e for e in result["layouts"] if not e["selected"])
+    source_id = source["layout"]["layout_id"]
+    metrics = [m for m in result["metrics"] if m["layout_id"] == source_id]
+    constraints = [c for c in result["constraints"] if c["layout_id"] == source_id]
+    for i in range(extra_layouts):
+        new_id = f"{source_id}-synthetic-copy-{i}"
+        entry = copy.deepcopy(source)
+        entry["layout"]["layout_id"] = new_id
+        result["layouts"].append(entry)
+        for k, metric in enumerate(metrics):
+            clone = dict(metric, layout_id=new_id)
+            clone["metric_instance_id"] = f"{result['run_id']}:synthetic-{i}-{k}"
+            result["metrics"].append(clone)
+        result["constraints"].extend(dict(c, layout_id=new_id) for c in constraints)
+    Result.model_validate(result)
+    return data
+
+
+def synthetic_job_state(observation, **changes):
+    """SYNTHETIC: a real Job dump with lifecycle fields changed, validated as a Job."""
+    job = dict(copy.deepcopy(observation["job"]), **changes)
+    Job.model_validate(job)
+    return {"job": job}
+
+
+# --------------------------------------------------------------------------- shape and content
+
+
+def test_view_consumes_the_actual_agent_loop_observation(tmp_path):
+    """Drive the unchanged AgentLoop and compact the exact tool message it sent."""
+    runtime, service = _runtime(tmp_path / "runtime")
+    layout_ref, _, _ = _context(service, runtime)
+    accepted = service.scenarios.get_scenario(runtime.scenario_ref)
+
+    class PumpingDispatcher:
+        """Test glue: the in-process task-pinned dispatcher plus a synchronous job pump."""
+
+        def __init__(self):
+            self.inner = AgentDispatcher(service, accepted_ref=runtime.scenario_ref)
+
+        def dispatch(self, envelope):
+            value = self.inner.dispatch(envelope)
+            runtime.app.state.run_one()
+            return value
+
+        def poll(self, job_id):
+            return self.inner.poll(job_id)
+
+        def result(self, run_id):
+            return self.inner.result(run_id)
+
+        def selection(self, ref, slot):
+            return self.inner.selection(ref, slot)
+
+    class ScriptedClient:
+        """SYNTHETIC protocol fixture: scripted assistant turns, not inference."""
+
+        def complete(self, messages, tools, *, timeout_s=None):
+            tool_messages = [m for m in messages if m["role"] == "tool"]
+            if not tool_messages:
+                arguments = json.dumps({"layout_ref": layout_ref})
+                return {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call-1",
+                            "type": "function",
+                            "function": {"name": "evaluate_layout", "arguments": arguments},
+                        }
+                    ],
+                }
+            run_id = json.loads(tool_messages[-1]["content"])["result"]["run_id"]
+            final = {"narrative": "synthetic", "evidence_ids": [run_id]}
+            return {"role": "assistant", "content": json.dumps(final)}
+
+    loop = AgentLoop(
+        ScriptedClient(),
+        PumpingDispatcher(),
+        accepted,
+        {"evaluate_layout"},
+        deadline=time.monotonic() + 60,
+        stop=threading.Event(),
+        poll_interval_s=0.01,
+    )
+    outcome = loop.run("Evaluate the current proposal.")
+    assert outcome.status == "completed", outcome
+    tool_message = next(m for m in loop.messages if m["role"] == "tool")
+    observation = json.loads(tool_message["content"])
+    assert set(observation) == {"job", "result"}
+    assert observation["result"] == loop.results[0].model_dump(mode="json")
+    assert len(tool_message["content"].encode("utf-8")) == observation_bytes(observation)
+
+    compact = view(observation)
+    assert compact["view"] == VIEW_SCHEMA and compact["level"] == "full"
+    assert compact["result"]["run_id"] == loop.results[0].run_id
+    assert compact["result"]["currentness"] == "validated_at_delivery"
+    assert loop.results[0].model_dump(mode="json") == observation["result"]
+
+
+@pytest.mark.parametrize("name", REAL)
+def test_full_view_keeps_every_value_and_identity(real, name):
+    observation = real[name]
+    full_job, full_result = observation["job"], observation["result"]
+    v = view(observation)
+    job, result = v["job"], v["result"]
+    assert v["level"] == "full"
+    assert (job["job_id"], job["status"], job["state"]) == (
+        full_job["job_id"],
+        "completed",
+        "completed_with_result",
+    )
+    assert job["scenario_ref"] == full_result["input_snapshot_ref"] == result["scenario_ref"]
+    assert job["input_fingerprint"] == result["input_fingerprint"] == full_job["input_fingerprint"]
+    for key in ("run_id", "source_job_id", "operation", "analytical_outcome", "arguments"):
+        assert result[key] == full_result[key], key
+    assert result["execution_mode"] == full_result["provenance"]["execution_mode"]
+    assert result["source_ids"] == full_result["source_ids"]
+    assert result["limitations"] == full_result["limitations"]
+    assert result["assumptions"] == full_result["assumptions"]
+    assert result["provenance"]["source_hashes"] == full_result["provenance"]["source_hashes"]
+
+    default = full_result["input_snapshot_ref"]
+
+    def key(scenario_ref, layout_id, metric_id, case_id, target_id, horizon):
+        return (scenario_ref["scenario_id"], scenario_ref["revision"], layout_id, metric_id,
+                case_id, target_id, horizon)
+
+    shown = {
+        key(r.get("scenario_ref?") or default, r["layout_id"], r["metric_id"], r["case_id"],
+            r["target_id"], r["horizon_years"]): r
+        for r in rows(result["metrics"])
+    }
+    assert len(shown) == len(result["metrics"]["rows"]) == len(full_result["metrics"])
+    for m in full_result["metrics"]:
+        r = shown[key(m["scenario_ref"], m["layout_id"], m["metric_id"], m["case_id"],
+                      m["target_id"], m["horizon_years"])]
+        for field in ("value", "unit", "quantity_kind", "weighting", "area_basis",
+                      "aggregation_basis"):
+            assert r[field] == m[field], field
+    assert len(result["constraints"]["rows"]) == len(full_result["constraints"])
+
+    for shown_layout, full_layout in zip(result["layouts"], full_result["layouts"], strict=True):
+        assert shown_layout["layout_id"] == full_layout["layout"]["layout_id"]
+        assert shown_layout["kind"] == full_layout["layout"]["kind"]
+        assert type(shown_layout["cost_pence"]) is int
+        assert shown_layout["cost_pence"] == full_layout["cost_pence"]
+        for field in ("role", "selected", "feasibility", "reasons", "tree_count"):
+            assert shown_layout[field] == full_layout[field], field
+        assert len(shown_layout["placements"]) == len(full_layout["layout"]["placements"])
+        assert shown_layout.get("scenario_ref", default) == full_layout["scenario_ref"]
+    assert_omissions_reference_the_record(v, observation)
+
+
+@pytest.mark.parametrize("name", ["compare", "compare_scenarios"])
+def test_comparison_deltas_resolve_to_the_recorded_metrics(real, name):
+    full = real[name]["result"]
+    default = full["input_snapshot_ref"]
+    by_instance = {m["metric_instance_id"]: m for m in full["metrics"]}
+    deltas = rows(view(real[name])["result"]["comparison"]["deltas"])
+    assert len(deltas) == len(full["comparison"]["deltas"]) > 0
+    for shown, recorded in zip(deltas, full["comparison"]["deltas"], strict=True):
+        a = by_instance[recorded["base_metric_instance_id"]]
+        b = by_instance[recorded["alternative_metric_instance_id"]]
+        assert shown["delta"] == recorded["value"] and shown["unit"] == recorded["unit"]
+        assert (shown["base_value"], shown["alternative_value"]) == (a["value"], b["value"])
+        assert (shown["base_layout_id"], shown["alternative_layout_id"]) == (
+            a["layout_id"],
+            b["layout_id"],
+        )
+        for field in ("quantity_kind", "weighting", "area_basis", "aggregation_basis"):
+            assert shown[field] == a[field], field
+        assert (shown["base_scenario_ref"] or default) == a["scenario_ref"]
+        assert (shown["alternative_scenario_ref"] or default) == b["scenario_ref"]
+
+
+def test_two_scenario_comparison_keeps_each_side_scenario_identity(real):
+    observation = real["compare_scenarios"]
+    full = observation["result"]
+    default = full["input_snapshot_ref"]
+    others = {
+        json.dumps(e["scenario_ref"], sort_keys=True)
+        for e in full["layouts"]
+        if e["scenario_ref"] != default
+    }
+    assert others  # the real result spans the accepted and the hypothetical scenario
+    for level in LEVELS:
+        result = view(observation, view_sizes(observation, result_validated_at_delivery=True)[level])[
+            "result"
+        ]
+        deltas = rows(result["comparison"]["deltas"])
+        assert all(d["alternative_scenario_ref"] is not None for d in deltas)
+        assert all(d["base_scenario_ref"] is None for d in deltas)
+        tagged = [r for r in rows(result["metrics"]) if r.get("scenario_ref?")]
+        assert all(json.dumps(r["scenario_ref?"], sort_keys=True) in others for r in tagged)
+        assert {json.dumps(x.get("scenario_ref", default), sort_keys=True) for x in result["layouts"]} == {
+            json.dumps(e["scenario_ref"], sort_keys=True) for e in full["layouts"]
+        }
+
+
+def test_valid_zero_is_shown_as_zero_not_omitted(real):
+    observation = real["compare_same_position"]
+    recorded = [d["value"] for d in observation["result"]["comparison"]["deltas"]]
+    assert 0.0 in recorded  # real relocation onto the same position
+    essential = view_sizes(observation, result_validated_at_delivery=True)["essential"]
+    for budget in (BIG, essential):
+        shown = rows(view(observation, budget)["result"]["comparison"]["deltas"])
+        assert [d["delta"] for d in shown] == recorded
+
+
+def test_missing_metric_is_reported_as_missing_not_zero(real):
+    data = copy.deepcopy(real["evaluate"])
+    result = data["result"]
+    # SYNTHETIC: drop one real aggregate weighted metric and declare it missing.
+    dropped = next(
+        m
+        for m in result["metrics"]
+        if m["metric_id"] == "weighted_shade_utility" and m["target_id"] is None
+    )
+    result["metrics"].remove(dropped)
+    result["missing_metrics"].append(
+        {
+            "scenario_ref": dropped["scenario_ref"],
+            "layout_id": dropped["layout_id"],
+            "case_id": dropped["case_id"],
+            "metric_id": dropped["metric_id"],
+            "reason": "synthetic test: not computed",
+        }
+    )
+    Result.model_validate(result)
+    v = view(data, validated=False)["result"]
+    assert v["currentness"] == "not_validated_by_caller"
+    assert {
+        "layout_id": dropped["layout_id"],
+        "case_id": dropped["case_id"],
+        "metric_id": dropped["metric_id"],
+        "reason": "synthetic test: not computed",
+    } in v["missing_metrics"]
+    assert not any(
+        (r["layout_id"], r["metric_id"], r["case_id"], r["target_id"])
+        == (dropped["layout_id"], dropped["metric_id"], dropped["case_id"], None)
+        for r in rows(v["metrics"])
+    )
+
+
+def test_target_rows_are_kept_when_no_aggregate_of_the_same_quantity_is_shown(real):
+    data = copy.deepcopy(real["evaluate"])
+    result = data["result"]
+    # SYNTHETIC: relabel one aggregate additional_shade row as blocking_equivalent, so its
+    # geometric target rows no longer have a matching aggregate quantity.
+    aggregate = next(
+        m
+        for m in result["metrics"]
+        if m["metric_id"] == "additional_shade"
+        and m["target_id"] is None
+        and m["quantity_kind"] == "geometric"
+        and any(
+            t["metric_id"] == "additional_shade"
+            and t["target_id"] is not None
+            and (t["layout_id"], t["case_id"], t["horizon_years"])
+            == (m["layout_id"], m["case_id"], m["horizon_years"])
+            for t in result["metrics"]
+        )
+    )
+    aggregate["quantity_kind"] = "blocking_equivalent"
+    Result.model_validate(result)
+    sizes = view_sizes(data, result_validated_at_delivery=False)
+    essential = view(data, sizes["essential"], validated=False)
+    assert essential["level"] == "essential"
+    kept_targets = [
+        r
+        for r in rows(essential["result"]["metrics"])
+        if r["metric_id"] == "additional_shade"
+        and r["target_id"] is not None
+        and r["quantity_kind"] == "geometric"
+        and (r["layout_id"], r["case_id"], r["horizon_years"])
+        == (aggregate["layout_id"], aggregate["case_id"], aggregate["horizon_years"])
+    ]
+    assert kept_targets
+
+
+# --------------------------------------------------------------------------- budget levels
+
+
+def test_large_search_degrades_level_by_level_with_explicit_omissions(real):
+    data = synthetic_scaled_search(real["search"], extra_layouts=40)
+    sizes = view_sizes(data, result_validated_at_delivery=False)
+    assert sizes["observation"] > sizes["full"] > sizes["reduced"] > sizes["essential"]
+
+    reduced = view(data, sizes["reduced"], validated=False)
+    assert reduced["level"] == "reduced" and observation_bytes(reduced) <= sizes["reduced"]
+    assert reduced["result"]["constraints"]["passed_not_listed_by_layout"]
+    assert "assumptions" not in reduced["result"]
+    assert_omissions_reference_the_record(reduced, data)
+
+    essential = view(data, sizes["essential"], validated=False)
+    assert essential["level"] == "essential"
+    assert observation_bytes(essential) == sizes["essential"]
+    assert_omissions_reference_the_record(essential, data)
+    result, full = essential["result"], data["result"]
+    selected = {e["layout"]["layout_id"] for e in full["layouts"] if e["selected"]}
+    assert selected
+    for layout in result["layouts"]:
+        assert ("placements" in layout) == (layout["layout_id"] in selected)
+    assert len(result["layouts"]) == len(full["layouts"])  # every candidate still listed
+    assert {r["layout_id"] for r in rows(result["metrics"])} <= selected
+    non_focus = sum(m["layout_id"] not in selected for m in full["metrics"])
+    omitted = {o["path"]: o for o in essential["omitted"]}
+    assert omitted["result.metrics (layouts not in focus)"]["count"] == non_focus
+    assert omitted["result.metrics[].metric_instance_id (shown rows)"]["count"] == len(
+        result["metrics"]["rows"]
+    )
+    shown_non_pass = [r for r in rows(result["constraints"]) if r["status"] != "pass"]
+    assert len(shown_non_pass) == sum(c["status"] != "pass" for c in full["constraints"])
+    assert result["constraints"]["status_counts"] == {
+        s: sum(c["status"] == s for c in full["constraints"]) for s in ("pass", "fail", "unknown")
+    }
+    assert result["analytical_outcome"] == full["analytical_outcome"]
+    assert [x["cost_pence"] for x in result["layouts"]] == [e["cost_pence"] for e in full["layouts"]]
+
+    with pytest.raises(ObservationBudgetError) as raised:
+        view(data, sizes["essential"] - 1, validated=False)
+    assert raised.value.required_bytes == sizes["essential"]
+    assert raised.value.budget_bytes == sizes["essential"] - 1
+
+
+def test_impossibly_small_budget_refuses_explicitly(real):
+    for name in REAL:
+        with pytest.raises(ObservationBudgetError) as raised:
+            view(real[name], 64)
+        sizes = view_sizes(real[name], result_validated_at_delivery=True)
+        assert raised.value.required_bytes == min(sizes[level] for level in LEVELS)
+
+
+def test_every_view_is_whole_finite_json_within_budget(real):
+    for name in REAL:
+        sizes = view_sizes(real[name], result_validated_at_delivery=True)
+        for level in LEVELS:
+            v = view(real[name], sizes[level])
+            text = json.dumps(v, ensure_ascii=False, allow_nan=False)
+            assert json.loads(text) == v
+            assert len(text.encode("utf-8")) == observation_bytes(v) <= sizes[level]
+            assert_omissions_reference_the_record(v, real[name])
+
+
+def test_byte_accounting_is_utf8_not_characters(real):
+    data = copy.deepcopy(real["evaluate"])
+    # SYNTHETIC: a non-ASCII limitation string added to a real Result.
+    data["result"]["limitations"].append("Synthetic test note: ±0.5 °C is not modelled — ünïcode")
+    Result.model_validate(data["result"])
+    v = view(data, validated=False)
+    text = json.dumps(v, ensure_ascii=False, allow_nan=False)
+    assert observation_bytes(v) == len(text.encode("utf-8")) > len(text)
+    assert "±0.5 °C" in v["result"]["limitations"][-1]
+    exact = observation_bytes(v)
+    assert view(data, exact, validated=False)["level"] == "full"
+    assert view(data, exact - 1, validated=False)["level"] != "full"
+
+
+def test_reports_real_byte_sizes(real, capsys):
+    report = {name: view_sizes(real[name], result_validated_at_delivery=True) for name in REAL}
+    for name, sizes in report.items():
+        assert sizes["full"] < sizes["observation"], name
+        assert sizes["essential"] <= sizes["reduced"] <= sizes["full"], name
+    with capsys.disabled():
+        print("\nobservation view UTF-8 bytes (real synthetic-runtime observations):")
+        for name, sizes in report.items():
+            print(f"  {name:17} " + "  ".join(f"{k}={v}" for k, v in sizes.items()))
+
+
+# --------------------------------------------------------------------------- job states
+
+
+def test_pending_and_cancelled_jobs_are_reported_without_results(tmp_path):
+    runtime, service = _runtime(tmp_path / "runtime")
+    layout_ref, _, _ = _context(service, runtime)
+    queued = _submit(runtime, service, "evaluate_layout", {"layout_ref": layout_ref})
+    pending_observation = {"job": queued.model_dump(mode="json")}
+    pending = view(pending_observation)
+    assert pending["level"] == JOB_ONLY_LEVEL
+    assert pending["job"]["state"] == "pending" and pending["job"]["run_id"] is None
+    assert "result" not in pending
+    assert_omissions_reference_the_record(pending, pending_observation)
+
+    service.jobs.cancel(queued.job_id)
+    cancelled_job = service.jobs.get_job(queued.job_id)
+    assert cancelled_job.status == "cancelled"
+    cancelled = view({"job": cancelled_job.model_dump(mode="json")})
+    assert cancelled["job"]["state"] == "cancelled" and cancelled["job"]["cancel_requested"]
+    assert cancelled["job"]["error"]["code"] == "CANCELLED"
+    assert cancelled["job"]["run_id"] is None
+
+
+def test_job_only_views_have_one_level_and_refuse_with_their_size(real):
+    observation = {"job": real["evaluate"]["job"]}
+    sizes = view_sizes(observation, result_validated_at_delivery=False)
+    assert set(sizes) == {"observation", JOB_ONLY_LEVEL}
+    # Documented: a Job-only view can exceed the raw Job dump (authority + omission list).
+    assert sizes[JOB_ONLY_LEVEL] < 2000
+    with pytest.raises(ObservationBudgetError) as raised:
+        view(observation, sizes[JOB_ONLY_LEVEL] - 1)
+    assert raised.value.required_bytes == sizes[JOB_ONLY_LEVEL]
+
+
+def test_failed_and_superseded_jobs_keep_their_status(real, tmp_path):
+    runtime, service = _runtime(tmp_path / "runtime")
+    layout_ref, _, _ = _context(service, runtime)
+    job = _submit(runtime, service, "evaluate_layout", {"layout_ref": layout_ref})
+    queued = {"job": job.model_dump(mode="json")}
+    failed = synthetic_job_state(
+        queued,
+        status="failed",
+        finished_at_utc=queued["job"]["created_at_utc"],
+        error={
+            "code": "NUMERICAL_FAILURE",
+            "message": "synthetic failure for the view test",
+            "retryable": False,
+            "field_errors": [],
+            "details": {"stage": "synthetic"},
+        },
+    )
+    shown = view(failed)["job"]
+    assert shown["state"] == "failed" and shown["error"]["code"] == "NUMERICAL_FAILURE"
+    assert shown["error"]["retryable"] is False and shown["run_id"] is None
+    assert shown["error"]["details"] == {"stage": "synthetic"}
+
+    revision = real["evaluate"]["job"]["scenario_revision"] + 1
+    superseded = synthetic_job_state(real["evaluate"], superseded_by_revision=revision)
+    shown = view(superseded)["job"]
+    assert shown["state"] == "superseded" and shown["superseded_by_revision"] == revision
+
+    # The loop never attaches a Result to a superseded Job; such input is refused.
+    with_result = {"job": superseded["job"], "result": real["evaluate"]["result"]}
+    for validated in (True, False):
+        with pytest.raises(ObservationViewError):
+            view(with_result, validated=validated)
+
+
+def test_currentness_is_reported_as_supplied_and_never_invented(real):
+    assert view(real["evaluate"])["result"]["currentness"] == "validated_at_delivery"
+    unvalidated = view(real["evaluate"], validated=False)["result"]["currentness"]
+    assert unvalidated == "not_validated_by_caller"
+    with pytest.raises(ObservationViewError):
+        view({"job": real["evaluate"]["job"]}, validated=True)
+
+
+# --------------------------------------------------------------------------- safety
+
+
+def test_deterministic_and_input_is_never_modified(real):
+    for name in REAL:
+        snapshot = copy.deepcopy(real[name])
+        sizes = view_sizes(real[name], result_validated_at_delivery=True)
+        for level in LEVELS:
+            first = json.dumps(view(real[name], sizes[level]), ensure_ascii=False)
+            second = json.dumps(view(real[name], sizes[level]), ensure_ascii=False)
+            assert first == second
+        assert real[name] == snapshot
+        assert Result.model_validate(real[name]["result"]) == Result.model_validate(
+            snapshot["result"]
+        )
+
+
+def test_unknown_or_inconsistent_shapes_fail_explicitly(real):
+    evaluate, search = real["evaluate"], real["search"]
+    nan_result = copy.deepcopy(evaluate)
+    nan_result["result"]["metrics"][0]["value"] = float("nan")
+    bad_status = copy.deepcopy(evaluate)
+    bad_status["job"]["status"] = "done"
+    queued_with_result = {
+        "job": dict(
+            evaluate["job"],
+            status="queued",
+            run_id=None,
+            delivery=None,
+            started_at_utc=None,
+            finished_at_utc=None,
+        ),
+        "result": evaluate["result"],
+    }
+    for observation in (
+        [],
+        {},
+        {"result": evaluate["result"]},
+        {**evaluate, "extra": 1},
+        {"job": search["job"], "result": evaluate["result"]},
+        queued_with_result,
+        bad_status,
+        nan_result,
+        {"job": "not a job"},
+    ):
+        with pytest.raises(ObservationViewError):
+            view(observation, validated=False)
+
+
+@pytest.mark.parametrize("budget", [0, -1, True, 1.5, "1000"])
+def test_budget_must_be_a_positive_integer(real, budget):
+    with pytest.raises(ValueError) as raised:
+        compact_async_observation(
+            real["evaluate"], budget_bytes=budget, result_validated_at_delivery=True
+        )
+    assert type(raised.value) is ValueError
+
+
+def test_validation_flag_must_be_a_bool(real):
+    with pytest.raises(ValueError):
+        compact_async_observation(
+            real["evaluate"], budget_bytes=BIG, result_validated_at_delivery="yes"
+        )

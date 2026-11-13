@@ -17,11 +17,13 @@ Rules this adapter keeps:
 * Only attributes the source actually supplied are kept; absent, null or blank values are
   listed under ``unknown`` and never filled in.
 * Records are never fused by proximity. Identical repeats of one source ID (for example a
-  pagination overlap) are kept once and counted; conflicting records sharing a source ID
-  are both rejected and reported; distinct IDs at identical coordinates are both kept and
-  reported as coincident.
-* An unknown or inconsistent CRS, a non-point layer or a schema the caller did not declare
-  fails explicitly (:class:`InventoryError`) instead of producing plausible output.
+  pagination overlap) are kept once and counted; conflicting *valid* records sharing a
+  source ID are both rejected and reported. A copy already rejected for unusable geometry
+  or ID does not take part in that comparison, so its valid twin is kept. Distinct IDs at
+  identical coordinates are both kept and reported as coincident.
+* An unknown or inconsistent CRS or a non-point layer fails explicitly
+  (:class:`InventoryError`) instead of producing plausible output. Fields the caller did
+  not declare are counted as schema drift and their values are not imported.
 """
 
 from __future__ import annotations
@@ -68,7 +70,12 @@ def _crs(spatial_reference: Any) -> str:
 
 
 def _finite_number(value: Any) -> bool:
-    return type(value) in (int, float) and math.isfinite(value)
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:  # an int too large for a float, e.g. 10**400
+        return False
 
 
 def build_inventory(

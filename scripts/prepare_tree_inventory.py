@@ -4,9 +4,10 @@ Not an agent tool: it contacts one fixed publisher endpoint, only when an operat
 It never touches accepted scenarios, runtime services or model state.
 
   fetch   bounded acquisition (EPSG:27700 envelope) -> raw bytes + SHA-256 receipts in a fresh
-          --raw-dir OUTSIDE the repository, then the inventory/manifest in a fresh --output-dir
-          (also outside the repository). Requires --local-use-approved-by: rights are recorded
-          as unknown until a person approves, and downloading is itself local use.
+          --raw-dir outside every git working tree, then the inventory/manifest in a separate
+          fresh --output-dir (also outside every git working tree). Requires
+          --acquisition-approved-by: it records who authorised this download only. It is not a
+          rights decision, so every rights *_status stays unknown until a person decides.
   replay  rebuild the inventory/manifest from an existing --raw-dir after re-checking every
           raw file hash (same-source replay must give the same inventory_sha256)
 
@@ -14,13 +15,14 @@ Example (run only in the approved environment):
 
   python scripts/prepare_tree_inventory.py fetch \
       --bbox-27700 433700,387100,434500,387700 --max-features 500 \
-      --local-use-approved-by "<who/where approved>" \
+      --acquisition-approved-by "<who/where approved>" \
       --raw-dir /path/outside/repo/raw-street-trees-001 --output-dir /path/out-001
   python scripts/prepare_tree_inventory.py replay \
       --raw-dir /path/outside/repo/raw-street-trees-001 --output-dir /path/out-002
 
-The redistributable sample withholds the free-text ``featurelocation`` field (house-number
-frontage text) unless --keep-location-text is given; raw downloads never go into git.
+The redistributable sample keeps only an allowlist of attributes (``sitename``,
+``featuretypename``); the free-text ``featurelocation`` field (house-number frontage text)
+is added only with --keep-location-text. Raw downloads never go into git.
 """
 
 from __future__ import annotations
@@ -54,23 +56,51 @@ SOURCE = {
     "catalogue_url": "https://www.data.gov.uk/dataset/957a85f3-d56b-4aed-9f29-5f8fe1363e57/street-trees",
     "layer_url": LAYER_URL,
 }
+CKAN_URL = (
+    "https://ckan.publishing.service.gov.uk/api/action/package_show?"
+    "id=957a85f3-d56b-4aed-9f29-5f8fe1363e57"
+)
+ARCGIS_ITEM_URL = (
+    "https://www.arcgis.com/sharing/rest/content/items/162d40a383fa48cbadc101ef18829bec?f=json"
+)
+# Field names follow the SiteBundle rights contract (docs/CONTRACTS.md, contracts/site.py
+# Rights). The licence is unresolved, so every purpose stays unknown.
 RIGHTS = {
-    "publisher_stated_licence": {
-        "name": "UK Open Government Licence (OGL) v3.0",
-        "url": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
-        "evidence": "CKAN package_show https://ckan.publishing.service.gov.uk/api/action/"
-        "package_show?id=957a85f3-d56b-4aed-9f29-5f8fe1363e57 reported license_id 'uk-ogl' "
-        "(observed 2026-11-13, metadata_modified 2026-01-07); not re-fetched by this script",
-    },
-    "proposed_attribution": "Contains public sector information licensed under the Open "
-    "Government Licence v3.0. Source: Sheffield City Council, Street Trees.",
-    "local_use": "unknown",
-    "team_share": "unknown",
-    "public_display": "unknown",
-    "export": "unknown",
-    "decision_needed": "A person confirms that the publisher-stated OGL v3.0 covers this layer "
-    "for each purpose (the council notes some of its data carries other terms). Until then "
-    "each purpose stays unknown, which is not approval.",
+    "source_id": SOURCE["source_key"],
+    "source_reference": LAYER_URL,
+    "licence_reference": "unresolved: conflicting licence statements (see rights_detail)",
+    "required_attribution": "unknown until the licence conflict is resolved",
+    "local_use_status": "unknown",
+    "team_share_status": "unknown",
+    "public_display_status": "unknown",
+    "export_status": "unknown",
+    "evidence": [CKAN_URL, ARCGIS_ITEM_URL],
+}
+RIGHTS_DETAIL = {
+    "licence_statements": [
+        {
+            "where": "data.gov.uk / CKAN catalogue record",
+            "statement": "UK Open Government Licence (OGL) v3.0 (license_id 'uk-ogl')",
+            "licence_url": "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+            "evidence_url": CKAN_URL,
+            "observed": "2026-11-13 (metadata_modified 2026-01-07); not re-fetched by this script",
+        },
+        {
+            "where": "ArcGIS item metadata for the Street Trees service",
+            "statement": "links the INSPIRE End User Licence, which restricts use and "
+            "redistribution",
+            "licence_url": "https://www.ordnancesurvey.co.uk/documents/licensing/"
+            "inspire-end-user-licence.pdf",
+            "evidence_url": ARCGIS_ITEM_URL,
+            "observed": "cited by docs/SOURCES.md [13]/[18] and reported by two reviewers on "
+            "2026-11-13; not re-fetched by this script",
+        },
+    ],
+    "conflict": "unresolved",
+    "attribution_if_ogl_is_confirmed": "Contains public sector information licensed under "
+    "the Open Government Licence v3.0. Source: Sheffield City Council, Street Trees.",
+    "decision_needed": "A person resolves which licence governs this layer and records a "
+    "status for each purpose. Until then every *_status stays unknown, which is not approval.",
 }
 MAX_FEATURES_LIMIT = 5000
 MAX_ENVELOPE_KM2 = 25.0
@@ -79,6 +109,14 @@ BNG_BOUNDS = (0.0, 0.0, 700000.0, 1300000.0)  # EPSG:27700 projected bounds, met
 RAW_NAME = re.compile(r"^(layer|count|page-\d{4})\.json$")
 USER_AGENT = "canopy-tree-inventory-prep/1"
 REPO = Path(__file__).resolve().parents[1]
+# Allowlist: only these attributes reach the redistributable sample. A new or unexpected
+# free-text field on the layer is withheld by default.
+SAMPLE_ATTRIBUTES = ("sitename", "featuretypename")
+LOCATION_TEXT_FIELD = "featurelocation"
+APPROVAL_SCOPE = (
+    "authorises this download only; it is not a rights decision, so every rights *_status "
+    "stays unknown until a person decides"
+)
 
 
 def _now() -> str:
@@ -128,9 +166,35 @@ def parse_bbox(text: str) -> tuple[float, float, float, float]:
     return values
 
 
+def _inside_git_working_tree(path: Path) -> bool:
+    """True inside any checkout or worktree (a ``.git`` dir or file on the path or above)."""
+    resolved = path.resolve()
+    return any((p / ".git").exists() for p in (resolved, *resolved.parents))
+
+
 def _outside_repository(path: Path, flag: str) -> None:
-    if path.resolve().is_relative_to(REPO):
-        raise SystemExit(f"{flag} must be outside the repository (raw and full outputs stay out of git)")
+    if path.resolve().is_relative_to(REPO) or _inside_git_working_tree(path):
+        raise SystemExit(
+            f"{flag} must be outside every git working tree (raw and full outputs stay out of git)"
+        )
+
+
+def _disjoint(raw_dir: Path, output_dir: Path) -> None:
+    a, b = raw_dir.resolve(), output_dir.resolve()
+    if a == b or a.is_relative_to(b) or b.is_relative_to(a):
+        raise SystemExit("--raw-dir and --output-dir must be separate, non-nested directories")
+
+
+class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
+    """A redirect could leave the fixed HTTPS host; refuse it and record the 3xx instead."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, f"redirect refused: {newurl}", headers, fp)
+
+
+def _open(request: urllib.request.Request):
+    """The script's only network call: redirects are refused, never followed."""
+    return urllib.request.build_opener(_RefuseRedirects).open(request, timeout=60)
 
 
 def _fresh_dir(path: Path, flag: str) -> Path:
@@ -151,7 +215,8 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
         "layer_url": LAYER_URL,
         "bbox_27700": list(bbox),
         "max_features": max_features,
-        "local_use_approved_by": approval,
+        "acquisition_approved_by": approval,
+        "acquisition_approval_scope": APPROVAL_SCOPE,
         "started_at_utc": _now(),
         "files": [],
         "status": "failed",
@@ -163,13 +228,18 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
         meta = {"file": name, "url": url, "retrieved_at_utc": _now()}
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with _open(request) as response:
                 body, meta["http_status"] = response.read(), response.status
+                meta["final_url"] = response.geturl()
         except urllib.error.HTTPError as exc:
             body, meta["http_status"] = exc.read(), exc.code
+            meta["final_url"] = url
         (raw_dir / name).write_bytes(body)
         meta.update(bytes=len(body), sha256=_sha256(body))
         acquisition["files"].append(meta)
+        if meta["final_url"] != url:
+            check_url(meta["final_url"])
+            raise SystemExit(f"{name}: the response came from a different URL than requested")
         if meta["http_status"] != 200:
             raise SystemExit(f"{name}: HTTP {meta['http_status']} from the publisher")
         try:
@@ -277,21 +347,42 @@ def _count(count_value) -> tuple[int | None, str]:
     return None, "non_integer"
 
 
-def _redacted(command: list[str]) -> list[str]:
-    """Keep substantive arguments; never record operator-local paths in a committable file."""
-    out, hide = [], False
-    for item in command:
-        if hide:
-            out.append(f"<{Path(item).name}>")
-            hide = False
-            continue
-        out.append(item)
-        hide = item in ("--raw-dir", "--output-dir")
+def _recorded_command(args: argparse.Namespace) -> list[str]:
+    """Rebuilt from the parsed arguments, never copied from argv, so no operator-local path
+    (in any spelling, such as ``--output-dir=PATH``) reaches the committable manifest. Paths
+    are reduced to their final name; the approval text is kept in the acquisition record."""
+    out = [args.mode]
+    if args.mode == "fetch":
+        out += ["--bbox-27700", ",".join(repr(v) for v in args.bbox_27700)]
+        out += ["--max-features", str(args.max_features)]
+        out += ["--acquisition-approved-by", "<see acquisition.acquisition_approved_by>"]
+    out += ["--raw-dir", f"<{args.raw_dir.name}>", "--output-dir", f"<{args.output_dir.name}>"]
+    out += ["--sample-size", str(args.sample_size)]
+    if args.keep_location_text:
+        out.append("--keep-location-text")
     return out
+
+
+def _native_crs_check(layer: dict) -> str:
+    """Queries force outSR=27700, so the page CRS cannot reveal a server reprojection; the
+    layer's own declared CRS must agree, or the build is refused."""
+    declared = layer.get("spatialReference")
+    if not isinstance(declared, dict):
+        return "not declared by the layer metadata; native CRS unverified"
+    codes = [declared.get(k) for k in ("latestWkid", "wkid") if type(declared.get(k)) is int]
+    if not codes:
+        return "not declared by the layer metadata; native CRS unverified"
+    if 27700 not in codes:
+        raise SystemExit(
+            f"layer native CRS wkid {codes[0]} is not EPSG:27700; outSR=27700 would hide a "
+            "server-side reprojection"
+        )
+    return "matches: layer declares EPSG:27700"
 
 
 def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_location: bool, mode, command):
     acquisition, receipt_sha256, layer, count_value, pages = load_raw(raw_dir)
+    native_crs = _native_crs_check(layer)
     fields = layer.get("fields") or []
     id_field = layer.get("objectIdField")
     attribute_fields = [
@@ -317,7 +408,8 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
             service_count_status=count_status,
             requested_limit=acquisition.get("max_features"),
         )
-        drop = () if keep_location else ("featurelocation",)
+        keep = set(SAMPLE_ATTRIBUTES) | ({LOCATION_TEXT_FIELD} if keep_location else set())
+        drop = tuple(f for f in attribute_fields if f not in keep)
         sample = redistributable_sample(built["inventory"], limit=sample_size, drop_attributes=drop)
     except InventoryError as exc:
         raise SystemExit(f"inventory refused: {exc}") from exc
@@ -326,12 +418,13 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
         "schema": "canopy-source-tree-inventory-manifest/1",
         "mode": mode,
         "built_at_utc": _now(),
-        "command": ["scripts/prepare_tree_inventory.py", *_redacted(command)],
+        "command": ["scripts/prepare_tree_inventory.py", *command],
         "source": SOURCE,
-        "rights": {
-            **RIGHTS,
-            "layer_copyright_text": layer.get("copyrightText"),
-            "local_use_approved_by": acquisition.get("local_use_approved_by"),
+        "rights": RIGHTS,
+        "rights_detail": {**RIGHTS_DETAIL, "layer_copyright_text": layer.get("copyrightText")},
+        "acquisition_approval": {
+            "approved_by": acquisition.get("acquisition_approved_by"),
+            "scope": APPROVAL_SCOPE,
         },
         "acquisition": {
             **{k: v for k, v in acquisition.items() if k != "files"},
@@ -343,6 +436,7 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
             "name": layer.get("name"),
             "geometryType": layer.get("geometryType"),
             "spatialReference": layer.get("spatialReference"),
+            "native_crs_check": native_crs,
             "hasZ": layer.get("hasZ"),
             "objectIdField": id_field,
             # Snapshot identity: record IDs are only stable within this recorded snapshot.
@@ -365,6 +459,10 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
             "Species values are the source's 'featuretypename' text as recorded; not verified.",
             "Coordinates stay in the source CRS; no ENU/WGS84 conversion has been verified here.",
             "Bounded envelope sample; not a citywide or complete inventory unless counts say so.",
+            "Reviewers report the layer likely covers council highway (street) trees only, not "
+            "park, private or other trees; not verified here.",
+            "Licence unresolved (OGL v3.0 vs INSPIRE End User Licence); every rights status is "
+            "unknown.",
         ],
     }
     # Everything was computed; only now create the (fresh) output directory.
@@ -382,41 +480,51 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    # No prefix abbreviations: every option must be spelled out.
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0], allow_abbrev=False)
     sub = parser.add_subparsers(dest="mode", required=True)
-    fetch_p = sub.add_parser("fetch", help="bounded acquisition from the fixed publisher layer")
+    fetch_p = sub.add_parser(
+        "fetch", help="bounded acquisition from the fixed publisher layer", allow_abbrev=False
+    )
     fetch_p.add_argument("--bbox-27700", type=parse_bbox, required=True)
     fetch_p.add_argument("--max-features", type=int, default=500)
     fetch_p.add_argument(
-        "--local-use-approved-by",
+        "--acquisition-approved-by",
         required=True,
-        help="who approved local use of this dataset, and where that approval is recorded",
+        help="who authorised this download, and where that is recorded (not a rights decision)",
     )
-    replay_p = sub.add_parser("replay", help="rebuild outputs from a saved raw directory")
+    replay_p = sub.add_parser(
+        "replay", help="rebuild outputs from a saved raw directory", allow_abbrev=False
+    )
     for p in (fetch_p, replay_p):
         p.add_argument("--raw-dir", type=Path, required=True)
         p.add_argument("--output-dir", type=Path, required=True)
         p.add_argument("--sample-size", type=int, default=25)
         p.add_argument("--keep-location-text", action="store_true")
-    command = list(sys.argv[1:] if argv is None else argv)
-    args = parser.parse_args(command)
+    args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
     if args.sample_size < 1:
         parser.error("--sample-size must be at least 1")
     _outside_repository(args.output_dir, "--output-dir")
+    _disjoint(args.raw_dir, args.output_dir)
     if args.output_dir.resolve().exists():
         parser.error(f"--output-dir {args.output_dir} already exists; use a fresh path")
     if args.mode == "fetch":
         if not 1 <= args.max_features <= MAX_FEATURES_LIMIT:
             parser.error(f"--max-features must be between 1 and {MAX_FEATURES_LIMIT}")
-        if not args.local_use_approved_by.strip():
-            parser.error("--local-use-approved-by must name the approval")
+        if not args.acquisition_approved_by.strip():
+            parser.error("--acquisition-approved-by must name the approval")
         _outside_repository(args.raw_dir, "--raw-dir")
         raw_dir = _fresh_dir(args.raw_dir, "--raw-dir")
-        fetch(args.bbox_27700, args.max_features, raw_dir, args.local_use_approved_by.strip())
+        fetch(args.bbox_27700, args.max_features, raw_dir, args.acquisition_approved_by.strip())
     else:
         raw_dir = args.raw_dir.resolve()
     manifest, output_dir = build_outputs(
-        raw_dir, args.output_dir, args.sample_size, args.keep_location_text, args.mode, command
+        raw_dir,
+        args.output_dir,
+        args.sample_size,
+        args.keep_location_text,
+        args.mode,
+        _recorded_command(args),
     )
     counts = manifest["counts"]
     print(

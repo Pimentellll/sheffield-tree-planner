@@ -11,8 +11,11 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib.util
+import io
 import json
 from pathlib import Path
+import urllib.error
+import urllib.request
 
 import pytest
 
@@ -156,7 +159,7 @@ def test_missing_ids_and_invalid_coordinates_are_rejected_with_reasons():
 
 
 def test_non_finite_coordinates_are_rejected():
-    for bad in (float("nan"), float("inf"), float("-inf")):
+    for bad in (float("nan"), float("inf"), float("-inf"), 10**400):  # 10**400: float overflow
         built = build([page([feature(1, bad, 1.0), feature(2, 1.0, 1.0)])])
         assert [f["source_record_id"] for f in built["inventory"]["features"]] == [2]
 
@@ -285,6 +288,35 @@ def test_redistributable_sample_records_what_it_removed():
 # --------------------------------------------------------------------------- operator script
 
 
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """No test may contact the council endpoint. Attempts are recorded and fail the test
+    afterwards, because fetch() would otherwise turn the stub's error into a SystemExit."""
+    attempts = []
+
+    def refuse(*args, **kwargs):
+        attempts.append(args)
+        raise OSError("network disabled in tests")
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", refuse)
+    yield
+    assert not attempts, f"a test attempted a real network request: {attempts!r}"
+
+
+def _strings(value):
+    """Every string inside a parsed JSON value (so path checks don't depend on escaping)."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            yield k
+            yield from _strings(v)
+    elif isinstance(value, list):
+        for v in value:
+            yield from _strings(v)
+
+
 def _script():
     path = Path(__file__).resolve().parents[3] / "scripts" / "prepare_tree_inventory.py"
     spec = importlib.util.spec_from_file_location("prepare_tree_inventory", path)
@@ -310,12 +342,12 @@ LAYER = {
 }
 
 
-def _write_raw(raw_dir: Path, pages, count=None, status="complete", extra_files=()):
+def _write_raw(raw_dir: Path, pages, count=None, status="complete", extra_files=(), layer=None):
     """SYNTHETIC raw directory in the exact layout `fetch` writes (receipt + hashed files)."""
     raw_dir.mkdir()
     count = {"count": 3} if count is None else count
     files = []
-    entries = [("layer.json", LAYER), ("count.json", count)]
+    entries = [("layer.json", LAYER if layer is None else layer), ("count.json", count)]
     entries += [(f"page-{i:04d}.json", p) for i, p in enumerate(pages)]
     for name, value in [*entries, *extra_files]:
         body = json.dumps(value).encode()
@@ -324,7 +356,7 @@ def _write_raw(raw_dir: Path, pages, count=None, status="complete", extra_files=
     acquisition = {
         "status": status,
         "max_features": 500,
-        "local_use_approved_by": "synthetic test fixture",
+        "acquisition_approved_by": "synthetic test fixture",
         "files": files,
     }
     (raw_dir / "acquisition.json").write_text(json.dumps(acquisition))
@@ -347,14 +379,77 @@ def test_replay_cli_builds_manifest_and_is_reproducible(tmp_path):
     assert len(manifest["acquisition"]["receipt_sha256"]) == 64
     assert manifest["layer_schema"]["objectIdField"] == "objectid"
     assert manifest["layer_schema"]["per_record_date_fields"] == "none declared by the layer"
-    assert manifest["rights"]["public_display"] == "unknown"  # unknown is not approval
-    # Operator-local paths never reach the committable manifest.
-    assert str(tmp_path) not in json.dumps(manifest)
+    # Contract field names (CONTRACTS.md SiteBundle rights); unknown is not approval.
+    rights = manifest["rights"]
+    for purpose in ("local_use", "team_share", "public_display", "export"):
+        assert rights[f"{purpose}_status"] == "unknown"
+        assert purpose not in rights
+    assert rights["licence_reference"].startswith("unresolved")
+    statements = manifest["rights_detail"]["licence_statements"]
+    assert ["Open Government Licence" in s["statement"] for s in statements] == [True, False]
+    assert "INSPIRE End User Licence" in statements[1]["statement"]
+    assert manifest["rights_detail"]["conflict"] == "unresolved"
+    # The download approval is recorded apart from rights and says it is not a rights decision.
+    assert manifest["acquisition_approval"]["approved_by"] == "synthetic test fixture"
+    assert "not a rights decision" in manifest["acquisition_approval"]["scope"]
+    assert not any("approved_by" in key for key in rights)
+    # Operator-local paths never reach the committable manifest (checked on parsed strings,
+    # so Windows backslash escaping cannot hide a leak).
+    assert not any(str(tmp_path) in s for s in _strings(manifest))
     assert "<raw>" in manifest["command"] and "<a>" in manifest["command"]
+    assert manifest["layer_schema"]["native_crs_check"].startswith("matches")
     sample = json.loads((tmp_path / "a" / "redistributable-sample.json").read_text())
     assert all("featurelocation" not in f["attributes"] for f in sample["features"])
     with pytest.raises(SystemExit):  # outputs are never overwritten
         script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "a")])
+
+
+def test_manifest_command_never_records_paths_in_any_spelling(tmp_path):
+    script = _script()
+    raw = tmp_path / "raw"
+    _write_raw(raw, SYNTHETIC_PAGES)
+    out = tmp_path / "eq"
+    assert script.main(["replay", f"--raw-dir={raw}", f"--output-dir={out}"]) == 0
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert not any(str(tmp_path) in s for s in _strings(manifest))
+    assert manifest["command"][1:] == [
+        "replay", "--raw-dir", "<raw>", "--output-dir", "<eq>", "--sample-size", "25"
+    ]
+    # Prefix abbreviations are refused outright rather than recorded.
+    with pytest.raises(SystemExit):
+        script.main(["replay", "--raw", str(raw), "--output-dir", str(tmp_path / "abbr")])
+    assert not (tmp_path / "abbr").exists()
+
+
+def test_sample_keeps_only_allowlisted_attributes(tmp_path):
+    script = _script()
+    layer = copy.deepcopy(LAYER)
+    layer["fields"].insert(3, {"name": "notes", "type": "esriFieldTypeString", "alias": "Notes"})
+    pages = copy.deepcopy(SYNTHETIC_PAGES)
+    pages[0]["features"][0]["attributes"]["notes"] = "synthetic free text"
+    raw = tmp_path / "raw"
+    _write_raw(raw, pages, layer=layer)
+    script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "o")])
+    sample = json.loads((tmp_path / "o" / "redistributable-sample.json").read_text())
+    for f in sample["features"]:
+        assert set(f["attributes"]) <= {"sitename", "featuretypename"}
+    assert sample["features"][0]["withheld_for_sample"] == ["featurelocation", "notes"]
+    script.main(
+        ["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "k"), "--keep-location-text"]
+    )
+    kept = json.loads((tmp_path / "k" / "redistributable-sample.json").read_text())
+    assert kept["features"][0]["attributes"]["featurelocation"] == "Outside 1"
+    assert "notes" not in kept["features"][0]["attributes"]
+
+
+def test_a_layer_whose_native_crs_is_not_bng_is_refused(tmp_path):
+    script = _script()
+    layer = {**LAYER, "spatialReference": {"wkid": 3857, "latestWkid": 3857}}
+    raw = tmp_path / "raw"
+    _write_raw(raw, SYNTHETIC_PAGES, layer=layer)
+    with pytest.raises(SystemExit, match="not EPSG:27700"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "o")])
+    assert not (tmp_path / "o").exists()
 
 
 @pytest.mark.parametrize(
@@ -376,8 +471,12 @@ def test_replay_refuses_changed_bytes_without_leaving_an_output_dir(tmp_path):
     script = _script()
     raw = tmp_path / "raw"
     _write_raw(raw, SYNTHETIC_PAGES)
-    (raw / "page-0000.json").write_text("{}")
-    with pytest.raises(SystemExit):
+    # Still valid, buildable JSON with one coordinate changed: only the SHA-256 check can
+    # catch it.
+    changed = copy.deepcopy(SYNTHETIC_PAGES[0])
+    changed["features"][0]["geometry"]["x"] += 1.0
+    (raw / "page-0000.json").write_text(json.dumps(changed))
+    with pytest.raises(SystemExit, match="SHA-256"):
         script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "out")])
     assert not (tmp_path / "out").exists()  # a corrected retry can reuse the same path
 
@@ -456,21 +555,123 @@ def test_bbox_must_be_a_bounded_bng_envelope():
 def test_fetch_requires_approval_and_keeps_raw_and_outputs_outside_the_repo(tmp_path):
     script = _script()
     box = "433700,387100,434500,387700"
-    with pytest.raises(SystemExit):  # local use must be approved by someone, explicitly
+    with pytest.raises(SystemExit):  # the download must be approved by someone, explicitly
         script.main(
             ["fetch", "--bbox-27700", box, "--raw-dir", str(tmp_path / "r"),
              "--output-dir", str(tmp_path / "o")]
         )
     inside = script.REPO / "raw-should-not-be-here"
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit, match="outside every git working tree"):
         script.main(
-            ["fetch", "--bbox-27700", box, "--local-use-approved-by", "synthetic test",
+            ["fetch", "--bbox-27700", box, "--acquisition-approved-by", "synthetic test",
              "--raw-dir", str(inside), "--output-dir", str(tmp_path / "o")]
         )
     assert not inside.exists() and not (tmp_path / "r").exists()
-    with pytest.raises(SystemExit):  # full outputs (with frontage text) never inside the repo
-        script.main(
-            ["replay", "--raw-dir", str(tmp_path / "r"),
-             "--output-dir", str(script.REPO / "docs" / "site-audit" / "source-inventory" / "out")]
+    # A valid raw dir, so the refusal below can only come from the output-location guard.
+    raw = tmp_path / "raw"
+    _write_raw(raw, SYNTHETIC_PAGES)
+    out = script.REPO / "docs" / "site-audit" / "source-inventory" / "out"
+    with pytest.raises(SystemExit, match="outside every git working tree"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(out)])
+    assert not out.exists()
+    # Any other checkout or worktree (marked by a .git dir or file) is refused too.
+    other = tmp_path / "other-checkout"
+    other.mkdir()
+    (other / ".git").write_text("gitdir: synthetic\n")
+    with pytest.raises(SystemExit, match="outside every git working tree"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(other / "out")])
+    assert not (other / "out").exists()
+
+
+def test_raw_and_output_directories_must_be_disjoint_before_any_download(tmp_path):
+    script = _script()
+    box = "433700,387100,434500,387700"
+    for raw, out in (
+        (tmp_path / "same", tmp_path / "same"),
+        (tmp_path / "raw", tmp_path / "raw" / "out"),
+        (tmp_path / "out2" / "raw", tmp_path / "out2"),
+    ):
+        with pytest.raises(SystemExit, match="non-nested"):
+            script.main(
+                ["fetch", "--bbox-27700", box, "--acquisition-approved-by", "synthetic test",
+                 "--raw-dir", str(raw), "--output-dir", str(out)]
+            )
+        assert not raw.exists()
+
+
+def test_redirects_are_refused_not_followed():
+    script = _script()
+    request = urllib.request.Request(script.LAYER_URL + "?f=json")
+    with pytest.raises(urllib.error.HTTPError, match="redirect refused"):
+        script._RefuseRedirects().redirect_request(
+            request, io.BytesIO(b""), 302, "Found", {}, "http://example.invalid/elsewhere"
         )
-    assert not (script.REPO / "docs" / "site-audit" / "source-inventory" / "out").exists()
+
+
+class _FakeResponse:
+    """SYNTHETIC stand-in for an HTTP response; no network is involved."""
+
+    def __init__(self, value, final_url):
+        self._body, self.status, self._url = json.dumps(value).encode(), 200, final_url
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self._body
+
+    def geturl(self):
+        return self._url
+
+
+def _fake_publisher(final_url=None):
+    """Serve the SYNTHETIC layer, count and one page by request URL."""
+    single_page = page(SYNTHETIC_PAGES[0]["features"] + SYNTHETIC_PAGES[1]["features"])
+
+    def opener(request):
+        url = request.full_url
+        if "returnCountOnly" in url:
+            value = {"count": 3}
+        elif "/query" in url:
+            value = single_page
+        else:
+            value = LAYER
+        return _FakeResponse(value, final_url or url)
+
+    return opener
+
+
+def test_fetch_records_each_final_url_and_builds_offline(tmp_path, monkeypatch):
+    script = _script()
+    monkeypatch.setattr(script, "_open", _fake_publisher())
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    assert script.main(
+        ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approved-by",
+         "synthetic test", "--raw-dir", str(raw), "--output-dir", str(out)]
+    ) == 0
+    acquisition = json.loads((raw / "acquisition.json").read_text())
+    assert acquisition["status"] == "complete"
+    assert [f["file"] for f in acquisition["files"]] == ["layer.json", "count.json", "page-0000.json"]
+    assert all(f["final_url"] == f["url"] for f in acquisition["files"])
+    assert all(script.check_url(f["url"]) for f in acquisition["files"])
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["counts"]["features_kept"] == 3
+    assert manifest["acquisition_approval"]["approved_by"] == "synthetic test"
+
+
+def test_fetch_refuses_a_response_from_another_url_and_keeps_the_receipt(tmp_path, monkeypatch):
+    script = _script()
+    monkeypatch.setattr(script, "_open", _fake_publisher("http://example.invalid/moved"))
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    with pytest.raises(SystemExit, match="outside the fixed publisher layer"):
+        script.main(
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approved-by",
+             "synthetic test", "--raw-dir", str(raw), "--output-dir", str(out)]
+        )
+    acquisition = json.loads((raw / "acquisition.json").read_text())
+    assert acquisition["status"] == "failed"
+    assert acquisition["files"][0]["final_url"] == "http://example.invalid/moved"
+    assert not out.exists()

@@ -23,13 +23,22 @@ export const STATUS_WORD: Record<RunningJobStatus, string> = {
   'status-unknown': 'Status unknown',
 }
 
-/** Shared `.status-pill` tone suffix (`sp-<tone>` in styles.css). The word, not the colour, carries the state. */
-export type PillTone = 'progress' | 'ok' | 'warn' | 'muted'
+/**
+ * Pill tone. `progress`/`ok`/`warn`/`muted` are the shared `.sp-<tone>` classes; `danger` is the
+ * shared `.tone-danger` class (styles.css has no `sp-danger`). The word, not the colour, carries the state.
+ */
+export type PillTone = 'progress' | 'ok' | 'warn' | 'muted' | 'danger'
 
-// Same tones as describeJob (evaluation.ts): cancelled and failed are warnings, not muted.
+/** The shared class for a pill tone. */
+export const pillToneClass = (tone: PillTone) => (tone === 'danger' ? 'tone-danger' : `sp-${tone}`)
+
+// Same tones as describeJob (evaluation.ts): failed is danger, cancelled and unknown are warnings.
 const PILL_TONE: Record<RunningJobStatus, PillTone> = {
-  queued: 'progress', running: 'progress', completed: 'ok', failed: 'warn', cancelled: 'warn', 'status-unknown': 'warn',
+  queued: 'progress', running: 'progress', completed: 'ok', failed: 'danger', cancelled: 'warn', 'status-unknown': 'warn',
 }
+
+/** Pill word while a cancel is pending on a queued or running job, as describeJob labels it. */
+export const CANCELLING_WORD = 'Cancelling…'
 
 /** Section kicker per operation, an uppercase word like every other kicker (shell.ts uses the same words). */
 const KICKER: Record<Job['operation'], string> = {
@@ -98,7 +107,7 @@ export function runningJobView(job: Job | null, statusLost: boolean): RunningJob
   const working = active(job.status) && !lost
   return {
     status,
-    statusWord: STATUS_WORD[status],
+    statusWord: working && job.cancel_requested ? CANCELLING_WORD : STATUS_WORD[status],
     pillTone: PILL_TONE[status],
     operation: job.operation,
     kicker: KICKER[job.operation],
@@ -122,9 +131,16 @@ export function runningJobView(job: Job | null, statusLost: boolean): RunningJob
 export interface SupersededView {
   /** Revision the older result was computed for. */
   readonly revision: number
-  /** Revision that superseded it, when known: the backend's Job.superseded_by_revision, else a newer accepted head. */
+  /** The backend's Job.superseded_by_revision only. Null when the job snapshot does not carry it. */
   readonly supersededBy: number | null
-  readonly source: 'job' | 'head' | null
+  /**
+   * The newer accepted head of the same scenario and scope, stated as the current revision only.
+   * It is NOT claimed as the superseder: ws.runs snapshots are written when polling ends and never
+   * refreshed, so a result that completed before a newer revision was accepted carries
+   * superseded_by_revision null, and the head may be several revisions past the one that
+   * superseded it (rev 3 result, rev 4 accepted but failed, head at rev 6).
+   */
+  readonly acceptedRevision: number | null
   readonly runId: string | null
   readonly pill: string
   readonly meta: string
@@ -134,9 +150,9 @@ export interface SupersededView {
 /**
  * The banner for an older result's job, or null. Whether the result IS superseded is not decided
  * here: the caller passes the project's own rule (`ws.currentness(result) === 'superseded'`, from
- * evaluation.ts `classifyResult`), so the banner and the result card never disagree. This only
- * says by which revision, preferring the backend's `superseded_by_revision`, and never carries a
- * metric value.
+ * evaluation.ts `classifyResult`), so the banner and the result card never disagree. It names the
+ * superseding revision only from the backend's `superseded_by_revision`; otherwise it states the
+ * current accepted revision without claiming that revision superseded it. Never carries a metric value.
  */
 export function supersededView(
   job: Pick<Job, 'scenario_id' | 'scope' | 'scenario_revision' | 'superseded_by_revision' | 'run_id'> | null,
@@ -144,23 +160,25 @@ export function supersededView(
   isSuperseded: boolean,
 ): SupersededView | null {
   if (!job || !isSuperseded) return null
-  const fromJob = job.superseded_by_revision
-  // The head can only be named when it is the same scenario and scope (classifyResult also calls a
-  // result from another scenario or scope superseded, but no revision of that scenario replaced it).
-  const fromHead = head !== null && head.scenario_id === job.scenario_id && head.scope === job.scope && head.revision > job.scenario_revision
+  const supersededBy = job.superseded_by_revision
+  // The head is only stated for the same scenario and scope (classifyResult also calls a result from
+  // another scenario or scope superseded; that scenario's head says nothing about this result).
+  const acceptedRevision = head !== null && head.scenario_id === job.scenario_id && head.scope === job.scope && head.revision > job.scenario_revision
     ? head.revision
     : null
-  const supersededBy = fromJob ?? fromHead
   const r = job.scenario_revision
+  const which = supersededBy !== null
+    ? ` Superseded by revision ${supersededBy}.`
+    : acceptedRevision !== null ? ` The accepted revision is now ${acceptedRevision}.` : ''
   return {
     revision: r,
     supersededBy,
-    source: fromJob !== null ? 'job' : fromHead !== null ? 'head' : null,
+    acceptedRevision,
     runId: job.run_id,
     // Same words as the provenance strip (shell.ts provenanceStatus): REV N RUN · SUPERSEDED.
     pill: `REV ${r} RUN · SUPERSEDED`,
     meta: `${job.run_id ?? 'no run id'} · kept in history`,
     // The pill already names revision r; the body reuses the project's own superseded wording.
-    body: `${CURRENTNESS_LABEL.superseded.detail}${supersededBy !== null ? ` Superseded by revision ${supersededBy}.` : ''}`,
+    body: `${CURRENTNESS_LABEL.superseded.detail}${which}`,
   }
 }

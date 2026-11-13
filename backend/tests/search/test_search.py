@@ -207,3 +207,40 @@ def test_bad_terrain_and_unknown_candidate_pair_fail_closed():
     d["scenario"]["input"]["constraints"]["incompatible_candidate_pairs"] = [["c0", "missing"]]
     with pytest.raises(ValueError, match="candidate"):
         prepare(d)
+
+
+def test_swap_improves_greedy_and_matches_exhaustive_synthetic():
+    def synthetic_union(placements):
+        cells = {"c0": {0, 1, 2}, "c1": {0, 1, 3}, "c2": {2, 4}}
+        value = float(len(set().union(*(cells[p["candidate_id"]] for p in placements))))
+        return {
+            "cases": [
+                {
+                    "case_id": "summer",
+                    "role": "benefit",
+                    "quantity_kind": "geometric",
+                    "physical_m2_h": value,
+                    "weighted_m2_h": value,
+                    "targets": [],
+                }
+            ]
+        }
+
+    p = prepare(deps())
+    heuristic = search(p, synthetic_union)
+    exact = search(p, synthetic_union, exact_limit=3)
+    assert heuristic.best.score == exact.best.score == 5
+    assert any(step[0] == "improve" for step in heuristic.trace)
+    assert heuristic.reference.score == 4
+    assert exact.proof_verified is False
+
+
+def test_invalid_candidate_and_pence_types_are_rejected():
+    d = deps()
+    d["profiles"]["synthetic-profile"]["cost_pence"] = 5.5
+    with pytest.raises(ValueError):
+        prepare(d)
+    d = deps()
+    d["site"]["candidate_catalogue"][0]["plantability_status"] = "unknown"
+    with pytest.raises(ValueError):
+        prepare(d)

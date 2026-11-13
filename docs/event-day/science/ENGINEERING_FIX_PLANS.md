@@ -2,6 +2,8 @@
 
 **Revised 13 Nov 2026 (issue #57 reconciliation):** checked against `origin/main` `033d56d` (PRs #66, #67, #70, #71, #76, #77, #78, #80 merged) and the branches listed in [README §Reconciliation](README.md#reconciliation-after-ca1662d-13-nov). "PR #70 @ `8d24e73`" below is its merged head, now `docs/implementation/NEMOTRON_AGENT_RUNTIME_AUDIT_20261113.md` on main. Nothing was executed.
 
+**Re-checked 13 Nov 2026 against `origin/main` `be9d544`** (read-only; nothing was executed): between `033d56d` and `be9d544` the only backend source changes are `agents/observation_views.py` (added, PR #75, imported by nothing) and `site/source_inventory.py` (PRs #86, #94); the runtime audit and `deploy/` are unchanged; no native `/api/chat` client is on any pushed ref. One citation moved (`docs/EVENT_DAY_EXECUTION_2026-11-13.md` L251 is now L253). Ben's steps are unchanged, and the individual line citations inside FIX-1 to FIX-4 were not re-read one by one.
+
 > **Reconciliation note (13 Nov, after PR #70 @ `8d24e73`):** FIX-1a/FIX-2/FIX-3 were written for the `/v1` route. PR #70 (R03, R05, R25, §9) records that Ben's active lane is the native Ollama `/api/chat` client (#54/#62), with `/v1` plus an alias or `OLLAMA_CONTEXT_LENGTH` as the fallback. That native client is not on any pushed ref we inspected. Everything below applies unchanged **if the release uses the `/v1` client**. On the native `/api/chat` lane the equivalents are:
 >
 > - **FIX-1a:** no Modelfile alias is created (#62). Send `options.num_ctx` 8192 and `options.num_predict` (the 1,024 output reservation) on every request. If the installed Ollama supports `"truncate": false` and `"shift": false`, send both and treat the error as a fail-closed `context_exceeded` with no dispatch (PR #70 §9 step 4). Record `/api/version` and `/api/ps` (organiser tag only loaded).
@@ -33,7 +35,7 @@
 ### Problem
 - `LocalClient.complete` posts to `{base}/chat/completions` (Ollama's OpenAI-compatible route). Ollama states that the OpenAI API has no way to set a model's context size, so `options.num_ctx` cannot be sent per request. The effective context is whatever the server or model defaults to.
 - The client's pre-flight bound is `max_input_bytes` (bytes). `max_input_tokens` requires a trusted counter that nothing configures.
-- `AgentLoop._dispatch` appends the **entire** `Job` and `Result` JSON to the conversation. A search Result (two layouts × three cases × targets × metrics, plus every constraint record and provenance) is what pushed earlier laptop runs (16k-context Qwen, not Spark evidence; `docs/EVENT_DAY_EXECUTION_2026-11-13.md` L251) to ~11.5–12.4k prompt tokens; local laptop/WSL Qwen runs from Arnav's paused integration session reported 11.8–12.8k (his 12:26 GMT #54 handoff to Ben; not Spark evidence).
+- `AgentLoop._dispatch` appends the **entire** `Job` and `Result` JSON to the conversation. A search Result (two layouts × three cases × targets × metrics, plus every constraint record and provenance) is what pushed earlier laptop runs (16k-context Qwen, not Spark evidence; `docs/EVENT_DAY_EXECUTION_2026-11-13.md` L253 on `be9d544`) to ~11.5–12.4k prompt tokens; local laptop/WSL Qwen runs from Arnav's paused integration session reported 11.8–12.8k (his 12:26 GMT #54 handoff to Ben; not Spark evidence).
 - If the server context is 8,192 and a prompt is longer, Ollama may truncate silently. If the server context is larger, requests can exceed the organiser cap without any error.
 
 ### Solution (three parts, all required)

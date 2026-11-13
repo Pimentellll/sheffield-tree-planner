@@ -1,4 +1,5 @@
 import type { Workspace } from '../planning/useWorkspace'
+import TerrainView from '../scene/TerrainView'
 
 /**
  * Candidate sites from the STP-005 desk audit (docs/site-audit/STP-005-desk-audit.md, 12 Nov 2026).
@@ -37,6 +38,7 @@ export default function OverviewScreen({ ws }: { ws: Workspace }) {
   return (
     <>
       <div className="page-heading"><div><h1>Sheffield sites<span className="heading-dot">.</span></h1><p>Where the planner can be used today, and what real Sheffield sites still need before any result there could be trusted.</p></div><span className="pill pill-muted">STP-005 STATUS</span></div>
+      <TerrainView name="weston-park" />
       <div className="overview-grid">
         <section className="detail-panel" aria-labelledby="active-site">
           <div className="detail-section">
@@ -47,7 +49,7 @@ export default function OverviewScreen({ ws }: { ws: Workspace }) {
                 <div className="readiness-row"><span>Kind</span><strong className={active.site_kind === 'synthetic_test' ? 'text-warning' : undefined}>{active.site_kind === 'synthetic_test' ? 'Synthetic test (not Sheffield)' : 'Real site'}</strong></div>
                 <div className="readiness-row"><span>Scene / semantics</span><strong>rev {active.scene_revision} / {active.semantic_revision}</strong></div>
                 <div className="readiness-row"><span>Blockers</span><strong>{active.readiness.blockers.length || 'none recorded'}</strong></div>
-                <p className="fine-print">Only this site can be evaluated now. No real Sheffield geometry is in the application yet.</p>
+                <p className="fine-print">Only this site can be evaluated now. Real terrain on this page is a view-only context; it is not loaded into the planner.</p>
               </>
             ) : <p className="fine-print">Start the local backend to load a site.</p>}
           </div>

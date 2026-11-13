@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:browser": "node tests/browser-check.cjs",
     "test:physical": "node tests/physical-check.cjs",
+    "test:terrain": "node tests/terrain-check.cjs",
     "serve:reference": "python scripts/serve_reference.py"
   },
   "dependencies": {

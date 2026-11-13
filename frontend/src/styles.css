@@ -9,3 +9,4 @@
 .report-actions .text-action{font-size:12px;margin-top:10px}
 .legend-line.region{border-top-color:#b7e879}.legend-dot.candidate{border:2px solid #f1f5ee;background:transparent;border-radius:50%;transform:none}.candidate-list{display:grid;gap:5px;margin-top:4px}.layout-table th small{word-break:break-all}.layout-table td{white-space:nowrap}.layout-table td small{white-space:normal}
 .delta-layout{color:#8a9a8d;font-family:"JetBrains Mono",Consolas,monospace;font-size:9px}
+.terrain-panel{margin-bottom:16px}.terrain-wrap{height:560px}.terrain-legend{flex-wrap:wrap;row-gap:6px}.terrain-notes{background:#fffefa;color:#3d5444;font-size:12px;line-height:1.5}.terrain-notes ul{padding-left:18px;margin:6px 0}.terrain-empty{color:#d7e3d9;font-size:13px;line-height:1.5}.terrain-empty code{font-family:"JetBrains Mono",Consolas,monospace;font-size:11px}.scene-toolbar button:nth-last-child(-n+2){font-size:11px;font-weight:700}

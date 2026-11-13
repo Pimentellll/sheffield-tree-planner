@@ -25,6 +25,16 @@ Without the launcher you can still open `?scenario=<id>&revision=<n>` against an
 
 With Ben's `feat/ben/STP-arnav-logic-takeover` checkout (or later), start `python frontend/scripts/serve_physical.py --workspace <fresh> --winter` from that checkout's environment, then run the dev server with `CANOPY_SESSION=<fresh>/session.json`. The launcher calls `create_physical_runtime` unchanged, reads the scene asset through the registry's rights-checked `read(..., "public_display_status")`, and the UI verifies its SHA-256 before drawing the 195 receiver samples, planting region and catalogue positions. Because this backend evaluates catalogue candidates only, the editor becomes a candidate picker: drags snap to positions and the arrow keys step between them. Search, winter cases, `compare_locations` and `compare_scenarios` then show real results. `npm run test:physical` checks all of this against the live server (19 checks).
 
+## Real terrain context (view only)
+
+The Sheffield sites screen can show real Environment Agency LiDAR as a navigable 3D surface. It is a context view: it is not a SiteBundle, is not sent to the backend, and no shade result refers to it.
+
+1. Download tile **SK38NW** from https://environment.data.gov.uk/survey: *LIDAR Composite DTM* and *LIDAR Composite First Return DSM*, 2022, 1 m. Keep the two .zip files out of git.
+2. `uv run --with rasterio --with numpy python frontend/scripts/prepare_terrain.py --dtm <DTM zip> --dsm <DSM zip> --out ../canopy-terrain` crops Weston Park plus the 450 m context buffer from the STP-005 audit, and records file hashes, survey, licence and attribution.
+3. Start the dev server with `CANOPY_TERRAIN_DIR=../../canopy-terrain`.
+
+Heights are drawn as stored, with no vertical exaggeration. Colours are bands of height above ground; a surface model cannot tell buildings from canopy, and the legend says so. `npm run test:terrain` checks labelling and navigation (`CANOPY_TERRAIN_EXPECT=absent|synthetic|real`); `scripts/make_test_terrain.py` writes a labelled synthetic surface for that check.
+
 ## Tests
 
 - `npm test`: Vitest unit tests for the stale-result rules, commit/revision building, job states, formatting, API client (If-Match, ContractError, head probing, cancel), declaration hash verification and the ENU→viewer transform.

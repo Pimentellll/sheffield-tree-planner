@@ -19,6 +19,15 @@ from .terrain import RasterGrid, affine_point, clip_pair, require_alignment
 
 @dataclass(frozen=True)
 class ImportResult:
+    """Import identity covers the full typed bundle, cropped inputs and geometry.
+
+    content_sha256 is a deterministic import fingerprint, not the digest of a
+    serialized physical_scene export. Export options (area basis, supported
+    baked profile states and explicit trees) must additionally be bound by the
+    caller; registered assets hash the actual serialized export bytes.
+    Elapsed wall time is deliberately excluded.
+    """
+
     vertices_enu_m: tuple
     vertices_viewer_m: tuple
     triangles: tuple
@@ -255,6 +264,10 @@ def import_pair(
                     elevated=elevated,
                     missing=missing,
                     grid=dtm.grid_key,
+                    dtm_heights_m=dtm.heights_m,
+                    dsm_heights_m=dsm.heights_m,
+                    semantic_mask=semantic_mask,
+                    site_bundle=site.model_dump(mode="json"),
                     site_id=site.site_id,
                     scene_revision=site.scene_revision,
                     semantic_revision=site.semantic_revision,

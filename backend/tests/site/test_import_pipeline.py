@@ -173,3 +173,45 @@ def test_scene_placement_and_target_validation():
         out.physical_scene("not-target", "surface")
     with pytest.raises(ValueError, match="area basis"):
         out.physical_scene("target", "unknown")
+
+
+def test_import_identity_binds_target_features_and_boundary_evidence():
+    base = import_pair(bundle(), raster(), raster())
+    target_site = bundle().model_dump(mode="json")
+    target_site["targets"][0]["target_id"] = "different-target"
+    target = import_pair(SiteBundle.model_validate(target_site), raster(), raster())
+    assert (
+        target.physical_scene("different-target", "surface")["samples"][0]["target_id"]
+        != base.physical_scene("target", "surface")["samples"][0]["target_id"]
+    )
+    assert target.content_sha256 != base.content_sha256
+
+    feature_site = bundle().model_dump(mode="json")
+    feature_site["existing_trees"] = [
+        dict(
+            feature_id="existing-tree",
+            geometry_ref="mesh",
+            evidence_status="synthetic assumption",
+            source_ids=[],
+            assumption_ids=["synthetic"],
+        )
+    ]
+    feature = import_pair(SiteBundle.model_validate(feature_site), raster(), raster())
+    with pytest.raises(ValueError, match="correspondence"):
+        feature.physical_scene("target", "surface")
+    assert feature.content_sha256 != base.content_sha256
+
+    context_site = bundle().model_dump(mode="json")
+    context_site["coverage"]["boundary_limitations"] = ["different context evidence"]
+    context = import_pair(SiteBundle.model_validate(context_site), raster(), raster())
+    assert context.warnings != base.warnings
+    assert context.content_sha256 != base.content_sha256
+
+
+def test_import_identity_covers_cropped_source_values_below_height_tolerance():
+    base = import_pair(bundle(), raster(), raster())
+    surface = raster(((10.001, 10.0, 10.0), (10.0, 10.0, 10.0), (10.0, 10.0, 10.0)))
+    changed = import_pair(bundle(), raster(), surface)
+    assert changed.vertices_enu_m == base.vertices_enu_m
+    assert changed.elevated_cells == base.elevated_cells
+    assert changed.content_sha256 != base.content_sha256

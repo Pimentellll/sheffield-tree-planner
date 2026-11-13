@@ -1,6 +1,16 @@
 # Sheffield recorded street-tree inventory: source, rights and output schema
 
-**Status (13 Nov 2026):** importer, operator script and tests are drafted for [#69](https://github.com/Pimentellll/sheffield-tree-planner/issues/69) (GEO3D-01 / I1). **No real sample has been acquired yet.** The unit tests have run only in this repository's GitHub-hosted CI, on synthetic fixtures with the network disabled. Nothing has run on the DGX, and no laptop run was made. This folder will hold the reviewed redistributable sample and its manifest once that run happens. A council record is **not** a verified current crown, species, health state, surveyed position or planting permission. Nothing here completes the real-site gate [#30](https://github.com/Pimentellll/sheffield-tree-planner/issues/30).
+**Status (13 Nov 2026):** importer, operator script and tests are drafted for [#69](https://github.com/Pimentellll/sheffield-tree-planner/issues/69) (GEO3D-01 / I1). **No real sample has been acquired yet.** The unit tests have run only in this repository's GitHub-hosted CI, on synthetic fixtures with urllib network calls blocked. Results for each revision are recorded on #69, and the #69 follow-up's tests count only once its CI has passed. Nothing has run on the DGX, and no laptop run was made. This folder will hold the reviewed redistributable sample and its manifest once that run happens. A council record is **not** a verified current crown, species, health state, surveyed position or planting permission. Nothing here completes the real-site gate [#30](https://github.com/Pimentellll/sheffield-tree-planner/issues/30).
+
+## Decisions recorded for #69 (13 Nov 2026)
+
+These were taken by the #69 owner's coordinating session, under the owner's delegation. They are also written into every manifest as `recorded_decisions`. The flag `sample_envelope_applies_to_this_acquisition` is true only when the fetched `bbox_27700` is exactly the 1a envelope, and only then is the Weston Park coverage caveat added to `limitations`. They change nothing that can run today: acquisition still waits for an approved DGX window.
+
+| Decision | Choice |
+| --- | --- |
+| Sample envelope | **1a:** Weston Park with surrounding streets, approximately `433700,387100,434500,387700` in EPSG:27700. The service count is recorded first. Park-interior coverage is unverified, because the layer likely holds highway trees only. |
+| Rights | **2a:** all four purposes stay `unknown`. The OGL v3.0 vs INSPIRE End User Licence conflict rules out recording any as permitted. Nothing may be displayed, shared or exported until a person records the endpoint's actual terms. |
+| `featurelocation` | **3a:** dropped from anything committed, including the redistributable sample, and kept in local outputs only. A sample built with `--keep-location-text` is stamped `local_only` and must not be committed. |
 
 ## Source (metadata inspected 13 Nov 2026; nothing bulk-downloaded)
 
@@ -36,7 +46,11 @@ The manifest's `rights` block uses the SiteBundle rights field names from [Contr
 
 **The two licence statements conflict.** OGL v3.0 would permit all four purposes with attribution, but the INSPIRE End User Licence restricts use and redistribution. A person must resolve which licence governs this layer before any status changes. **Unknown is not approval.**
 
-`--acquisition-approved-by` records only who authorised one download, under `acquisition_approval`. It is not a rights decision and changes no status.
+`--acquisition-approval-ref` records only which approval authorised one download, under `acquisition_approval.reference`. It is not a rights decision and changes no status. Because the manifest is committable and this repository is public, the value must be one of the following, **never a person's name**:
+- a role from a fixed list: `role:coordinator`, `role:data-owner`, `role:integrator`, `role:operator`, `role:site-lead` or `role:team-lead`. A list rather than any slug, so that a name cannot pass as a role;
+- a reference to where the approval is recorded: `#<issue>`, `#<issue>#issuecomment-<id>`, or that GitHub URL.
+
+Both `fetch` and `replay` check the exact form, and `replay` refuses a receipt without a valid one. Only allowlisted receipt keys are copied into the manifest, so an old free-text approval field in a local receipt never reaches it.
 
 If OGL is confirmed, the attribution would be: *"Contains public sector information licensed under the Open Government Licence v3.0. Source: Sheffield City Council, Street Trees."*
 
@@ -44,11 +58,11 @@ If OGL is confirmed, the attribution would be: *"Contains public sector informat
 
 ```bash
 # Bounded EPSG:27700 envelope (metres, <= 25 km2), capped feature count. Raw bytes AND full
-# outputs must live outside every git checkout/worktree, in separate directories. Name who
-# authorised this download (this is not a rights decision).
+# outputs must live outside every git checkout/worktree, in separate directories. Reference
+# the approval of this download by role or issue/comment, never by name (not a rights decision).
 python scripts/prepare_tree_inventory.py fetch \
-  --bbox-27700 <xmin,ymin,xmax,ymax> --max-features 500 \
-  --acquisition-approved-by "<who approved, and where it is recorded>" \
+  --bbox-27700 433700,387100,434500,387700 --max-features 500 \
+  --acquisition-approval-ref "#69#issuecomment-<id>" \
   --raw-dir <outside-repo>/raw-street-trees-001 --output-dir <outside-repo>/street-trees-001
 # Same-source replay from the saved raw bytes (receipt and hashes re-checked) must reproduce
 # inventory_sha256.
@@ -56,22 +70,30 @@ python scripts/prepare_tree_inventory.py replay \
   --raw-dir <outside-repo>/raw-street-trees-001 --output-dir <outside-repo>/street-trees-001-replay
 ```
 
-**Choosing the envelope:** agree it with the site work. The desk audit's Weston Park / Manor Fields boxes are WGS84 and were not converted here, because no conversion is accepted in this slice. The script rejects boxes that look like lon/lat.
+**Envelope:** decision 1a above. It is a query filter only; no coordinate conversion is claimed. The desk audit's Weston Park / Manor Fields boxes are WGS84 and were not converted here, and the script rejects boxes that look like lon/lat.
 
 **Script safeguards:**
-- **Network:** HTTPS to the one fixed layer only. Redirects are refused, not followed, and each response's final URL is recorded and checked. Tests block every real network call.
+- **Network:** HTTPS to the one fixed layer only. Redirects are refused, not followed, and each response's final URL is recorded and checked. Every site test runs with urllib network calls (`urlopen`, `OpenerDirector.open`) blocked and recorded as failures (`backend/tests/site/conftest.py`). Other clients, such as raw sockets or httpx, are not covered.
+- **Feature cap:** with paging, pages stop at `--max-features`. A layer without paging allows only one uncapped query. In that case the service count must be an integer no larger than `--max-features`, or nothing is downloaded. The single page is also checked afterwards, so a layer that changed in between fails the acquisition.
 - **Locations:** raw and output directories must be outside every git checkout or worktree, and must not be equal or nested. This is checked before any download.
 - **Committable command:** the manifest's `command` is rebuilt from the parsed arguments, with paths reduced to their final name. Option abbreviations are refused.
 - **CRS:** queries ask for `f=json` with `outSR=27700`, never GeoJSON (which the server reprojects to WGS84). The layer's own declared CRS must also be EPSG:27700, or the build is refused.
 - **On failure:** the script always leaves `acquisition.json` (status, error, every request URL, final URL, retrieval time, HTTP status and SHA-256).
 - **On replay:** it refuses an incomplete acquisition, any file the receipt does not exactly account for, and non-contiguous pages.
-- **Count provenance:** a failed count request is reported as such, not as "not requested". An empty result is reported as empty.
+- **Count provenance:** a failed count request is reported as such, not as "not requested". "Empty" means nothing was received. Records that arrive but are all rejected or conflicting are reported as "no usable records". "Matches" and "mismatch" also state how many records were kept and rejected, and how many source IDs conflicted.
 
 **Outputs** (all written outside the repository):
 - `inventory.json`
 - `receipt.json`: counts, rejections, conflicts, coincident locations, schema drift and `inventory_sha256`.
-- `manifest.json`: resolved URLs, retrieval times, per-file SHA-256, the receipt hash, the layer schema, the rights and the approval reference. Path arguments are redacted, so the manifest is safe to commit.
-- `redistributable-sample.json`: its schema is tagged `#sample`, and each record lists any `withheld_for_sample` fields. Only allowlisted attributes are kept (`sitename`, `featuretypename`, plus `featurelocation` with `--keep-location-text`); any other field is withheld.
+- `manifest.json` contains:
+  - resolved URLs, retrieval times and per-file SHA-256;
+  - the receipt hash and the layer schema;
+  - the rights;
+  - the approval reference (a role or a reference, never a name);
+  - the recorded decisions.
+
+  Path arguments are redacted, so after review the manifest is safe to commit.
+- `redistributable-sample.json`: its schema is tagged `#sample`, and each record lists any `withheld_for_sample` fields. Only `sitename` and `featuretypename` are kept; any other field is withheld. With `--keep-location-text`, the sample also keeps `featurelocation` and is stamped `local_only`; under decision 3a it is never committed.
 
 After review, copy only `manifest.json` and the small sample here. Raw downloads and the full inventory stay out of git.
 
@@ -105,10 +127,10 @@ Each feature:
 - **Licence:** rights remain `unknown` until the OGL vs INSPIRE conflict above is resolved.
 - **Scope of the layer:** reviewers report that it likely covers council highway (street) trees only, not park, private or other trees. This is not verified here; absence from the layer is not absence of a tree.
 
-## Known limits (from review, not fixed in this slice)
+## Known limits (from review, not fixed)
 
-- **Non-paging fallback:** this single query ignores `--max-features`. The real layer supports paging, so the risk is latent.
-- **Completeness wording:** the completeness text can mislead. It reports "empty" when records arrived but none had an integer ID, and "matches" when every record was rejected for geometry. The kept/rejected counts in the receipt are authoritative.
+The non-paging cap and the completeness wording are addressed in the #69 follow-up; its CI result is recorded on #69. These remain:
+
 - **Same-ID conflicts:** a same-ID copy rejected for bad geometry is not compared, so its valid twin is kept. Copies that differ only in non-string values hash as identical repeats.
 - **Count status:** `fetch` stops on a count error body, so the `service_error` count status is reachable only through a hand-made raw directory.
 - **Provenance on replay:** `replay` stamps the fixed Sheffield source on any raw directory; provenance rests on the receipt.

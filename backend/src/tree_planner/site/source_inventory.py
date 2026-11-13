@@ -232,17 +232,27 @@ def build_inventory(
             "service_error": "unknown: the service count request returned an error",
             "non_integer": "unknown: the service count response had no integer count",
         }.get(service_count_status, f"unknown: service count {service_count_status}")
-    elif unique_received == 0:
+    elif not received:
         completeness = (
             f"empty: no records retrieved for this query (service reported {service_count})"
         )
-    elif unique_received == service_count:
-        completeness = "matches the service-reported count for this query"
-    else:
+    elif not features:
         completeness = (
-            f"mismatch: {unique_received} distinct source IDs retrieved, "
-            f"service reported {service_count}"
+            f"no usable records: all {len(received)} retrieved records were rejected or "
+            f"conflicting (service reported {service_count})"
         )
+    else:
+        tally = (
+            f"{len(features)} kept, {len(rejected)} rejected, "
+            f"{len(conflicts)} conflicting source IDs"
+        )
+        if unique_received == service_count:
+            completeness = f"matches the service-reported count for this query ({tally})"
+        else:
+            completeness = (
+                f"mismatch: {unique_received} distinct source IDs retrieved, "
+                f"service reported {service_count} ({tally})"
+            )
     counts["completeness_relative_to_service"] = completeness
 
     inventory = {

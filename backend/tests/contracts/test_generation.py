@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,26 @@ def test_checked_in_artifacts_are_deterministic(tmp_path):
     schema = json.loads(first["contracts.schema.json"])
     assert schema["$defs"]["ScenarioRef"]["additionalProperties"] is False
     assert json.loads(first["openapi.json"])["paths"] == {}
+
+
+def test_generator_canonicalizes_its_owned_temporary_workspace(tmp_path, monkeypatch):
+    gen = generator()
+    workspace = tmp_path / "owned-workspace"
+    anchor = workspace / "anchor"
+    anchor.mkdir(parents=True)
+    alias = anchor / ".."
+    assert alias.absolute() != workspace.resolve(strict=True)
+
+    @contextmanager
+    def owned_temporary_directory(**kwargs):
+        # Exercise the same noncanonical-root boundary without requiring NTFS aliases.
+        assert kwargs["prefix"] == "canopy-schema-"
+        yield str(alias)
+
+    monkeypatch.setattr(gen, "TemporaryDirectory", owned_temporary_directory)
+    emitted = gen.artifacts()
+    for name, content in emitted.items():
+        assert (ROOT / "generated" / name).read_bytes() == content.encode("utf-8")
 
 
 def test_http_contracts_are_derived_from_the_implemented_routes():

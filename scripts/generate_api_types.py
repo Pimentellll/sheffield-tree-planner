@@ -171,7 +171,8 @@ def artifacts():
 
     # Construction uses an isolated SQLite workspace, not a worker or private data.
     with TemporaryDirectory(prefix="canopy-schema-", dir=os.environ.get("TMPDIR")) as temp:
-        http = create_app(Path(temp), start_worker=False).openapi()
+        # Windows may return an 8.3 alias; canonicalize only this generator-owned workspace.
+        http = create_app(Path(temp).resolve(strict=True), start_worker=False).openapi()
 
     definitions_http = http["components"]["schemas"]
     type_names = {}

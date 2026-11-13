@@ -1,0 +1,32 @@
+name: auto-merge on green CI
+
+# Merges a non-draft PR once the "readiness checks" workflow succeeds on its head commit.
+# Replaces GitHub's built-in auto-merge, which needs branch protection (unavailable on this plan).
+# Opt out by marking the PR as draft or adding the label "do-not-merge".
+on:
+  workflow_run:
+    workflows: ["readiness checks"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Merge matching open PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          prs=$(gh api "repos/$REPO/pulls?state=open&per_page=100" --jq \
+            ".[] | select(.head.sha == \"$HEAD_SHA\" and .draft == false and (.labels | map(.name) | index(\"do-not-merge\") | not)) | .number")
+          for pr in $prs; do
+            echo "Merging #$pr at $HEAD_SHA"
+            gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash -f sha="$HEAD_SHA" \
+              || echo "::warning::Could not merge #$pr (conflict or new commits); it will retry on the next green run"
+          done

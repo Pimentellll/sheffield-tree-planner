@@ -169,7 +169,9 @@ describe('narrativeFigures (untrusted model text)', () => {
     expect(statuses('$450')).toEqual([['$450', 'money', 'unverified']])
     expect(statuses('€450')).toEqual([['€450', 'money', 'unverified']])
     expect(statuses('30 degrees')).toEqual([['30 degrees', 'degrees', 'unverified']])
-    expect(statuses('2 K')).toEqual([['2 K', 'unknown', 'unverified']])
+    expect(statuses('2 K')).toEqual([['2 K', 'degrees', 'unverified']])
+    expect(statuses('saves 450k a year')).toEqual([['450k', 'unknown', 'unverified']])
+    expect(statuses('10 thousand trees')).toEqual([['10 thousand', 'count_scale', 'unverified']])
   })
   it('keeps the sign of a currency range to the figure it belongs to', () => {
     expect(statuses('£400-£450')).toEqual([['£400', 'money', 'unverified'], ['£450', 'money', 'appears-in-result']])
@@ -226,5 +228,11 @@ describe('narrativeView', () => {
     expect(context.figures.map(f => [f.kind, f.contextOnly])).toEqual([['length_m', true], ['hours', true]])
     expect(context.needsWarning).toBe(false)
     expect(narrativeView('a 2-degree drop', result()).needsWarning).toBe(true)
+    expect(narrativeView('planted about 10 thousand trees', result()).needsWarning).toBe(false)
+  })
+  it('still warns on kelvin differences, unlabelled money and area claims', () => {
+    for (const text of ['cools the street by 2 K', 'saves 450k a year', 'adds 120 m² of shade']) {
+      expect([text, narrativeView(text, result()).needsWarning]).toEqual([text, true])
+    }
   })
 })

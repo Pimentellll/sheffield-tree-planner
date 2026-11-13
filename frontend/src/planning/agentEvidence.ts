@@ -172,8 +172,9 @@ export const MODEL_INTERPRETATION_LABEL = 'Model interpretation, not a computed 
 
 export type FigureKind =
   | 'temperature' | 'percent' | 'money' | 'shade_m2_h' | 'weighted_shade' | 'energy_kWh' | 'energy_kWh_per_m2' | 'area_m2' | 'hours' | 'length_m'
-  | 'degrees' // "30 degrees", "2-degree", "2 deg", "45°": an angle OR an unstated temperature, so it warns
-  | 'unknown' // a quantity whose unit or scale this guard cannot attribute ("2 K", "10 thousand")
+  | 'degrees' // "30 degrees", "2-degree", "2 deg", "45°", "2 K": an angle OR a temperature, so it warns
+  | 'count_scale' // a spelled scale word with no unit or currency ("10 thousand trees"): context
+  | 'unknown' // an abbreviated scale with no unit or currency ("450k", "1.2 bn"): possibly money, so it warns
 
 /**
  * - `unsupported`: no registered operation computes this kind of quantity (°C, %).
@@ -192,9 +193,10 @@ export interface NarrativeFigure {
   readonly kind: FigureKind
   readonly status: FigureStatus
   /**
-   * Hours, lengths, areas and unattributable quantities: no registered metric is reported in these
-   * units (contracts/results.py `Metric.registry_pair`), so they are usually context ("3 m apart",
-   * "over 6 hours"). Still listed as `unverified`, but they do not by themselves set `needsWarning`.
+   * Hours, lengths and spelled counts: no registered metric is reported in these units
+   * (contracts/results.py `Metric.registry_pair`), so they are usually context ("3 m apart",
+   * "over 6 hours", "10 thousand trees"). Still listed as `unverified`, but they do not by
+   * themselves set `needsWarning`.
    */
   readonly contextOnly: boolean
 }
@@ -252,7 +254,8 @@ const SHADE = /^(?:m(?:²|2)(?:·|_| )?h|square[- ]met(?:re|er)[- ]hours?)$/
 const METRIC_UNIT: Partial<Record<FigureKind, Metric['unit']>> = {
   shade_m2_h: 'm2_h', weighted_shade: 'weighted_m2_h', energy_kWh: 'kWh', energy_kWh_per_m2: 'kWh_per_m2', area_m2: 'm2', hours: 'h', length_m: 'm',
 }
-const CONTEXT_ONLY: ReadonlySet<FigureKind> = new Set<FigureKind>(['area_m2', 'hours', 'length_m', 'unknown'])
+// Areas are NOT context: models mis-write the shade metric as m² ("adds 120 m² of shade").
+const CONTEXT_ONLY: ReadonlySet<FigureKind> = new Set<FigureKind>(['hours', 'length_m', 'count_scale'])
 
 /** Markdown emphasis/code marks become spaces (same length, so indices stay valid). */
 const blankMarkdown = (text: string) => text.replace(/[*`]/g, ' ')
@@ -286,8 +289,14 @@ function classify(currency: string, scaleText: string, unitText: string): Classi
   }
   if (u.startsWith('pound') || u === 'gbp') return { kind: 'money', money: 'pounds', multiplier }
   if (u === 'pence' || u === 'p') return { kind: 'money', money: 'pence', multiplier }
-  // Without a currency, a lone trailing "m" is metres ("4.2 m"); any other lone scale is unattributable.
-  if (!u && s) return s === 'm' ? { kind: 'length_m', multiplier: 1 } : { kind: 'unknown', multiplier: 1 }
+  // Without a currency or unit: a lone "m" is metres ("4.2 m"); a capital "K" is kelvin ("2 K");
+  // a spelled word is a count ("10 thousand trees"); an abbreviation ("450k", "1.2 bn") may be money.
+  if (!u && s) {
+    if (s === 'm') return { kind: 'length_m', multiplier: 1 }
+    if (scaleText === 'K') return { kind: 'degrees', multiplier: 1 }
+    if (s.length > 2) return { kind: 'count_scale', multiplier }
+    return { kind: 'unknown', multiplier }
+  }
   if (!u) return null
   if (u.startsWith('weighted')) return { kind: 'weighted_shade', multiplier }
   if (u.startsWith('kwh')) return { kind: u === 'kwh' ? 'energy_kWh' : 'energy_kWh_per_m2', multiplier }
@@ -306,7 +315,7 @@ const near = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tol
 function statusOf(c: Classified, value: number, tolerance: number, evidence: NarrativeEvidence | null): FigureStatus {
   // No registered operation computes air/surface temperature or a percentage.
   if (c.kind === 'temperature' || c.kind === 'percent') return 'unsupported'
-  if (c.kind === 'unknown' || c.kind === 'degrees' || c.money === 'foreign' || !evidence) return 'unverified'
+  if (c.kind === 'unknown' || c.kind === 'degrees' || c.kind === 'count_scale' || c.money === 'foreign' || !evidence) return 'unverified'
   const scaled = value * c.multiplier
   const scaledTolerance = tolerance * c.multiplier
   if (c.kind === 'money') {
@@ -330,6 +339,8 @@ function statusOf(c: Classified, value: number, tolerance: number, evidence: Nar
  * - direction words: "reduces by 2.5 kWh" is compared as +2.5. Signs written as "-", "−" or "–"
  *   are compared strictly, so a contradicted stored sign shows as unverified only when the sign
  *   is written, not when it is implied by a word.
+ * Known false alarms (fail safe): matching is case-insensitive, so "Table 2c" or "Fig 3f" reads as a
+ * temperature; an unspaced list "12,13 m²·h" reads as the decimal 12.13.
  * `narrativeView` adds a temperature backstop for unparsed forms. Bare counts and identifiers
  * ("3 trees", "revision 2", "C5") are left alone. Pass `null` evidence when no validated Result
  * is attached.

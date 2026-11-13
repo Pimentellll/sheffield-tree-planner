@@ -73,7 +73,7 @@ Status values initially **Planned** or **In progress (owner-reported)**; replace
 | **B-E06** | P0 | Ben | Device stability, safe bounded load, error/restart proof and fixed release runbook | B-E03–E05 | Cold/warm logs; measured latency/resource receipt; restart/rollback |
 | **B-E07** | P0 | Ben | Freeze known-good release; tell team one deploy SHA, URL and operational restrictions | B-E06 + A-E05 + X-E04 | Release receipt; no unapproved restarts/features |
 | **A-E01** | P0 | Arnav | **REVIEWED (13 Nov)** B11 runner/scorer and agent contracts on pushed `demo/hackathon` baseline; recheck Ben's final SHA before harness work | None | Capabilities/gaps recorded in §9; no live model or manual benchmark claimed |
-| **A-E02** | P0 | Arnav | Freeze small scored scenario suite: tool selection, valid args, budget, comparison, evidence, unsupported claims, stale/failure cases | A-E01 | Immutable inputs/hashes, expected outcome, exact rubric, dry-run checks |
+| **A-E02** | P0 | Arnav | Freeze **at least five** model test inputs (organiser instruction), including one ambiguous and one correct 'I don't know'; cover tool selection, args, constraints, evidence and failures | A-E01; approved task contract | Immutable inputs/hashes, expected answer/allowed uncertainty, exact rubric, dry-run checks |
 | **A-E03** | P0 | Arnav | Run genuine available model against suite with Ben-agreed endpoint/window | B-E05 + A-E02 | Per-attempt trace: model, SHA, seed/settings, tool/result IDs, pass/fail, latency |
 | **A-E04** | P1 | Arnav | Fair local Nemotron vs available comparator; optionally scripted/manual baseline | A-E03, Ben's explicit load-test window | Same tasks/prompts/tool contracts/hardware where feasible; no false fairness claim |
 | **A-E05** | P0 | Arnav | Independently audit scientific correctness, provenance, synthetic label, UI/result fidelity, agent citation integrity | B-E03–E05 | Signed-off acceptance sheet or precise blockers/severity |
@@ -83,10 +83,10 @@ Status values initially **Planned** or **In progress (owner-reported)**; replace
 | **X-E02** | P0 | Alex | Make agent experience transparent: goal, tool selected, running/failed/cancelled, verified evidence, human approval boundary | Stable agent API contract | Visible real trace without browser-to-LLM calls |
 | **X-E03** | P0 | Alex | Create concise story and slide layout before model/deployment is finished | None | Deck skeleton: problem → product → architecture → demo → results → impact |
 | **X-E04** | P0 | Alex | Rehearse core demo with known-good synthetic scenario; capture screenshots/recorded fallback | X-E01 + deterministic working build | Repeatable steps; clear synthetic/actual-hardware labels |
-| **X-E05** | P0 | Alex | Capture verified Spark run, edit video, polish deck, prepare speaker and failure fallback | B-E05 + X-E03–E04 | Complete video, exported slide PDF, screenshots, narrated demo |
+| **X-E05** | P0 | Alex | Capture genuine Spark run and produce **≤5 minute YouTube or Loom video**; deck for optional on-site pitch; prepare fallback recording | B-E05 + X-E03–E04 | Publicly viewable video URL tested by another teammate; deck PDF available if requested |
 | **X-E06** | P1 | Alex | One-area real-site 3D mesh, only if source/CRS and visual validity work | A-E07; P0 UI stable | Labelled display; no unsupported solver claim |
-| **S-E01** | P0 | Arnav | Confirm organiser deadline/pitch length/video format/repo deliverables + assign team speakers | Organiser | **PARTIAL (13 Nov):** official event/theme/team size/hours/criteria verified; submission instructions, advance-work rules and speaking roles still require organiser confirmation (see §8) |
-| **S-E02** | P0 | Arnav + Alex + Ben | Full timed rehearsal, show hardware/evidence receipt, freeze and submit | B-E07, A-E05, X-E05, S-E01 | Submission confirmation + offline fallback copies |
+| **S-E01** | P0 | Arnav | Verify NVIDIA brief, judging criteria, required form fields and track; capture outstanding logistics | Official organiser briefing | **VERIFIED core rules and mandatory fields** from Kunal's 11:31 email. Form URL, exact form cutoff and pitch stage format still pending; tracked in §10 |
+| **S-E02** | P0 | Arnav + Alex + Ben | Full timed rehearsal, security-reviewed **public GitHub**, form completion, video URL and upload confirmation **before Spark 18:00 shutdown** | B-E07, A-E05, X-E05, S-E01 | Actual form confirmation; repo publicly accessible; YouTube/Loom link viewed; offline fallback |
 
 **Ownership and merge coordination:** Ben writes/reviews release integration; Alex writes frontend; Arnav writes evaluation and science/claims. If edits touch someone else's module, ask for a review or deliver a small scoped PR. Avoid multiple agents editing `docs/BUILD.md` or deploying to the same worktree at once.
 
@@ -100,7 +100,8 @@ Status values initially **Planned** or **In progress (owner-reported)**; replace
 | **13:30–14:30** | Repeat full E2E; capture performance/recovery; stabilise | Run fixed task suite; inspect failures; comparator only if safe | Final UI corrections; start live demo capture | **14:30 checkpoint:** working evidence and usable demo footage, no unverified claim |
 | **14:30–15:00** | Critical bug fixes only, tag/record good SHA | Acceptance and benchmark summary, technical slides | Polish flow and begin final cut | **15:00 target:** functionality frozen if P0 green |
 | **15:00–16:00** | Recovery window only; freeze by 16:00 even if P1 unfinished | Findings/claims and technical narrative locked | Deck/video nearly final | **16:00 latest engineering cutoff.** Revert optional features rather than risking demo |
-| **16:00 onward** | Keep live service healthy; no feature churn | Pitch/rehearsal/submission and questions | Final video/slides/PDF/export and rehearsal | Organiser deadline overrides all; submit with buffer |
+| **16:00–17:30** | Keep Spark stable; collect final proof and publish reviewed code | Complete description/form, public repo audit, rehearse | Edit/upload ≤5min video to YouTube/Loom; finish slides only if needed | **17:30 target: submission completed.** Judges cannot access powered-off Spark after 18:00 |
+| **17:30–18:00** | Preserve final evidence & cleanly prepare shutdown | Check submitted links and confirmation | Backup video/deck and rehearse | **18:00 DGX shutdown (team-reported).** Verify form cutoff separately |
 
 If B-E05 is blocked, still demonstrate real Spark deterministic planning and be candid that agent inference is unavailable, rather than claim simulated tool calls. If real Sheffield data is blocked, label the supported synthetic scenario. If video recording is blocked, retain narrated live demo + pre-recorded truthful local fallback.
 
@@ -181,3 +182,37 @@ Submission deadline and confirmation:
 | `backend/tests/benchmarks/test_runner.py` tests observed ID integrity, multi-operation completion, failure handling and unreviewed usefulness semantics | Validate changes locally on actual release SHA, then run genuine-model comparisons under Ben-approved shared GPU windows |
 
 **Next task A-E02:** freeze **three minimum** scenarios first: `evaluate_layout` current result citation, `search_layouts` budget/feasibility, and `compare_locations` or stale/failure handling. Add a compact eight-task suite only after these work. Preserve synthetic labels and immutable fixture hashes. For every run record observed tool path, schema validity, current result IDs, supportable claims, failures and wall-clock time. Comparison with Qwen or other models is P1 until Nemotron's first real tool round-trip is verified; don't run second model concurrently on a busy Spark.
+
+
+## 10. NVIDIA onsite briefing — authoritative event-day requirements (13 Nov, 11:31 GMT)
+
+**Source:** email from Kunal Pattany (NVIDIA), subject **“Hack For Impact: Guide”**, shared directly by Arnav. **The Spark shutdown at 18:00 GMT is separately team-reported**, not stated in Kunal's pasted message. This briefing supersedes earlier *assumed* vLLM/default deployment advice and resolves the mandatory submission deliverables. Do not borrow rules from other NVIDIA or Devpost hackathons.
+
+### Acceptance gates from organiser
+
+- **One of three tracks:** Economic Systems, Public Services, or Urban Operations. CANOPY selects **Urban Operations** (city planning/operations), subject to final team's choice.
+- **Must run a true AI agent using a local model on the team's DGX Spark**, not a hosted API. The agent's host code provides context and tools, checks outputs, and acts on valid outputs. Nemotron earns **bonus credit**, but the organiser does not say it is mandatory.
+- **Model test requirement:** choose a model and test **five inputs** including **one ambiguous** input and **one where a correct answer is “I don't know”**. Record actual responses, expected behaviour and failures. This is a gate for A-E02/A-E03, not an optional benchmark extension.
+- **Available local Ollama models (reported by NVIDIA):** `nemotron-3.5-lightning:30b` (agent routing/extraction), `nemotron-3-nano:30b` (reasoning/code), `qwen3.6:35b-a3b` (image + text + code). Only Qwen is described as image-capable. **One model loaded at a time**, and switching incurs delay; **8,192 tokens per request**. No need to download model weights before checking what is already provided.
+- **Model transport:** supplied **Ollama on Spark `127.0.0.1:11434`**; organisers recommend an SSH tunnel from a laptop via `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:11435:127.0.0.1:11434 USER@SPARK_ADDRESS`, then `POST http://127.0.0.1:11435/api/chat` with `stream:false`, `think:false`, `options.num_ctx:8192`. Address/login must be organiser-provided, key/host identity verified. Existing OpenAI-compatible `/v1` client or vLLM-oriented configuration must be **smoke-tested** for actual structured tool support before claiming compatibility. Reuse installed Ollama rather than starting a competing serving stack. Spark is **ARM64**.
+- **All submission form fields required:** `project name`, `team name`, **every member's name + email**, `track`, `AI models used` (exact tags), `NVIDIA tools/libraries/SDKs/recipes used`, `problem + solution description`, **public GitHub repo URL**, and **YouTube/Loom demo video URL up to five minutes**. **Slides are NOT listed as a required submission attachment** in this email; create them for an on-stage pitch if organisers request or time allows.
+- **Judging categories:** **Impact** (real problem), **Technical Execution** (agentic AI + local compute), and **Feasibility** (can function beyond the hackathon). Pitch/video should explicitly demonstrate all three with honest limitations. Prizes: winner DGX Spark; runner-up Brev credits.
+- **Optional data:** Sheffield City Council Open Data/Local Insight, data.gov.uk and ONS; no specific Sheffield dataset mandated. Dataset rights and scientific applicability remain independent gates.
+
+### Hard 18:00 operational shutdown and submission risk controls
+
+| GMT | Required result | Owner |
+|---|---|---|
+| **Now–12:00** | Ben adapts service plan to supplied Ollama + ARM64; Arnav freezes five-input suite with ambiguous and correct unknown; Alex starts ≤5 min storyboard | Ben / Arnav / Alex |
+| **12:00–14:30** | Deploy deterministic UI/API and prove real Ollama agent/tool path; collect correct/scoped evidence; polish UI and record fallback | Ben / Arnav / Alex |
+| **14:30–15:00** | First usable Spark demo and filmable scenario, benchmark results with actual measurements | All |
+| **15:00–16:00** | Only critical fixes and recording; application freeze **no later than 16:00** | Ben; Arnav validates; Alex captures |
+| **16:00–17:00** | Finalise ≤5 min demo, upload and check public YouTube/Loom URL; publish cleaned public repo; complete form draft with exact tools/models used | Alex video; Ben publication; Arnav form |
+| **17:00–17:30** | Submit, double-check confirmation and public links from another browser, export backup screenshots/video/logs | All, Arnav submits |
+| **17:30–18:00** | Recovery buffer only. Do not depend on Spark being powered after 18:00 | All |
+
+**Public repo exposure gate:** the existing GitHub repository was private. Ben and team must authorise public exposure **before** changing visibility. Audit Git history (not just current tree) for passwords, tokens, SSH keys, private IP/location data needing protection, rights-restricted assets, personal logs, proprietary weights and unlicensed media. If historic secrets exist, rotate/revoke and remove from the public release history, or publish a cleaned submission repository with authentic source/commit provenance. A `.gitignore` is not sufficient if secrets were committed. Verify README install/reproduction steps and source rights. **Do not publish shared Spark credentials or teammate emails in public docs without permission**; form member emails are supplied in the authorised form only.
+
+**Promptly ask organisers (still unresolved):** submission form URL, exact cutoff (might precede 18:00), whether there is an on-stage pitch and its time limit, whether slides must be uploaded, advance work/AI assistance disclosures, whether a separate public repo is allowed for sanitized release. If no cutoff is specified, submit by 17:30. Do not mark the cutoff/form-link questions verified without an organiser answer.
+
+**Task status update:** S-E01's **core organiser rules and mandatory fields are VERIFIED**, with remaining upload logistics tracked above. A-E01 audit is reviewed. **Next independent work A-E02: freeze five minimum correct-answer test cases and rubric**, then ask Ben for a non-disruptive window to run them against the real Spark model.

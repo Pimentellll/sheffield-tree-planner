@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import SiteScene from './scene/SiteScene'
 import { checkSiteTransform } from './scene/transform'
 import { useWorkspace } from './planning/useWorkspace'
@@ -8,21 +8,14 @@ import { AlternativesPanel } from './panels/Alternatives'
 import CompareScreen from './panels/CompareScreen'
 import ReportScreen from './panels/ReportScreen'
 import OverviewScreen from './panels/OverviewScreen'
+import { AgentPanel, ContextHeader, DraftBanner, EvidenceChainDetails, MapKey, NavigationRail, ProvenanceStrip, SCREENS, ScenarioStrip, type Screen } from './panels/Shell'
 import { layoutRows } from './planning/alternatives'
 import type { Vec3 } from './api/types'
 import { nearestCandidate, samePosition, stepCandidate } from './planning/evaluation'
 
-type Screen = 'overview' | 'studio' | 'compare' | 'report'
-const screens: { id: Screen; number: string; label: string }[] = [
-  { id: 'overview', number: '01', label: 'Sheffield sites' },
-  { id: 'studio', number: '02', label: 'Planning studio' },
-  { id: 'compare', number: '03', label: 'Compare' },
-  { id: 'report', number: '04', label: 'Review pack' },
-]
-
 function App() {
   const [screen, setScreen] = useState<Screen>('studio')
-  const selected = screens.find(item => item.id === screen)!
+  const selected = SCREENS.find(item => item.id === screen)!
   const ws = useWorkspace()
   const transform = useMemo(() => (ws.site ? checkSiteTransform(ws.site) : null), [ws.site])
   const primaryCase = ws.scenario?.input.evaluation_cases.find(c => c.case_id === ws.scenario?.input.objective.primary_case_id) ?? null
@@ -51,45 +44,71 @@ function App() {
     .filter(row => row.role !== 'baseline')
     .map(row => ({ id: row.layoutId, positions: row.placements.map(p => p.position_enu_m as Vec3), highlighted: row.layoutId === selectedLayoutId })), [searchRecord, selectedLayoutId])
 
-  return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main">Skip to content</a>
-      <aside className="sidebar no-print">
-        <div className="brand" aria-label="CANOPY Sheffield"><span className="brand-mark" aria-hidden="true">✳</span><span>CANOPY<span className="brand-place">SHEFFIELD</span></span></div>
-        <p className="nav-caption">WORKSPACE</p>
-        <nav aria-label="Main navigation">
-          {screens.map(item => <button key={item.id} type="button" className={`nav-item ${screen === item.id ? 'active' : ''}`} aria-current={screen === item.id ? 'page' : undefined} onClick={() => setScreen(item.id)}><span className="nav-number">{item.number}</span>{item.label}<span className="nav-arrow" aria-hidden="true">↗</span></button>)}
-        </nav>
-        <div className="sidebar-foot"><span className={`status-dot${connected ? '' : ' warning'}`} /> Local workspace <span className="muted">· {connected ? `API ${ws.connection.status === 'connected' ? ws.connection.health.version : ''}` : 'offline'}</span></div>
-      </aside>
+  // The scenario editor (C01) opens by itself when a draft or a proposal appears; the user can close it.
+  const [editorOpen, setEditorOpen] = useState(false)
+  useEffect(() => { if (ws.draftDirty) setEditorOpen(true) }, [ws.draftDirty])
+  useEffect(() => { if (ws.review) setEditorOpen(true) }, [ws.review])
 
-      <main id="main" className="main-content">
-        <header className="topbar no-print"><div className="mobile-brand">CANOPY <span>SHEFFIELD</span></div><span className="topbar-label">EVIDENCE LED TREE PLANNING</span><span className="topbar-status" data-testid="backend-status"><span className={`status-dot${connected ? '' : ' warning'}`} /> {connected ? 'Local backend connected' : ws.connection.status === 'connecting' ? 'Connecting…' : 'Backend not connected'}</span></header>
-        <div className="page-content">
-          <div className="eyebrow">WORKSPACE / {selected.number} / {selected.label.toUpperCase()}</div>
-          {screen === 'studio' ? <>
-            <div className="page-heading"><div><h1>Planting studio<span className="heading-dot">.</span></h1><p>Place a tree, evaluate it on the local engine, search for options, and see exactly which run every number came from.</p></div><span className="pill pill-muted">M2 VERTICAL SLICE</span></div>
-            {(synthetic || !connected) && <div className="notice" role="status" data-testid="site-notice"><span className="notice-icon" aria-hidden="true">ⓘ</span><div><strong>{connected ? 'Synthetic test site: not Sheffield' : 'Not connected to an evaluator'}</strong><p>{connected
-              ? `Every number is a live computation by the local backend on this authored synthetic geometry and the assumptions listed with each result. It is not a surveyed site or a forecast of real benefit. Available here: ${ops.join(', ') || 'no operations'}. Each result states which constraints were evaluated and which remain unknown.`
-              : 'Start the local backend (see frontend/README.md). No numbers are shown without a backend run.'}</p></div></div>}
-            <div className="studio-grid">
-              <section className="site-panel" aria-labelledby="site-heading"><div className="panel-head"><div><span className="section-kicker">ACTIVE SITE</span><h2 id="site-heading">{ws.site?.name ?? 'No site loaded'}</h2></div><span className="tiny-tag">{synthetic ? 'SYNTHETIC TEST' : ws.site ? ws.site.site_kind.toUpperCase() : 'OFFLINE'}</span></div>
-                <SiteScene scene={scene} candidates={candidates} onStep={candidateMode ? stepTree : undefined} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={moveTree} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} />
-                <div className="map-legend"><span><i className="legend-dot proposed" /> Proposed tree</span>{ws.draftDirty && <span><i className="legend-dot ghost" /> Last evaluated position</span>}{scene?.kind === 'reference' && <><span><i className="legend-dot target" /> Target receiver (represented area)</span><span><i className="legend-line sun" /> Declared sun direction (input, view only)</span></>}{scene?.kind === 'physical' && <><span><i className="legend-dot target" /> Receiver samples ({scene.scene.samples.length})</span><span><i className="legend-line region" /> Planting region</span></>}{candidateMode && <span><i className="legend-dot candidate" /> Catalogue positions ({catalogue.length})</span>}{overlays.length > 0 && <span><i className="legend-dot option" /> Search option placements</span>}<span>{candidateMode ? 'Drag tree to snap between catalogue positions' : 'Drag tree to move'} · drag elsewhere to orbit · scroll to zoom</span></div>
-              </section>
+  return (
+    <div className={`app-shell screen-${screen}`}>
+      <a className="skip-link" href="#main">Skip to content</a>
+      <NavigationRail screen={screen} onSelect={setScreen} connected={connected} />
+
+      <main id="main" className={`main-content screen-${screen}`}>
+        <ContextHeader ws={ws} screenTitle={selected.title} />
+        {screen === 'studio' ? (
+          <div className="studio">
+            <h1 className="sr-only">Planting studio</h1>
+            <section className="site-panel studio-scene" aria-labelledby="site-heading">
+              <h2 id="site-heading" className="sr-only">{ws.site?.name ?? 'No site loaded'}</h2>
+              <SiteScene scene={scene} candidates={candidates} onStep={candidateMode ? stepTree : undefined} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={moveTree} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} framing={1.9} />
+            </section>
+
+            <div className="studio-left">
+              <ScenarioStrip ws={ws} editorOpen={editorOpen} onToggle={() => setEditorOpen(open => !open)} />
+              <DraftBanner ws={ws} onReview={() => setEditorOpen(true)} />
+              {(synthetic || !connected) && (
+                <div className="notice glass-light" role="status" data-testid="site-notice">
+                  <span className="notice-icon" aria-hidden="true">ⓘ</span>
+                  <div><strong>{connected ? 'Synthetic test site: not Sheffield' : 'Not connected to an evaluator'}</strong><p>{connected
+                    ? `Every metric is computed live by the local backend on this authored synthetic geometry and the assumptions listed with each result. It is not a surveyed site or a forecast of real benefit. Available here: ${ops.join(', ') || 'no operations'}. Each result states which constraints were evaluated and which remain unknown.`
+                    : 'Start the local backend (see frontend/README.md). No metric is shown without a backend run.'}</p></div>
+                </div>
+              )}
+              {editorOpen && (
+                <aside id="scenario-editor" className="scenario-editor glass-light" aria-label="Scenario editor">
+                  <RequirementsPanel ws={ws} />
+                  <ProposalReviewPanel ws={ws} />
+                </aside>
+              )}
+            </div>
+
+            <div className="studio-right">
               <aside className="detail-panel" aria-label="Planning controls and evidence">
                 <ResultCard ws={ws} />
                 <EvaluationControls ws={ws} />
+                <EvidenceChainDetails ws={ws} />
                 <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
                 <AlternativesPanel ws={ws} selectedLayoutId={selectedLayoutId} onSelectLayout={setSelectedLayoutId} />
-                <RequirementsPanel ws={ws} />
-                <ProposalReviewPanel ws={ws} />
                 <RunHistory ws={ws} />
                 <SiteStatus ws={ws} transform={transform} />
+                <div className="detail-section card-actions">
+                  <button type="button" className="secondary-action" onClick={() => setScreen('compare')}>Compare runs</button>
+                  <button type="button" className="dark-action" onClick={() => setScreen('report')}>Open review pack</button>
+                </div>
               </aside>
+              <ProvenanceStrip ws={ws} />
             </div>
-          </> : screen === 'compare' ? <CompareScreen ws={ws} scene={scene} candidates={candidates} treeState={treeState} /> : screen === 'report' ? <ReportScreen ws={ws} /> : screen === 'overview' ? <OverviewScreen ws={ws} /> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
-        </div>
+
+            {!editorOpen && <MapKey scene={scene} dirty={ws.draftDirty} locationCount={new Set(catalogue.map(c => c.location_id)).size} optionCount={overlays.length} candidateMode={candidateMode} />}
+            <AgentPanel ws={ws} />
+          </div>
+        ) : (
+          <div className="page-content">
+            <div className="eyebrow">WORKSPACE / {selected.title.toUpperCase()}</div>
+            {screen === 'compare' ? <CompareScreen ws={ws} scene={scene} candidates={candidates} treeState={treeState} /> : screen === 'report' ? <ReportScreen ws={ws} /> : <OverviewScreen ws={ws} />}
+          </div>
+        )}
       </main>
     </div>
   )

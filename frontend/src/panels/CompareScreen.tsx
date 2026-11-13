@@ -25,7 +25,7 @@ export default function CompareScreen({ ws, scene, candidates, treeState }: { ws
   }
   return (
     <>
-      <div className="page-heading"><div><h1>Compare &amp; evidence<span className="heading-dot">.</span></h1><p>Analysis cases, controlled comparisons of stored runs, and the evidence behind every number.</p></div><span className="pill pill-muted">STP-025</span></div>
+      <div className="page-heading"><div><h1>Compare &amp; evidence<span className="heading-dot">.</span></h1><p>Analysis cases, controlled comparisons of stored runs, and the evidence behind every metric.</p></div><span className="pill pill-muted">STP-025</span></div>
       <div className="notice" role="note"><span className="notice-icon" aria-hidden="true">ⓘ</span><div><strong>Scope of what is computed</strong><p>This system computes direct geometric shade metrics only ({SUPPORTED_METRICS.join(', ')}). It does not compute temperature, air quality, CO₂, flood or energy-bill savings, and none are shown.</p></div></div>
       <div className="compare-grid">
         <RunComparison ws={ws} scene={scene} candidates={candidates} treeState={treeState} />

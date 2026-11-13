@@ -75,7 +75,7 @@ async function online() {
     await page.getByText('Local backend connected').waitFor({ timeout: 20000 })
     check('connects to the local backend', true)
     const text = await panel(page).innerText()
-    check('site geometry bytes verified against SiteBundle hash', /Verified · sha256/.test(text))
+    check('site geometry bytes match the SiteBundle hash', /Hash matches · sha256/.test(text))
     check('synthetic site is labelled as not Sheffield', /Synthetic test \(not Sheffield\)/.test(text))
     check('identity analysis_to_viewer is reported, not hidden', /Identity in SiteBundle/.test(text))
     await shot(page, '01-loaded')
@@ -209,6 +209,8 @@ async function online() {
 
 // STP-021: requirement drafts, human acceptance, recompute, refused concurrent edit, proposal review.
 async function requirementsFlow(page) {
+  // The scenario editor (C01) is a panel the user opens from the scenario strip.
+  if (await page.locator('#scenario-editor').count() === 0) await page.getByRole('button', { name: 'Edit scenario' }).click()
   const budget = page.getByLabel('Upfront budget in pounds')
   const before = await head()
   await budget.fill('80')

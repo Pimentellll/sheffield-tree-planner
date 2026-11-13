@@ -2,7 +2,7 @@
 
 **State:** proposed implementation contract, **not** acceptance of real Sheffield geometry, agent/model performance or environmental benefits. Date: 13 November 2026.  
 **Proposed owners:** Alex frontend/UI; Ben agent/API/revision plumbing; Arnav semantics/claims/visual-to-numerical parity.  
-**Read with:** [BUILD](../BUILD.md), [UI_DESIGN_REFERENCE](../UI_DESIGN_REFERENCE.md), [SPEC](../SPEC.md), [CONTRACTS](../CONTRACTS.md), [FEATURE_PRIORITIES](../FEATURE_PRIORITIES.md), [NUMERICS](../NUMERICS.md), [VALIDATION](../VALIDATION.md), and [3D city/tree pipeline](3D_CITY_AND_TREE_PIPELINE.md) once merged.
+**Read with:** [BUILD](../BUILD.md), [UI_DESIGN_REFERENCE](../UI_DESIGN_REFERENCE.md), [SPEC](../SPEC.md), [CONTRACTS](../CONTRACTS.md), [FEATURE_PRIORITIES](../FEATURE_PRIORITIES.md), [NUMERICS](../NUMERICS.md), [VALIDATION](../VALIDATION.md), and the 3D city/tree pipeline proposal in [PR #66](https://github.com/Pimentellll/sheffield-tree-planner/pull/66) (lands as `docs/implementation/3D_CITY_AND_TREE_PIPELINE.md`; switch this to a relative link once #66 merges).
 
 ## 1. Objective and design audit
 

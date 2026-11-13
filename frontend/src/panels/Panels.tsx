@@ -45,7 +45,8 @@ export function SiteStatus({ ws, transform }: { ws: Workspace; transform: Transf
 
 function declarationLabel(check: DeclarationCheck | null) {
   if (!check) return 'Not supplied'
-  if (check.status === 'verified') return `Verified · sha256 ${short(check.sha256, 8)}`
+  // A byte-hash match of the geometry file, not a statement about the site itself.
+  if (check.status === 'verified') return `Hash matches · sha256 ${short(check.sha256, 8)}`
   return check.status === 'mismatch' ? 'Hash mismatch — not drawn' : check.status === 'missing' ? 'Asset missing — not drawn' : 'Invalid — not drawn'
 }
 
@@ -145,6 +146,12 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
             <span>{described.detail}</span>
             {job.progress && job.progress.total > 0 && (
               <progress max={job.progress.total} value={job.progress.completed} aria-label="Job progress" />
+            )}
+            {running && !(job.progress && job.progress.total > 0) && (
+              <>
+                <progress aria-label="Job in progress; the backend reports no progress counts" data-testid="indeterminate-progress" />
+                <span className="caption">The backend reports no progress counts, so no percentage or phase is estimated.</span>
+              </>
             )}
           </div>
         )}

@@ -319,8 +319,12 @@ def test_redistributable_sample_records_what_it_removed():
 
 
 def test_the_site_network_guard_is_active():
+    import socket
+
     assert urllib.request.urlopen.__name__ == "refuse"
     assert urllib.request.OpenerDirector.open.__name__ == "refuse"
+    assert socket.socket.connect.__name__ == "guarded_connect"
+    assert socket.socket.connect_ex.__name__ == "guarded_connect_ex"
 
 
 def _strings(value):
@@ -421,14 +425,16 @@ def test_replay_cli_builds_manifest_and_is_reproducible(tmp_path):
     assert decisions["sample_envelope_applies_to_this_acquisition"] is False
     assert not any("Park-interior coverage" in limit for limit in manifest["limitations"])
     assert "local_only" not in json.loads(
-        (tmp_path / "a" / "redistributable-sample.json").read_text()
+        (tmp_path / "a" / "review-sample.json").read_text()
     )["sample"]
     # Operator-local paths never reach the committable manifest (checked on parsed strings,
     # so Windows backslash escaping cannot hide a leak).
     assert not any(str(tmp_path) in s for s in _strings(manifest))
-    assert "<raw>" in manifest["command"] and "<a>" in manifest["command"]
+    assert "<raw-dir>" in manifest["command"] and "<output-dir>" in manifest["command"]
+    # Fixed placeholders: not even a final directory name reaches the manifest.
+    assert "<raw>" not in manifest["command"] and "<a>" not in manifest["command"]
     assert manifest["layer_schema"]["native_crs_check"].startswith("matches")
-    sample = json.loads((tmp_path / "a" / "redistributable-sample.json").read_text())
+    sample = json.loads((tmp_path / "a" / "review-sample.json").read_text())
     assert all("featurelocation" not in f["attributes"] for f in sample["features"])
     with pytest.raises(SystemExit):  # outputs are never overwritten
         script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "a")])
@@ -443,7 +449,7 @@ def test_manifest_command_never_records_paths_in_any_spelling(tmp_path):
     manifest = json.loads((out / "manifest.json").read_text())
     assert not any(str(tmp_path) in s for s in _strings(manifest))
     assert manifest["command"][1:] == [
-        "replay", "--raw-dir", "<raw>", "--output-dir", "<eq>", "--sample-size", "25"
+        "replay", "--raw-dir", "<raw-dir>", "--output-dir", "<output-dir>", "--sample-size", "25"
     ]
     # Prefix abbreviations are refused outright rather than recorded.
     with pytest.raises(SystemExit):
@@ -460,14 +466,14 @@ def test_sample_keeps_only_allowlisted_attributes(tmp_path):
     raw = tmp_path / "raw"
     _write_raw(raw, pages, layer=layer)
     script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "o")])
-    sample = json.loads((tmp_path / "o" / "redistributable-sample.json").read_text())
+    sample = json.loads((tmp_path / "o" / "review-sample.json").read_text())
     for f in sample["features"]:
         assert set(f["attributes"]) <= {"sitename", "featuretypename"}
     assert sample["features"][0]["withheld_for_sample"] == ["featurelocation", "notes"]
     script.main(
         ["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "k"), "--keep-location-text"]
     )
-    kept = json.loads((tmp_path / "k" / "redistributable-sample.json").read_text())
+    kept = json.loads((tmp_path / "k" / "local-only-sample-with-location-text.json").read_text())
     assert kept["features"][0]["attributes"]["featurelocation"] == "Outside 1"
     assert "notes" not in kept["features"][0]["attributes"]
 
@@ -809,6 +815,103 @@ def test_location_text_sample_is_marked_local_only(tmp_path):
     script.main(
         ["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "k"), "--keep-location-text"]
     )
-    sample = json.loads((tmp_path / "k" / "redistributable-sample.json").read_text())
+    # Written under its own name, never the reviewable sample's.
+    assert not (tmp_path / "k" / "review-sample.json").exists()
+    sample = json.loads((tmp_path / "k" / "local-only-sample-with-location-text.json").read_text())
     assert "decision 3a" in sample["sample"]["local_only"]
     assert sample["features"][0]["attributes"]["featurelocation"] == "Outside 1"
+
+
+def test_a_negative_service_count_is_refused(tmp_path, monkeypatch):
+    script = _script()
+    monkeypatch.setattr(script, "_open", _fake_publisher(count={"count": -1}))
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    with pytest.raises(SystemExit, match="negative count"):
+        script.main(
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700",
+             "--acquisition-approval-ref", "role:operator",
+             "--raw-dir", str(raw), "--output-dir", str(out)]
+        )
+    acquisition = json.loads((raw / "acquisition.json").read_text())
+    assert [f["file"] for f in acquisition["files"]] == ["layer.json", "count.json"]
+    assert acquisition["status"] == "failed" and not out.exists()
+    # On replay a negative count is never used as a service count.
+    raw2 = tmp_path / "raw2"
+    _write_raw(raw2, SYNTHETIC_PAGES, count={"count": -1})
+    script.main(["replay", "--raw-dir", str(raw2), "--output-dir", str(tmp_path / "o2")])
+    manifest = json.loads((tmp_path / "o2" / "manifest.json").read_text())
+    assert manifest["acquisition"]["service_count_status"] == "negative_count"
+    assert manifest["counts"]["service_reported_count"] is None
+    assert manifest["counts"]["completeness_relative_to_service"] == (
+        "unknown: service count negative_count"
+    )
+
+
+_LAYER = "https://sheffieldcitycouncil.cloud.esriuk.com/server/rest/services/AGOL/INSPIRE/FeatureServer/14"
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("layer_url", "https://example.invalid/layer"),
+        ("max_features", 0),
+        ("started_at_utc", "Synthetic Person"),
+        ("bbox_27700", [-1.5, 53.37, -1.47, 53.39]),
+        ("bbox_27700", [10**400, 387100, 434500, 387700]),  # int too large for a float
+        ("files[0].url", _LAYER + "?f=json&approved_by=Synthetic+Person"),  # free text in query
+        ("files[0].final_url", _LAYER + "/query?f=json&where=Synthetic+Person"),
+        ("supports_pagination", "yes"),
+        ("files[0].retrieved_at_utc", "Synthetic Person"),
+        ("files[0].url", "http://example.invalid/elsewhere"),
+    ],
+)
+def test_replay_refuses_malformed_receipt_values(tmp_path, key, value):
+    """Allowlisted receipt values reach the committable manifest, so each must have its
+    expected form; nothing is written otherwise."""
+    script = _script()
+    raw = tmp_path / "raw"
+    acquisition = _write_raw(raw, SYNTHETIC_PAGES)
+    if key.startswith("files[0]."):
+        acquisition["files"][0][key.split(".", 1)[1]] = value
+    else:
+        acquisition[key] = value
+    (raw / "acquisition.json").write_text(json.dumps(acquisition))
+    with pytest.raises(SystemExit):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()
+
+
+def test_receipt_urls_from_fetch_pass_the_query_check(tmp_path, monkeypatch):
+    """The query check accepts exactly what fetch() sends (paging and count included)."""
+    script = _script()
+    layer = {**LAYER, "advancedQueryCapabilities": {"supportsPagination": True}}
+
+    def opener(request):
+        url = request.full_url
+        if "returnCountOnly" in url:
+            value = {"count": 3}
+        elif "/query" in url:
+            value = page(SYNTHETIC_PAGES[0]["features"] + SYNTHETIC_PAGES[1]["features"])
+        else:
+            value = layer
+        return _FakeResponse(value, url)
+
+    monkeypatch.setattr(script, "_open", opener)
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    assert script.main(
+        ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approval-ref",
+         "role:operator", "--raw-dir", str(raw), "--output-dir", str(out)]
+    ) == 0
+    urls = [f["url"] for f in json.loads((raw / "acquisition.json").read_text())["files"]]
+    assert any("orderByFields" in u and "resultOffset" in u for u in urls)
+    assert all(script._query_is_expected(u) for u in urls)
+
+
+def test_approval_reference_digits_are_ascii_only():
+    script = _script()
+    import argparse
+
+    six, nine, one = chr(0x0666), chr(0x0669), chr(0x0661)  # Arabic-Indic digits
+    for bad in ("#" + six + nine, "#6" + nine, "#69#issuecomment-" + one):
+        with pytest.raises(argparse.ArgumentTypeError):
+            script.parse_approval_ref(bad)

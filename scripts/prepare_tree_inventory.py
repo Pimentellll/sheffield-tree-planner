@@ -24,9 +24,13 @@ Example (run only in the approved environment):
   python scripts/prepare_tree_inventory.py replay \
       --raw-dir /path/outside/repo/raw-street-trees-001 --output-dir /path/out-002
 
-The redistributable sample keeps only an allowlist of attributes (``sitename``,
-``featuretypename``); the free-text ``featurelocation`` field (house-number frontage text)
-is added only with --keep-location-text. Raw downloads never go into git.
+The review sample (``review-sample.json``) keeps only an allowlist of attributes
+(``sitename``, ``featuretypename``). It is for review, not redistribution: it may be copied
+into the repository only once ``public_display_status`` and ``export_status`` are both
+recorded as permitted (today all rights are unknown, decision 2a). With
+--keep-location-text the sample, which then also keeps the free-text ``featurelocation``
+(house-number frontage text), is written as ``local-only-sample-with-location-text.json``
+instead and is never committed (decision 3a). Raw downloads never go into git.
 """
 
 from __future__ import annotations
@@ -113,7 +117,7 @@ BNG_BOUNDS = (0.0, 0.0, 700000.0, 1300000.0)  # EPSG:27700 projected bounds, met
 RAW_NAME = re.compile(r"^(layer|count|page-\d{4})\.json$")
 USER_AGENT = "canopy-tree-inventory-prep/1"
 REPO = Path(__file__).resolve().parents[1]
-# Allowlist: only these attributes reach the redistributable sample. A new or unexpected
+# Allowlist: only these attributes reach the review sample. A new or unexpected
 # free-text field on the layer is withheld by default.
 SAMPLE_ATTRIBUTES = ("sitename", "featuretypename")
 LOCATION_TEXT_FIELD = "featurelocation"
@@ -129,8 +133,13 @@ APPROVAL_REF = re.compile(
     r"(role:(" + "|".join(APPROVAL_ROLES) + r")"
     r"|#\d{1,7}(#issuecomment-\d{1,12})?"
     r"|https://github\.com/Pimentellll/sheffield-tree-planner/(issues|pull)/\d{1,7}"
-    r"(#issuecomment-\d{1,12})?)"
+    r"(#issuecomment-\d{1,12})?)",
+    re.ASCII,  # \d is 0-9 only, never other Unicode digits
 )
+REVIEW_SAMPLE_NAME = "review-sample.json"
+LOCAL_ONLY_SAMPLE_NAME = "local-only-sample-with-location-text.json"
+ISO_UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", re.ASCII)
+SHA256_HEX = re.compile(r"[0-9a-f]{64}", re.ASCII)
 DECISION_1A_BBOX = [433700.0, 387100.0, 434500.0, 387700.0]
 # Only these receipt keys reach the committable manifest; anything else (for example an old
 # free-text approval field) stays in the local receipt.
@@ -147,19 +156,18 @@ MANIFEST_ACQUISITION_KEYS = (
     "status",
 )
 MANIFEST_FILE_KEYS = ("file", "url", "final_url", "retrieved_at_utc", "http_status", "bytes", "sha256")
-# The three #69 decisions, recorded as taken by the #69 owner's coordinating session
-# under the owner's delegation (issue #69, 13 Nov 2026).
+# The three #69 decisions, as recorded on issue #69 (13 Nov 2026).
 RECORDED_DECISIONS = {
-    "decided_by": "the #69 owner's coordinating session, under the owner's delegation "
-    "(issue #69, 2026-11-13)",
+    "decided_by": "the #69 owner's coordinating session, under the owner's general "
+    "delegation (issue #69, 2026-11-13); the owner's own confirmation is pending",
     "sample_envelope": "1a: Weston Park with surrounding streets, approximately "
     "433700,387100,434500,387700 in EPSG:27700, with the service count recorded first; "
     "park-interior coverage is unverified because the layer likely holds highway trees only",
     "rights": "2a: all four purposes stay unknown; the OGL v3.0 vs INSPIRE End User Licence "
     "conflict rules out recording any as permitted. Nothing may be displayed, shared or "
     "exported until a person records the endpoint's actual terms",
-    "featurelocation": "3a: dropped from anything committed (including the redistributable "
-    "sample); kept in local outputs only",
+    "featurelocation": "3a: dropped from anything committed (including the review sample); "
+    "kept in local outputs only",
 }
 
 
@@ -322,6 +330,11 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
         }
         count = get("count.json", _query_url({**spatial, "returnCountOnly": "true", "f": "json"}))
         common = {**spatial, "outFields": "*", "returnGeometry": "true", "outSR": "27700", "f": "json"}
+        reported_count = count.get("count") if isinstance(count, dict) else None
+        if type(reported_count) is int and reported_count < 0:
+            raise SystemExit(
+                f"the service reported a negative count ({reported_count}); refusing to fetch"
+            )
         if not paging:
             # A single query cannot be capped, so --max-features is enforced from the count
             # first; the service's exceededTransferLimit still reports any truncation.
@@ -416,21 +429,101 @@ def _count(count_value) -> tuple[int | None, str]:
     if isinstance(count_value, dict) and "error" in count_value:
         return None, "service_error"
     if isinstance(count_value, dict) and type(count_value.get("count")) is int:
+        if count_value["count"] < 0:
+            return None, "negative_count"
         return count_value["count"], "ok"
     return None, "non_integer"
+
+
+def _validate_receipt_values(acquisition: dict) -> None:
+    """Every receipt value that can reach the committable manifest must have its expected
+    form; anything else is refused before any output is written."""
+
+    def bad(key, value):
+        raise SystemExit(f"acquisition receipt value for {key!r} is not valid: {value!r}")
+
+    checks = {
+        "layer_url": lambda v: v == LAYER_URL,
+        "max_features": lambda v: type(v) is int and 1 <= v <= MAX_FEATURES_LIMIT,
+        "acquisition_approval_scope": lambda v: v == APPROVAL_SCOPE,
+        "started_at_utc": lambda v: isinstance(v, str) and ISO_UTC.fullmatch(v),
+        "finished_at_utc": lambda v: isinstance(v, str) and ISO_UTC.fullmatch(v),
+        "page_size": lambda v: type(v) is int and 1 <= v <= 1000,
+        "supports_pagination": lambda v: type(v) is bool,
+        "status": lambda v: v == "complete",
+    }
+    for key, ok in checks.items():
+        if key in acquisition and not ok(acquisition[key]):
+            bad(key, acquisition[key])
+    if "bbox_27700" in acquisition:
+        box = acquisition["bbox_27700"]
+        if not (isinstance(box, list) and len(box) == 4 and all(type(v) in (int, float) for v in box)):
+            bad("bbox_27700", box)
+        try:
+            parse_bbox(",".join(repr(float(v)) for v in box))
+        except (argparse.ArgumentTypeError, OverflowError, ValueError):
+            bad("bbox_27700", box)
+    file_checks = {
+        "file": lambda v: isinstance(v, str) and RAW_NAME.match(v),
+        "retrieved_at_utc": lambda v: isinstance(v, str) and ISO_UTC.fullmatch(v),
+        "http_status": lambda v: type(v) is int and 100 <= v <= 599,
+        "bytes": lambda v: type(v) is int and v >= 0,
+        "sha256": lambda v: isinstance(v, str) and SHA256_HEX.fullmatch(v),
+    }
+    for record in acquisition.get("files", []):
+        for key, ok in file_checks.items():
+            if key in record and not ok(record[key]):
+                bad(f"files[].{key}", record[key])
+        for key in ("url", "final_url"):
+            if key in record:
+                if not isinstance(record[key], str) or not _query_is_expected(record[key]):
+                    bad(f"files[].{key}", record[key])
+                check_url(record[key])
+
+
+# The query parameters fetch() itself sends, with the forms their values take; a receipt URL
+# carrying anything else (for example free text) is refused before it reaches the manifest.
+_QUERY_FORMS = {
+    "f": re.compile(r"json", re.ASCII),
+    "where": re.compile(r"1=1", re.ASCII),
+    "geometry": re.compile(r"[0-9.eE+-]+(,[0-9.eE+-]+){3}", re.ASCII),
+    "geometryType": re.compile(r"esriGeometryEnvelope", re.ASCII),
+    "inSR": re.compile(r"27700", re.ASCII),
+    "outSR": re.compile(r"27700", re.ASCII),
+    "spatialRel": re.compile(r"esriSpatialRelIntersects", re.ASCII),
+    "returnCountOnly": re.compile(r"true", re.ASCII),
+    "outFields": re.compile(r"\*", re.ASCII),
+    "returnGeometry": re.compile(r"true", re.ASCII),
+    "orderByFields": re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63} ASC", re.ASCII),
+    "resultOffset": re.compile(r"\d{1,7}", re.ASCII),
+    "resultRecordCount": re.compile(r"\d{1,4}", re.ASCII),
+}
+
+
+def _query_is_expected(url: str) -> bool:
+    query = urllib.parse.urlsplit(url).query
+    try:
+        pairs = urllib.parse.parse_qsl(query, keep_blank_values=True, strict_parsing=bool(query))
+    except ValueError:
+        return False
+    keys = [k for k, _ in pairs]
+    if len(set(keys)) != len(keys):
+        return False
+    return all(k in _QUERY_FORMS and _QUERY_FORMS[k].fullmatch(v) for k, v in pairs)
 
 
 def _recorded_command(args: argparse.Namespace) -> list[str]:
     """Rebuilt from the parsed arguments, never copied from argv, so no operator-local path
     (in any spelling, such as ``--output-dir=PATH``) reaches the committable manifest. Paths
-    are reduced to their final name. The approval reference is validated (a role or a
-    reference, never a name), so it is recorded as given."""
+    are replaced by fixed placeholders, because even a final directory name could be a
+    person's name. The approval reference is validated (a role or a reference, never a
+    name), so it is recorded as given."""
     out = [args.mode]
     if args.mode == "fetch":
         out += ["--bbox-27700", ",".join(repr(v) for v in args.bbox_27700)]
         out += ["--max-features", str(args.max_features)]
         out += ["--acquisition-approval-ref", args.acquisition_approval_ref]
-    out += ["--raw-dir", f"<{args.raw_dir.name}>", "--output-dir", f"<{args.output_dir.name}>"]
+    out += ["--raw-dir", "<raw-dir>", "--output-dir", "<output-dir>"]
     out += ["--sample-size", str(args.sample_size)]
     if args.keep_location_text:
         out.append("--keep-location-text")
@@ -462,6 +555,7 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
             "acquisition receipt has no valid acquisition_approval_ref (a role or a reference, "
             "never a person's name); refusing to write a committable manifest"
         )
+    _validate_receipt_values(acquisition)
     native_crs = _native_crs_check(layer)
     fields = layer.get("fields") or []
     id_field = layer.get("objectIdField")
@@ -553,7 +647,10 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
                 None,
             ),
             "maxRecordCount": layer.get("maxRecordCount"),
-            "fields": fields,
+            # Publisher text (untrusted, AGENTS.md 8): only the structural keys of each field.
+            "fields": [
+                {k: f[k] for k in ("name", "type", "alias", "length") if k in f} for f in fields
+            ],
             "declared_but_not_imported": not_imported,
             "per_record_date_fields": date_fields or "none declared by the layer",
         },
@@ -567,7 +664,7 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
         ("inventory.json", inventory),
         ("receipt.json", receipt),
         ("manifest.json", manifest),
-        ("redistributable-sample.json", sample),
+        (LOCAL_ONLY_SAMPLE_NAME if keep_location else REVIEW_SAMPLE_NAME, sample),
     ):
         (output_dir / name).write_text(
             json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + "\n", encoding="utf-8"

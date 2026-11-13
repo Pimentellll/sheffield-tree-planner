@@ -336,6 +336,8 @@ function statusOf(c: Classified, value: number, tolerance: number, evidence: Nar
  * - numbers glued to a preceding "." or "_" (".5"), and the lower bound of a range ("10-12 m²·h"
  *   checks only 12);
  * - spelled-out or qualitative claims ("two degrees", "noticeably cooler");
+ * - money written with a spelled scale but no £ or unit ("saves 3 million a year" is a context
+ *   count; "£3 million" and "3 million pounds" are still checked);
  * - direction words: "reduces by 2.5 kWh" is compared as +2.5. Signs written as "-", "−" or "–"
  *   are compared strictly, so a contradicted stored sign shows as unverified only when the sign
  *   is written, not when it is implied by a word.

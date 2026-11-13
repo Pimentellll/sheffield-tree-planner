@@ -18,7 +18,7 @@ import { CURRENTNESS_LABEL, EXECUTION_MODE_LABEL, formatPence, formatValue, unit
 // Availability
 
 export const AGENT_API_UNAVAILABLE_REASON =
-  'This backend exposes no planning-agent API yet, so no agent history can be shown. Nothing on this panel is a model transcript. Manual evaluation is unaffected.'
+  'This interface has no planning-agent integration yet, so no agent history can be shown. Nothing on this panel is a model transcript. Manual evaluation is unaffected.'
 
 /** Only one state exists until #73 lands; the union is extended from the generated contract, not here. */
 export type AgentPanelState = {
@@ -104,15 +104,19 @@ export function evidenceChain(job: ChainJob, result: ChainResult, currentness: C
 
 export const MODEL_INTERPRETATION_LABEL = 'Model interpretation, not a computed result'
 
-export type FigureKind = 'temperature' | 'percent' | 'money' | 'shade_m2_h' | 'energy_kWh' | 'area_m2'
+export type FigureKind =
+  | 'temperature' | 'percent' | 'money' | 'shade_m2_h' | 'weighted_shade' | 'energy_kWh' | 'energy_kWh_per_m2' | 'area_m2' | 'hours' | 'length_m'
+  | 'unknown' // a quantity whose unit or scale this guard cannot attribute (angles, "2 K", foreign currency)
 
 /**
- * - `unsupported`: no registered operation computes this kind of quantity (for example °C).
- * - `unverified`: the kind is computable, but the figure equals no value in the given Result.
- * - `matches-result`: equals (to the precision written) a value in the given Result. It is still
- *   model text; the authoritative number is the metric card, never the narrative.
+ * - `unsupported`: no registered operation computes this kind of quantity (°C, %).
+ * - `unverified`: computable or unattributable, and equal to no value in the given Result.
+ * - `appears-in-result`: equals (to the precision written, sign included) SOME value of that unit in
+ *   the given Result: any case, any layout, including non-selected or infeasible ones. It does not
+ *   prove the model attached it to the right case or layout; it is still model text, and the
+ *   authoritative number is the metric card, never the narrative.
  */
-export type FigureStatus = 'unsupported' | 'unverified' | 'matches-result'
+export type FigureStatus = 'unsupported' | 'unverified' | 'appears-in-result'
 
 export interface NarrativeFigure {
   readonly text: string
@@ -131,62 +135,103 @@ export interface NarrativeView {
 
 type NarrativeEvidence = Pick<ChainResult, 'metrics' | 'layouts'>
 
-const NUMBER = String.raw`[-−]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?`
-const UNIT = String.raw`°\s?[CF]\b|degrees?\s+(?:celsius|fahrenheit|C|F)\b|%|per\s?cent\b|m²·h|m2·h|m²\s?h\b|m2\s?h\b|m2_h\b|square[- ]metre[- ]hours?\b|kWh\b|m²|m2\b|pounds?\b|GBP\b|pence\b`
-const FIGURE = new RegExp(String.raw`(£\s?)?(${NUMBER})\s?(${UNIT})?`, 'gi')
+// A number not glued to a preceding word, digit or decimal point ("C5", "v1.2" and the "12" of
+// "10-12" do not start a negative or a new figure). The minus sign is only a sign after a non-word.
+const NUMBER = String.raw`(?:(?<![\w.,])[-−])?(?<![\w.,])(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?`
+// Scale words. A lone "m" is a scale only when not followed by ²/2/·/_ or a letter (so "m²" stays a unit).
+const SCALE = String.raw`k(?!\w)|bn(?!\w)|m(?![²2·_\w])|thousand\b|million\b|billion\b`
+const UNIT = [
+  String.raw`weighted\s+m(?:²|2)(?:·|_|\s)?h\b`,
+  String.raw`kWh\s?(?:\/|per\s)\s?m(?:²|2)`,
+  String.raw`kWh\b`,
+  String.raw`°\s?[CF](?:elsius|ahrenheit)?\b`, String.raw`º\s?[CF]\b`, '[℃℉]',
+  String.raw`deg(?:rees?)?\s?(?:celsius|fahrenheit|C|F)\b`, String.raw`kelvin\b`,
+  String.raw`degrees?\b`, '°',
+  String.raw`per\s?cent(?:age\s+points?)?\b`, String.raw`percentage\s+points?\b`, '%',
+  String.raw`m(?:²|2)(?:·|_|\s)?h\b`, String.raw`square[- ]met(?:re|er)[- ]hours?\b`,
+  'm²', String.raw`m2\b`, String.raw`square\s+met(?:re|er)s?\b`,
+  String.raw`hours?\b`, String.raw`hrs?\b`, String.raw`h\b`,
+  String.raw`met(?:re|er)s?\b`,
+  String.raw`pounds?\b`, String.raw`GBP\b`, String.raw`pence\b`, String.raw`p(?=[\s,;:)!?]|$|\.(?:\s|$))`,
+].join('|')
+const FIGURE = new RegExp(String.raw`([£$€]\s?)?(${NUMBER})(?:\s?(${SCALE}))?\s?(${UNIT})?`, 'gi')
+
+const TEMPERATURE = /^(?:°\s?[cf]|º|℃|℉|deg(?:rees?)?\s?(?:c|f|celsius|fahrenheit)$|kelvin)/
+const SHADE = /^(?:m(?:²|2)(?:·|_| )?h|square[- ]met(?:re|er)[- ]hours?)$/
+const METRIC_UNIT: Partial<Record<FigureKind, Metric['unit']>> = {
+  shade_m2_h: 'm2_h', weighted_shade: 'weighted_m2_h', energy_kWh: 'kWh', energy_kWh_per_m2: 'kWh_per_m2', area_m2: 'm2', hours: 'h', length_m: 'm',
+}
 
 const decimals = (numberText: string) => numberText.split('.')[1]?.length ?? 0
 const parseNumber = (numberText: string) => Number(numberText.replace(/−/g, '-').replace(/,/g, ''))
 /** Half a unit in the last written decimal place: "12.3" may round any value in [12.25, 12.35]. */
 const writtenTolerance = (numberText: string) => 0.5 * 10 ** -decimals(numberText)
 
-function kindOf(pound: boolean, unit: string): { kind: FigureKind; pence: boolean } | null {
-  const u = unit.toLowerCase().replace(/\s+/g, ' ')
-  if (pound || u.startsWith('pound') || u === 'gbp') return { kind: 'money', pence: false }
-  if (u === 'pence') return { kind: 'money', pence: true }
-  if (u.startsWith('°') || u.startsWith('degree')) return { kind: 'temperature', pence: false }
-  if (u === '%' || u.startsWith('per')) return { kind: 'percent', pence: false }
-  if (u === 'kwh') return { kind: 'energy_kWh', pence: false }
-  if (u === 'm²' || u === 'm2') return { kind: 'area_m2', pence: false }
-  if (u) return { kind: 'shade_m2_h', pence: false }
-  return null
+interface Classified { readonly kind: FigureKind; readonly money?: 'pounds' | 'pence' | 'foreign'; readonly multiplier: number }
+
+function multiplierOf(scale: string): number {
+  if (scale === 'k' || scale === 'thousand') return 1e3
+  if (scale === 'm' || scale === 'million') return 1e6
+  if (scale === 'bn' || scale === 'billion') return 1e9
+  return 1
+}
+
+function classify(currency: string, scaleText: string, unitText: string): Classified | null {
+  const s = scaleText.toLowerCase()
+  const u = unitText.toLowerCase().replace(/\s+/g, ' ')
+  const multiplier = multiplierOf(s)
+  if (currency) return { kind: 'money', money: currency === '£' ? 'pounds' : 'foreign', multiplier }
+  if (u.startsWith('pound') || u === 'gbp') return { kind: 'money', money: 'pounds', multiplier }
+  if (u === 'pence' || u === 'p') return { kind: 'money', money: 'pence', multiplier }
+  // Without a currency, a lone trailing "m" is metres ("4.2 m"); any other lone scale is unattributable.
+  if (!u && s) return s === 'm' ? { kind: 'length_m', multiplier: 1 } : { kind: 'unknown', multiplier: 1 }
+  if (!u) return null
+  if (u.startsWith('weighted')) return { kind: 'weighted_shade', multiplier }
+  if (u.startsWith('kwh')) return { kind: u === 'kwh' ? 'energy_kWh' : 'energy_kWh_per_m2', multiplier }
+  if (TEMPERATURE.test(u)) return { kind: 'temperature', multiplier }
+  if (u === '°' || u.startsWith('degree')) return { kind: 'unknown', multiplier } // an angle, or an unstated scale
+  if (u === '%' || u.startsWith('per')) return { kind: 'percent', multiplier }
+  if (SHADE.test(u)) return { kind: 'shade_m2_h', multiplier }
+  if (u === 'm²' || u === 'm2' || u.startsWith('square')) return { kind: 'area_m2', multiplier }
+  if (/^(?:h|hrs?|hours?)$/.test(u)) return { kind: 'hours', multiplier }
+  if (/^met(?:re|er)s?$/.test(u)) return { kind: 'length_m', multiplier }
+  return { kind: 'unknown', multiplier }
 }
 
 const near = (a: number, b: number, tolerance: number) => Math.abs(a - b) <= tolerance + 1e-9
 
-function statusOf(kind: FigureKind, value: number, tolerance: number, inPence: boolean, evidence: NarrativeEvidence | null): FigureStatus {
+function statusOf(c: Classified, value: number, tolerance: number, evidence: NarrativeEvidence | null): FigureStatus {
   // No registered operation computes air/surface temperature or a percentage.
-  if (kind === 'temperature' || kind === 'percent') return 'unsupported'
-  if (!evidence) return 'unverified'
-  if (kind === 'money') {
-    const pence = inPence ? value : value * 100
-    const penceTolerance = inPence ? tolerance : tolerance * 100
+  if (c.kind === 'temperature' || c.kind === 'percent') return 'unsupported'
+  if (c.kind === 'unknown' || c.money === 'foreign' || !evidence) return 'unverified'
+  const scaled = value * c.multiplier
+  const scaledTolerance = tolerance * c.multiplier
+  if (c.kind === 'money') {
+    const toPence = c.money === 'pence' ? 1 : 100
     const candidates = [...evidence.layouts.map(l => l.cost_pence), ...evidence.metrics.filter(m => m.unit === 'GBP_pence').map(m => m.value)]
-    return candidates.some(c => near(pence, c, penceTolerance)) ? 'matches-result' : 'unverified'
+    return candidates.some(p => near(scaled * toPence, p, scaledTolerance * toPence)) ? 'appears-in-result' : 'unverified'
   }
-  const unit: Metric['unit'] = kind === 'shade_m2_h' ? 'm2_h' : kind === 'energy_kWh' ? 'kWh' : 'm2'
-  return evidence.metrics.some(m => m.unit === unit && near(value, m.value, tolerance)) ? 'matches-result' : 'unverified'
+  const unit = METRIC_UNIT[c.kind]
+  return evidence.metrics.some(m => m.unit === unit && near(scaled, m.value, scaledTolerance)) ? 'appears-in-result' : 'unverified'
 }
 
 /**
- * Find every quantity with a unit or £ sign in model text and say whether the given Result backs
- * it. Bare numbers ("3 trees", "revision 2") are not quantities and are left alone. Pass `null`
- * evidence when no validated Result is attached: every computable figure is then unverified.
+ * A figure guard, not a claim filter: it finds every number written with a unit, scale or
+ * currency in model text and says whether the given Result contains that value. Bare counts and
+ * identifiers ("3 trees", "revision 2", "C5") are left alone, and spelled-out or qualitative claims
+ * ("two degrees", "noticeably cooler") are NOT detected; the narrative is labelled interpretation
+ * for that reason. Signs are compared strictly, so "reduces by 2.5 kWh" against a stored -2.5 is
+ * unverified (noisy but safe). Pass `null` evidence when no validated Result is attached.
  */
 export function narrativeFigures(text: string, evidence: NarrativeEvidence | null): NarrativeFigure[] {
   const figures: NarrativeFigure[] = []
   for (const match of text.matchAll(FIGURE)) {
-    const [whole, pound, numberText, unit] = match
-    const kind = kindOf(Boolean(pound), unit ?? '')
-    if (!kind) continue
+    const [whole, currency, numberText, scale, unit] = match
+    const c = classify((currency ?? '').trim(), scale ?? '', unit ?? '')
+    if (!c) continue
     const value = parseNumber(numberText)
     if (!Number.isFinite(value)) continue
-    figures.push({
-      text: whole.trim(),
-      index: match.index ?? 0,
-      kind: kind.kind,
-      status: statusOf(kind.kind, value, writtenTolerance(numberText), kind.pence, evidence),
-    })
+    figures.push({ text: whole.trim(), index: match.index ?? 0, kind: c.kind, status: statusOf(c, value, writtenTolerance(numberText), evidence) })
   }
   return figures
 }
@@ -194,5 +239,5 @@ export function narrativeFigures(text: string, evidence: NarrativeEvidence | nul
 /** Model prose packaged for display as interpretation, with its figures checked against the Result. */
 export function narrativeView(text: string, evidence: NarrativeEvidence | null): NarrativeView {
   const figures = narrativeFigures(text, evidence)
-  return { label: MODEL_INTERPRETATION_LABEL, text, figures, needsWarning: figures.some(f => f.status !== 'matches-result') }
+  return { label: MODEL_INTERPRETATION_LABEL, text, figures, needsWarning: figures.some(f => f.status !== 'appears-in-result') }
 }

@@ -79,33 +79,66 @@ describe('metricText', () => {
 })
 
 describe('narrativeFigures (untrusted model text)', () => {
-  it('flags unsupported and unverified figures, and recognises ones that match the result', () => {
+  const statuses = (text: string, r: ChainResult | null = result()) => narrativeFigures(text, r).map(f => [f.text, f.kind, f.status])
+
+  it('flags unsupported and unverified figures, and recognises ones that appear in the result', () => {
     const text = 'Planting here adds 12.3 m²·h of shade for £450.00, cooling the street by 3 °C and saving £1,200 a year (40% more shade).'
-    expect(narrativeFigures(text, result()).map(f => [f.text, f.kind, f.status])).toEqual([
-      ['12.3 m²·h', 'shade_m2_h', 'matches-result'],
-      ['£450.00', 'money', 'matches-result'],
+    expect(statuses(text)).toEqual([
+      ['12.3 m²·h', 'shade_m2_h', 'appears-in-result'],
+      ['£450.00', 'money', 'appears-in-result'],
       ['3 °C', 'temperature', 'unsupported'],
       ['£1,200', 'money', 'unverified'],
       ['40%', 'percent', 'unsupported'],
     ])
   })
-  it('leaves bare counts and identifiers alone', () => {
-    expect(narrativeFigures('Revision 2 has 3 trees in case C5.', result())).toEqual([])
+  it('leaves bare counts, identifiers and clock times alone', () => {
+    expect(narrativeFigures('Revision 2 has 3 trees in case C5 at 3 p.m.', result())).toEqual([])
   })
   it('treats every computable figure as unverified when no validated result is attached', () => {
     expect(narrativeFigures('adds 12.3 m²·h, about 3 °C cooler', null).map(f => f.status)).toEqual(['unverified', 'unsupported'])
   })
   it('matches only to the precision the model wrote', () => {
-    const statuses = (text: string) => narrativeFigures(text, result()).map(f => f.status)
-    expect(statuses('12 m²·h')).toEqual(['matches-result'])
-    expect(statuses('12.30 m²·h')).toEqual(['unverified'])
-    expect(statuses('£450')).toEqual(['matches-result'])
-    expect(statuses('£451')).toEqual(['unverified'])
-    expect(statuses('45000 pence')).toEqual(['matches-result'])
+    const only = (text: string) => narrativeFigures(text, result()).map(f => f.status)
+    expect(only('12 m²·h')).toEqual(['appears-in-result'])
+    expect(only('12.30 m²·h')).toEqual(['unverified'])
+    expect(only('£450')).toEqual(['appears-in-result'])
+    expect(only('£451')).toEqual(['unverified'])
+    expect(only('45000 pence')).toEqual(['appears-in-result'])
+    expect(only('45000p')).toEqual(['appears-in-result'])
   })
-  it('reads unicode minus signs and energy units', () => {
+  it('applies currency scale words instead of reading £450k as £450', () => {
+    expect(statuses('£450k')).toEqual([['£450k', 'money', 'unverified']])
+    expect(statuses('£1.2m')).toEqual([['£1.2m', 'money', 'unverified']])
+  })
+  it('flags every common way of writing a temperature', () => {
+    for (const text of ['2 deg C', '2℃', '2 ºC', '2 °Celsius', '2 degrees F', '2 kelvin']) {
+      expect(narrativeFigures(text, result()).map(f => [f.kind, f.status])).toEqual([['temperature', 'unsupported']])
+    }
+    expect(statuses('5 percentage points')).toEqual([['5 percentage points', 'percent', 'unsupported']])
+  })
+  it('never treats foreign currency or unattributable scales as backed by the result', () => {
+    expect(statuses('$450')).toEqual([['$450', 'money', 'unverified']])
+    expect(statuses('€450')).toEqual([['€450', 'money', 'unverified']])
+    expect(statuses('30 degrees')).toEqual([['30 degrees', 'unknown', 'unverified']])
+    expect(statuses('2 K')).toEqual([['2 K', 'unknown', 'unverified']])
+  })
+  it('recognises the other units the backend computes', () => {
+    const r = result({ metrics: [
+      metric({ unit: 'h', value: 3.5 }), metric({ unit: 'm', value: 4.2 }),
+      metric({ metric_id: 'weighted_shade_utility', quantity_kind: 'weighted_utility', unit: 'weighted_m2_h', value: 12.34 }),
+      metric({ metric_id: 'direct_incident_energy_change', quantity_kind: 'direct_incident_energy', unit: 'kWh_per_m2', value: 0.8 }),
+    ] })
+    expect(statuses('3.5 h', r)).toEqual([['3.5 h', 'hours', 'appears-in-result']])
+    expect(statuses('4.2 m', r)).toEqual([['4.2 m', 'length_m', 'appears-in-result']])
+    expect(statuses('12.3 weighted m²·h', r)).toEqual([['12.3 weighted m²·h', 'weighted_shade', 'appears-in-result']])
+    expect(statuses('0.8 kWh/m²', r)).toEqual([['0.8 kWh/m²', 'energy_kWh_per_m2', 'appears-in-result']])
+  })
+  it('reads ranges and unicode minus signs without inventing negatives', () => {
+    expect(statuses('10-12 m²·h')).toEqual([['12 m²·h', 'shade_m2_h', 'appears-in-result']])
     const r = result({ metrics: [metric({ metric_id: 'direct_incident_energy_change', quantity_kind: 'direct_incident_energy', unit: 'kWh', value: -2.5 })] })
-    expect(narrativeFigures('changes incident energy by −2.5 kWh', r).map(f => [f.kind, f.status])).toEqual([['energy_kWh', 'matches-result']])
+    expect(statuses('changes incident energy by −2.5 kWh', r)).toEqual([['−2.5 kWh', 'energy_kWh', 'appears-in-result']])
+    // Signs are compared strictly: noisy but safe.
+    expect(statuses('reduces energy by 2.5 kWh', r)).toEqual([['2.5 kWh', 'energy_kWh', 'unverified']])
   })
 })
 

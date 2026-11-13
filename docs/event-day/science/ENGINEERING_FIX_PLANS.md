@@ -1,16 +1,30 @@
 # Engineering fix plans for Ben — problems found in the science review
 
+**Revised 13 Nov 2026 (issue #57 reconciliation):** checked against `origin/main` `033d56d` (PRs #66, #67, #70, #71, #76, #77, #78, #80 merged) and the branches listed in [README §Reconciliation](README.md#reconciliation-after-ca1662d-13-nov). "PR #70 @ `8d24e73`" below is its merged head, now `docs/implementation/NEMOTRON_AGENT_RUNTIME_AUDIT_20261113.md` on main. Nothing was executed.
+
+> **Reconciliation note (13 Nov, after PR #70 @ `8d24e73`):** FIX-1a/FIX-2/FIX-3 were written for the `/v1` route. PR #70 (R03, R05, R25, §9) records that Ben's active lane is the native Ollama `/api/chat` client (#54/#62), with `/v1` plus an alias or `OLLAMA_CONTEXT_LENGTH` as the fallback. That native client is not on any pushed ref we inspected. Everything below applies unchanged **if the release uses the `/v1` client**. On the native `/api/chat` lane the equivalents are:
+>
+> - **FIX-1a:** no Modelfile alias is created (#62). Send `options.num_ctx` 8192 and `options.num_predict` (the 1,024 output reservation) on every request. If the installed Ollama supports `"truncate": false` and `"shift": false`, send both and treat the error as a fail-closed `context_exceeded` with no dispatch (PR #70 §9 step 4). Record `/api/version` and `/api/ps` (organiser tag only loaded).
+> - **FIX-1b and its tests 1–4:** bound the server-reported `prompt_eval_count` at 7,168 (8,192 − 1,024) instead of `usage.prompt_tokens`, and record `eval_count` and `done`/`done_reason`. Missing counts fail closed. A prompt-count bound is a second check, not proof that nothing was truncated (§9 step 4). Under Ollama prompt (prefix) caching, `prompt_eval_count` may count only newly evaluated tokens, and so may `usage.prompt_tokens` on the `/v1` fallback if it comes from the same counter (unverified); establish the field's behaviour on the DGX, or use the model's tokenizer count of the full request or a cold-cache request, before relying on it (acceptance X-06; PR #70 §9; ledger H-06). 7,168 is the engineering guard and a guard trip is a host failure; the validity rule is server-reported prompt + output ≤ 8,192 per request (acceptance X-06).
+> - **FIX-1 acceptance evidence:** the requested `options.num_ctx`/`num_predict` and `/api/ps` showing only the organiser tag replace the `ollama show canopy-nemotron-nano-8k --modelfile` line; FIX-1 guard evidence on C2 is every request's `prompt_eval_count` ≤ 7,168. Organiser validity is judged separately per acceptance X-06 (prompt + output ≤ 8,192, with the requested/loaded context ≥ that sum).
+> - **FIX-2:** `per_request_usage` takes `prompt_eval_count`, `eval_count` and `done_reason` from each native response, and each receipt records which transport produced it. Derive `/api/version` and `/api/ps` from the server root, not by `removesuffix("/v1")`. Record `think` and `options` (including `num_ctx`) instead of `reasoning_effort`; the frozen prompt bytes and hashes do not change. `CANOPY_LOCAL_MODEL` is the organiser tag, with no alias.
+> - **FIX-3 step 1:** the smoke passes when `message.tool_calls[0].function.name` is a registered tool, `function.arguments` is an object that the client normaliser converts to canonical JSON text, `done` is true with an allow-listed `done_reason`, and `prompt_eval_count`/`eval_count` are present. Record `options.num_ctx` and `num_predict`. A JSON-object `arguments` value is not a failure on this lane.
+> - **FIX-3 steps 3–4:** `ollama-runtime.md` records the transport and request options instead of a Modelfile and alias; `application.env.example` names the native base URL and the organiser tag, not `canopy-nemotron-nano-8k`. The same condition applies to the #64 checklist.
+> - **Model naming (either lane):** the form's "AI models used" field and acceptance X-02 must record the **organiser base tag** behind any alias (`ollama show <alias> --modelfile`, `FROM` line), never the team-made alias.
+>
+> Ben owns the implementation; these are proposed adjustments, not edits to his plan.
+
 **Owner of implementation:** Ben (backend, agent integration, Spark). **Author of plans:** Arnav (scientific review). **Status:** plans only. No code in this repository was changed by this document, and nothing here has been run.
 **Basis:** read-only inspection of `main` @ `630ee65`. If your unpushed integration already solves a problem, skip the code steps and only produce that fix's acceptance evidence.
 
 | Fix | Problem (from [README findings](README.md#findings-that-need-team-attention-read-first)) | Priority | Files (Ben-owned) | Estimate | Blocks |
 |---|---|---|---|---|---|
-| [FIX-1](#fix-1--enforce-and-prove-the-8192-token-request-limit) [#62](https://github.com/Pimentellll/sheffield-tree-planner/issues/62) | 8,192-token rule can't be set or proven over Ollama `/v1`; search observations previously reached ~11.5–12.4k tokens | **P0** | `backend/src/tree_planner/agents/__init__.py`, `backend/tests/agents/test_protocol.py`, Spark Ollama config | 45–60 min | #55 C2, organiser compliance |
+| [FIX-1](#fix-1--enforce-and-prove-the-8192-token-request-limit) [#62](https://github.com/Pimentellll/sheffield-tree-planner/issues/62) | 8,192-token rule can't be set or proven over Ollama `/v1`; search observations previously reached ~11.5–12.4k tokens (earlier laptop Qwen runs; not Spark evidence) | **P0** | `backend/src/tree_planner/agents/__init__.py`, `backend/tests/agents/test_protocol.py`, Spark Ollama config | 45–60 min | #55 C2, organiser compliance |
 | [FIX-2](#fix-2--five-case-spark-driver) [#63](https://github.com/Pimentellll/sheffield-tree-planner/issues/63) | No driver runs custom prompts with a chosen tool set and saves receipts | **P0** | new `backend/tests/agents/test_five_case_spark.py` | 30–40 min | #55 entirely |
 | [FIX-3](#fix-3--record-and-configure-the-real-ollama-runtime) [#64](https://github.com/Pimentellll/sheffield-tree-planner/issues/64) | Committed deployment profile is vLLM/HF BF16, not the organiser's Ollama tag | **P0** | `deploy/spark/application.env.example`, new `deploy/spark/ollama-runtime.md`, `docs/DGX_SPARK.md` | 15 min | #60 model field, X-02 |
 | [FIX-4](#fix-4--optional-relocation-to-another-catalogue-position) [#65](https://github.com/Pimentellll/sheffield-tree-planner/issues/65) | `compare_locations` to another catalogue position is always infeasible | P1, **optional; after P0 only** | `backend/src/tree_planner/search/__init__.py`, `evaluators/physical_runtime.py`, tests | 30–45 min | Nothing for submission |
 
-**Order:** FIX-3 step 1–3 (smoke test) → FIX-1 → FIX-2 → hand the window to Arnav → FIX-4 only if time remains before the 16:00 freeze. Every fix keeps AGENTS.md rules: no hard-constraint relaxation, no fabricated outputs, tests added for changed behaviour, evidence recorded in BUILD/#54.
+**Order:** FIX-3 step 1–3 (smoke test) → FIX-1 → FIX-2 → hand the window to Arnav → FIX-4 **post-submission** *(13 Nov reconciliation: the five-case run and the filmed release must be one SHA, protocol §2 / acceptance X-03, and C3 is pre-registered as variant A; if FIX-4 is added to any release SHA, C1–C5 must be re-run on that SHA)*. Every fix keeps AGENTS.md rules: no hard-constraint relaxation, no fabricated outputs, tests added for changed behaviour, evidence recorded in BUILD/#54.
 
 ---
 
@@ -19,10 +33,12 @@
 ### Problem
 - `LocalClient.complete` posts to `{base}/chat/completions` (Ollama's OpenAI-compatible route). Ollama states that the OpenAI API has no way to set a model's context size, so `options.num_ctx` cannot be sent per request. The effective context is whatever the server or model defaults to.
 - The client's pre-flight bound is `max_input_bytes` (bytes). `max_input_tokens` requires a trusted counter that nothing configures.
-- `AgentLoop._dispatch` appends the **entire** `Job` and `Result` JSON to the conversation. A search Result (two layouts × three cases × targets × metrics, plus every constraint record and provenance) is what pushed earlier laptop runs to ~11.5–12.4k prompt tokens.
+- `AgentLoop._dispatch` appends the **entire** `Job` and `Result` JSON to the conversation. A search Result (two layouts × three cases × targets × metrics, plus every constraint record and provenance) is what pushed earlier laptop runs (16k-context Qwen, not Spark evidence; `docs/EVENT_DAY_EXECUTION_2026-11-13.md` L251) to ~11.5–12.4k prompt tokens; local laptop/WSL Qwen runs from Arnav's paused integration session reported 11.8–12.8k (his 12:26 GMT #54 handoff to Ben; not Spark evidence).
 - If the server context is 8,192 and a prompt is longer, Ollama may truncate silently. If the server context is larger, requests can exceed the organiser cap without any error.
 
 ### Solution (three parts, all required)
+
+> Applies only if the release uses the `/v1` client. For the native `/api/chat` lane, see the [reconciliation note](#engineering-fix-plans-for-ben--problems-found-in-the-science-review) at the top of this file.
 
 **1a. Pin the server-side context to 8,192 for the model you evaluate (Spark, no code).**
 
@@ -166,8 +182,10 @@ Leave `inspect_site`/`prepare_scenario` observations unchanged: `test_protocol_o
 6. Re-run `backend/tests/agents` and `backend/tests/benchmarks` to confirm no other test depended on the full observation.
 
 ### Acceptance evidence (Spark, release SHA)
+> Applies only if the release uses the `/v1` client; native `/api/chat` equivalents are in the reconciliation note at the top of this file.
+
 - `ollama show canopy-nemotron-nano-8k --modelfile` output with `num_ctx 8192`, and `/api/ps` showing that model only.
-- C2 of the five-case run completes with every response's `usage.prompt_tokens` ≤ 7168 (from the receipt). Checklist rows **X-06** and **X-05** in [SCIENTIFIC_ACCEPTANCE](SCIENTIFIC_ACCEPTANCE.md).
+- FIX-1 guard evidence: C2 of the five-case run completes with every response's `usage.prompt_tokens` ≤ 7168 (from the receipt). 7,168 is the FIX-1 engineering guard, not the validity rule; organiser validity is checklist row **X-06** (server-reported prompt + output ≤ 8,192 per request), with **X-05**, in [SCIENTIFIC_ACCEPTANCE](SCIENTIFIC_ACCEPTANCE.md).
 - Unit-test output for tests 1–6 on the Spark.
 
 ### Risks
@@ -290,6 +308,7 @@ Fill the two `...` by copying the server start/stop block of `live.live_runtime`
 
 **Design decisions (keep them):**
 - **One runtime and one accepted scenario for all five cases**, run in order C1→C5, as the protocol requires. Later cases may receive cached deliveries; the Result's `execution_mode` records this.
+  > *Reconciliation note (13 Nov):* per `docs/CONTRACTS.md` L163, a cached delivery is recorded in `job.delivery.execution_mode`; `Result.provenance.execution_mode` keeps the source computation's mode (acceptance A-04). Record both; Ben's step is otherwise unchanged.
 - No behavioural asserts. The test passes when all five receipts and `SHA256SUMS` are written; failures of the model are data, not test errors.
 - `exist_ok=False` so a rerun can never overwrite earlier receipts (use a new directory per attempt).
 
@@ -313,6 +332,8 @@ export CANOPY_FIVE_CASE_DIR=$HOME/canopy-evidence/five-case-$(date -u +%Y%m%dT%H
 `deploy/spark/model-profile.json` and `application.env.example` describe a vLLM container serving the Hugging Face BF16 checkpoint as `tree-planner-local` on port 8000 (`candidate_not_device_tested`). The organisers supply Ollama on `127.0.0.1:11434` with tags such as `nemotron-3-nano:30b`. The form's "AI models used" field and the video must name what actually ran.
 
 ### Solution
+> Steps 1 and 4 apply only if the release uses the `/v1` client. If Ben's native `/api/chat` client ships (#54/#62), use the pass criteria in the reconciliation note at the top of this file; a JSON-object `arguments` value is not a failure there.
+
 1. **Smoke-test tool calling on the Spark** (loopback; no public port):
 
 ```bash
@@ -396,12 +417,12 @@ Spacing, budget, count, region and winter checks still apply through `check()`. 
 
 ### Coordination
 - Tell **Alex**: a relocation can now be feasible, and the UI must not still label every relocation "diagnostic".
-- Tell **Arnav before the five-case run**. If shipped, C3's expected answer switches to: "the move is permitted in this catalogue model; report deltas from `comparison.deltas` with units and case; no plantability claim". Arnav records this as protocol variant C3-B in the run notes.
+- Tell **Arnav before the five-case run**. Per the protocol PASS/FAIL AMENDMENT of 13 Nov (protocol §8), FIX-4 is **post-submission** and C3 is scored only as variant A; if FIX-4 is on any release SHA anyway, C1–C5 are re-run on that SHA and C3 is reported as run under a changed contract (no pre-registered grade exists for it), not re-graded as C3-B.
 - Update the PHYSICAL_RUNTIME.md sentence "A known candidate moved away from its catalogue coordinate is computed only in explicit diagnostic mode" to mention catalogue rebinding.
 
 ---
 
 ## Not assigned (by design)
-- **Agent-run endpoint and agent UI** are already Ben's #54 and Alex's #56 work; no duplicate issue is opened.
-- **Multi-hour time bins** in the seed would make shade figures more meaningful, but would change every number, cache identity and test expectation on event day. Deferred; the narration uses "one-hour midday sample" instead.
+- **Agent-run endpoint and agent UI**: the endpoint is Ben's (#54/#73) and the agent-evidence UI is Arnav's (#74), per the 13 Nov decision; no duplicate issue is opened. *Update (13 Nov decision): the agent-evidence UI (#74) is Arnav's; Alex keeps the rest of the UI (#56/#58), including placing the panel in his shell (runtime audit R02 on main).*
+- **Multi-hour time bins** in the seed would make shade figures more meaningful, but would change every number, cache identity and test expectation on event day. Deferred; the narration uses "one midday sun position, counted for one hour" instead (acceptance N-02; ledger S-05).
 - **Narration wording** (measured→computed, weighted vs area, pence vs £) is content work for Arnav and Alex; see the [ledger](EVIDENCE_AND_CLAIMS_LEDGER.md).

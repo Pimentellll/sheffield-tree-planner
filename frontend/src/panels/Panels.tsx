@@ -5,8 +5,8 @@ import type { TransformCheck } from '../scene/transform'
 import {
   CURRENTNESS_LABEL, EDIT_LIMIT_M, EXECUTION_MODE_LABEL, clampPosition, describeJob, formatPence, formatValue,
   primaryMetric, unitLabel, type Currentness,
-} from '../state/evaluation'
-import type { RunRecord, Workspace } from '../state/useWorkspace'
+} from '../planning/evaluation'
+import type { RunRecord, Workspace } from '../planning/useWorkspace'
 
 const short = (value: string, n = 10) => (value.length > n + 1 ? `${value.slice(0, n)}…` : value)
 

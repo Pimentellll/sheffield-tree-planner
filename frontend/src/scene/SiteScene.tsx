@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { SyntheticDeclaration } from '../api/session'
 import type { TreeState, Vec3 } from '../api/types'
-import { clampPosition, nudge } from '../state/evaluation'
+import { clampPosition, nudge } from '../planning/evaluation'
 import { enuToViewer, viewerToEnu } from './transform'
 
 type SceneState = 'loading' | 'ready' | 'error'

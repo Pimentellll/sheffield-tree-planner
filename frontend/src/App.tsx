@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import SiteScene from './scene/SiteScene'
 import { checkSiteTransform } from './scene/transform'
-import { useWorkspace } from './state/useWorkspace'
+import { useWorkspace } from './planning/useWorkspace'
 import { EvaluationControls, ResultCard, RunHistory, SiteStatus, TreeEditor } from './panels/Panels'
 
 type Screen = 'overview' | 'studio' | 'compare' | 'report'

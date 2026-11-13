@@ -1,4 +1,7 @@
 # CANOPY Sheffield — Event-Day Execution Board
+
+**Operational issue tracker (13 November):** [7 assigned event-critical tickets plus mapping of all 22 board tasks](EVENT_DAY_ISSUE_INDEX_2026-11-13.md). **Delegation, five on-DGX prompts and researched submission/video content:** [Claude Code handoff & judge narrative pack](EVENT_DAY_CONTENT_AND_CLAUDE_HANDOFFS_2026-11-13.md). **Issue status requires evidence**; older schedule rows below are historical/provisional where superseded by the latest organiser briefing and explicit DGX-only rule.
+
 **Friday 13 November 2026 · All times GMT (Europe/London)**
 
 > **Team target:** have an integrated, working and validated DGX Spark demonstration by **15:00**, with **16:00 the latest planned engineering cutoff**. From then onward, prioritise presentation, video, rehearsal and submission. **The organiser's actual submission deadline and pitch/video rules must be checked immediately and override this schedule.**

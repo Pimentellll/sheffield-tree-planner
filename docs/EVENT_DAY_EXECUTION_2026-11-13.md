@@ -85,7 +85,7 @@ Status values initially **Planned** or **In progress (owner-reported)**; replace
 | **X-E04** | P0 | Alex | Rehearse core demo with known-good synthetic scenario; capture screenshots/recorded fallback | X-E01 + deterministic working build | Repeatable steps; clear synthetic/actual-hardware labels |
 | **X-E05** | P0 | Alex | Capture verified Spark run, edit video, polish deck, prepare speaker and failure fallback | B-E05 + X-E03–E04 | Complete video, exported slide PDF, screenshots, narrated demo |
 | **X-E06** | P1 | Alex | One-area real-site 3D mesh, only if source/CRS and visual validity work | A-E07; P0 UI stable | Labelled display; no unsupported solver claim |
-| **S-E01** | P0 | Arnav | Confirm organiser deadline/pitch length/video format/repo deliverables + assign team speakers | Organiser | Submission requirements captured and acknowledged |
+| **S-E01** | P0 | Arnav | Confirm organiser deadline/pitch length/video format/repo deliverables + assign team speakers | Organiser | **PARTIAL (13 Nov):** official event/theme/team size/hours/criteria verified; submission instructions, advance-work rules and speaking roles still require organiser confirmation (see §8) |
 | **S-E02** | P0 | Arnav + Alex + Ben | Full timed rehearsal, show hardware/evidence receipt, freeze and submit | B-E07, A-E05, X-E05, S-E01 | Submission confirmation + offline fallback copies |
 
 **Ownership and merge coordination:** Ben writes/reviews release integration; Alex writes frontend; Arnav writes evaluation and science/claims. If edits touch someone else's module, ask for a review or deliver a small scoped PR. Avoid multiple agents editing `docs/BUILD.md` or deploying to the same worktree at once.
@@ -140,3 +140,25 @@ Submission deadline and confirmation:
 ```
 
 **Success criterion:** A judge can change a planting constraint, execute a genuine planning computation through the Spark-hosted UI, inspect the resulting cost/shade/feasibility and source evidence, and (if the GPU model works) see an authentic agent choose a real tool and cite the corresponding result. Presentation should communicate that value without conflating synthetic science with field-validated Sheffield measurements.
+
+
+## 8. Verified organiser guidance and pending submission questions (13 Nov, ~11:30 GMT)
+
+**Verified review of coordination sources: COMPLETE for public/registration information; S-E01 overall is PARTIAL, not DONE.** Evidence: [official NVIDIA event page](https://events.nvidia.com/Hack-for-Impact-Sheffield), confirmed registration email dated 4 Nov 2026, organiser team-detail email dated 6 Nov 2026 and private team calendar event. This board is a coordination note, not an organiser policy document.
+
+| Area | Verified statement | Effect |
+|---|---|---|
+| Event | Friday **13 Nov 2026, 09:00–20:00 GMT**, at **Pendo, Little Kelham Street, Sheffield S3 8DH** (registration email) | The 15:00 target / 16:00 latest freeze is the **team's** choice, not an official submission deadline |
+| Team eligibility | Official page says **minimum 3 / maximum 5** and in-person full-day attendance | Ben/Arnav/Alex three-person team qualifies on size, subject to organiser registration acceptance |
+| Team roster administration | NVIDIA requested full names and emails of all team members in organiser email **6 Nov**; no sent confirmation was found in connected Gmail search as of this check | Ask Ben/team whether roster was supplied; if not, clarify with organiser promptly |
+| Equipment | One organiser-supplied DGX Spark per team; bring laptop/charger; monitors provided (registration email) | Ben coordinates key access and device policies |
+| Technical challenge | Official page: agentic applications powered by open models deployed on DGX Spark | Real model/tool interaction is central to judged proof; local CPU physics may coexist without falsely claiming GPU physics |
+| Theme | **Urban Operations** includes city infrastructure and operational optimisation | CANOPY's planning narrative fits the track; do not claim prior approval/selection |
+| Data source rules | Official page says public datasets are available but **none is mandatory** | Sheffield real-site data improves relevance but does not block challenge eligibility; do not claim real-site science if only synthetic validated |
+| Judging | Official page lists **Impact**, **Technical Execution** (agentic AI/local compute) and **Feasibility**; judges include NVIDIA, Scan, Pendo and invited local representatives | Pitch should prioritise functional Spark evidence, validated workflow, realistic adoption and transparent limitations |
+| Prior development | Repo `BUILD.md` explicitly flags unresolved advance-code/AI/asset eligibility; public event page does not settle this | Retain provenance, ask organiser before claiming compliance |
+| **Submission** | **NOT VERIFIED:** deadline, destination, repository access/visibility, mandatory source/video/screenshots, exact slide/pitch duration, on-stage format, advance-work declaration | **Blocking unresolved organiser questions for S-E01.** Do not import rules from unrelated Devpost events |
+
+**Next on-site action:** ask the event desk or official team communications for: (1) exact submission cutoff and platform; (2) pitch and demo length/order; (3) required artefacts and repo/public access rules; (4) whether pre-event code, AI assistants and third-party data need declaration; (5) confirmation that the three team member registrations/roster are recorded. Update this section with the organiser's answer and a time/source, and then mark S-E01 **Verified**. Do not hold Ben's deployment or Arnav's independent benchmark audit while waiting.
+
+**Audit progress:** Coordination/event eligibility and published judging facts checked; submission-specific gate remains pending. **Next independent Arnav task: A-E01**, audit the existing B11 benchmark runner/scorers on the live integration revision.

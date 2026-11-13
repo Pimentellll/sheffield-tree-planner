@@ -19,9 +19,9 @@ The integrated source contains:
 - Finite-catalogue search with upfront costs in integer pence, overlap-aware marginal gains and a separate final-layout constraint checker. Results are best evaluated alternatives, not claimed global optima.
 - Controlled relocation and scenario comparisons, with exact inputs, run IDs, units and source hashes.
 - Immutable SQLite scenarios, asynchronous jobs, generated API types, rights-checked assets and current-selection/cache safeguards.
-- A bounded local-model adapter and domain-tool loop. A small local-model round trip has been demonstrated, but reliable autonomous investigation and an AI advantage have **not** been established.
+- A bounded local-model adapter and domain-tool loop. In a laptop development test, a small Qwen model (not Nemotron, not on the DGX Spark) selected `evaluate_layout` and cited the stored run; Nemotron tool use on the DGX, reliable autonomous investigation and an AI advantage have **not** been established.
 
-The full product is not finished. Real Sheffield geometry/rights/parity, target-model execution on the DGX, complete autonomous planning, independent manual-versus-AI evaluation and full-system acceptance remain open. SSH access to the assigned DGX is verified; that is not a model or application deployment result. [BUILD](docs/BUILD.md) records current issue-level evidence and the next gates.
+The full product is not finished. Real Sheffield geometry/rights/parity, target-model execution on the DGX, complete autonomous planning, independent manual-versus-AI evaluation and full-system acceptance remain open. SSH access to the assigned DGX is verified. Ben reports ([#54](https://github.com/Pimentellll/sheffield-tree-planner/issues/54)) that the CI-built baseline application ran there behind loopback/SSH and completed a browser-triggered evaluation on synthetic flat-ground geometry, and that a single Ollama chat smoke returned a Nemotron response without a tool call; Nemotron tool use on the DGX remains open. [BUILD](docs/BUILD.md) records current issue-level evidence and the next gates.
 
 ### A concrete run
 

@@ -223,6 +223,8 @@ Submission deadline and confirmation:
 
 ## 11. A-E02 — five required model inputs, provisional frozen evaluation rubric
 
+> **Superseded:** the expected outcomes below are replaced by [AGENT_EVALUATION_PROTOCOL.md](event-day/science/AGENT_EVALUATION_PROTOCOL.md) (C1–C5) and the frozen [five_case_prompts.json](event-day/science/five_case_prompts.json); send the model only the frozen prompts. "Measured" should read "computed", and FIVE-03's "valid alternative" is wrong under the current contract.
+
 **Status: SPECIFIED, NOT YET EXECUTED.** The five prompts below meet the organiser's **minimum five** at design level, but the actual test is complete only when the currently deployed model is run on real accepted scenario fixtures and its responses are captured. Before execution Arnav must bind each prompt to a known-valid synthetic scenario, snapshot IDs, supported tool list and expected/forbidden outcomes, freeze the prompt bytes/checksum, and verify the exact release contract with Ben. Avoid manual preselected tool calls masquerading as model decisions.
 
 | ID | Input the agent should receive (parameterise from trusted host context, not made-up IDs) | Correct observable response | Scoring gate |
@@ -256,7 +258,7 @@ Submission deadline and confirmation:
 |---|---|---|---|
 | **Now to 14:30** | Merge/keep known-good release; use organiser-supplied Ollama; repair integration/context limits and run initial Spark checks | **NO testing yet**; define 5 fixed prompts (ambiguity + correct “I don't know”), pass/fail rubric, source/claims notes, final form fields and video technical narrative | Finish high-impact agent/evidence UI; draft ≤5-minute video storyboard and assets |
 | **14:30–15:00** | Reach filmable real E2E Spark demonstration; report exact SHA/endpoint/model and blockers | Finalise acceptance sheet and prepare safe Spark-only test window | Rehearse demo and capture first real Spark footage |
-| **15:00–16:00** | Hand over stable Spark demo/test interface, support critical fixes, freeze code no later than 16:00 | With Ben's approval, run **only on Spark** the five genuine Nemotron input tests, score tools/evidence, review application claims; optional comparator only if time/load permits | Capture live tool/physics results; freeze UI and footage |
+| **15:00–16:00** | Hand over stable Spark demo/test interface, support critical fixes, freeze code no later than 16:00 | With Ben's approval, run **only on Spark** the five genuine Nemotron input tests, score tools/evidence, review application claims; optional comparator only if time/load permits; announce the start and end of the quiet window to Alex and Ben | Capture deterministic UI footage before or after Arnav's quiet five-case window (no Spark jobs during it); capture agent footage only after the run; freeze footage after Arnav's "Claims frozen for video" sign-off |
 | **16:00–17:00** | Security-review and make permitted authentic code repository public | Write/verify submission description, exact model and NVIDIA technology identifiers; check links/form | Finish, upload and verify ≤5 min YouTube/Loom video; optional slides if useful for edit |
 | **17:00–17:30** | Confirm repo and runtime evidence | Submit and obtain confirmation | Cross-check video link and backups |
 | **17:30–18:00** | Preserve logs/known-good state before shutdown | Contingency only, confirm acceptance | Video recovery only |

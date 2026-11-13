@@ -22,6 +22,8 @@ The primary sources below support **why this problem matters**; none independent
 
 ## 2. Safe form description — ready for user/teammate review
 
+> **Superseded for final copy by** [JUDGING_AND_SUBMISSION_BRIEF.md §1](event-day/science/JUDGING_AND_SUBMISSION_BRIEF.md). Keep this section only as history; use the brief and the [claims ledger](event-day/science/EVIDENCE_AND_CLAIMS_LEDGER.md) for form text.
+
 **Project:** CANOPY Sheffield  
 **Team:** [team to confirm]  
 **Track:** Urban Operations
@@ -41,7 +43,7 @@ The primary sources below support **why this problem matters**; none independent
 | 0:00–0:35 | **Problem** — choosing a tree site requires balancing budget, meaningful shade and constraints, not merely dropping markers | Sheffield street/tree management context; no unsupported statistics |
 | 0:35–1:05 | **Product** — CANOPY Studio: interactive planning scenario, objective and budget | Real running browser UI on Spark |
 | 1:05–2:25 | **Agentic execution** — user asks a concrete planning question; live Nemotron chooses a registered action; backend performs job | Recorded real Spark model tag, tool call, job IDs, status; do not substitute scripted test |
-| 2:25–3:35 | **Numerical result** — show measured geometric shade + budget and winter tradeoff; compare an alternative | Actual backend Results, same revision, units, constraints, source IDs |
+| 2:25–3:35 | **Numerical result** — show computed direct-sun shade (m²·h, one-hour midday sample) + cost and winter-loss check; compare with search's best evaluated layout (not the infeasible relocation diagnostic) | Actual backend Results, same revision, units, constraints, source IDs |
 | 3:35–4:15 | **Why local NVIDIA compute** — model actually hosted on Spark and orchestrating calculations with bounded tool safety | Exact deployed config and measured data only; no claims of GPU physics |
 | 4:15–4:45 | **Impact and feasibility** — more explainable scenario analysis; next steps with real data and field verification | Source citations and honest limitations |
 | 4:45–5:00 | **Close** — name CANOPY Sheffield, team, Urban Operations and exact usable deliverable | Public GitHub link or end card |
@@ -51,6 +53,8 @@ The primary sources below support **why this problem matters**; none independent
 **If agent fails:** do not narrate a fake tool execution. Show deterministic physical planning and state honestly that the local model integration is incomplete; prioritize debugging before release, but preserve a truthful backup recording.
 
 ## 4. Five compulsory on-Spark probe definitions
+
+> **Superseded:** the prompts and expected outcomes below are replaced by [AGENT_EVALUATION_PROTOCOL.md](event-day/science/AGENT_EVALUATION_PROTOCOL.md) (C1–C5) and the frozen [five_case_prompts.json](event-day/science/five_case_prompts.json); send the model only the frozen prompts. Here, "measured" should read "computed", and probe 03's "valid permitted alternative" is wrong under the current contract (relocation to an unoffered position is infeasible by design).
 
 These are organiser-required **design fixtures**, NOT executed test results. Bind to a real, accepted synthetic site scenario after Ben's release handoff; retain exactly frozen prompts and fixture fingerprints.
 

@@ -231,6 +231,8 @@ def score_run(
         sum(claim.get("supported") is False for claim in claims) if audit_complete else None
     )
     actions = observation.get("user_actions", [])
+    # An empty adapter list is not evidence that independent review found zero value.
+    usefulness_audit_complete = observation.get("usefulness_audit_complete") is True
     useful_ids = set(observation.get("useful_analysis_run_ids", []))
     useful = useful_ids.intersection(actual_run_ids).intersection(current_run_ids)
     integrity.extend(
@@ -248,7 +250,9 @@ def score_run(
         "claim_audit_complete": audit_complete,
         "human_actions": len(actions),
         "human_corrections": sum(action.get("kind") == "correction" for action in actions),
-        "useful_analyses": len(useful),
+        "useful_analyses": len(useful) if usefulness_audit_complete else None,
+        "usefulness_audit_complete": usefulness_audit_complete,
+        "useful_analysis_run_ids": sorted(useful_ids) if usefulness_audit_complete else None,
         "tool_errors": len(errors)
         + sum(e.get("status") in {"error", "failed", "cancelled"} for e in events),
         "latency_ms": elapsed,
@@ -345,6 +349,7 @@ def run_suite(task_file: Path, output: Path, adapter_spec: str) -> dict:
                     "numeric_claim_audits": [],
                     "user_actions": [],
                     "useful_analysis_run_ids": [],
+                    "usefulness_audit_complete": False,
                     "elapsed_ms": (time.perf_counter_ns() - started) / 1_000_000,
                 }
             # Never let adapter supplied events replace calls actually observed here.
@@ -360,6 +365,7 @@ def run_suite(task_file: Path, output: Path, adapter_spec: str) -> dict:
             observation.setdefault("numeric_claim_audits", [])
             observation.setdefault("user_actions", [])
             observation.setdefault("useful_analysis_run_ids", [])
+            observation.setdefault("usefulness_audit_complete", False)
             observation["elapsed_ms"] = (time.perf_counter_ns() - started) / 1_000_000
             current_ids = {
                 e["run_id"]

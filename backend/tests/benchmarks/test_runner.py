@@ -1,3 +1,5 @@
+import pytest
+
 from backend.tests.benchmarks.runner import score_run
 
 
@@ -24,6 +26,7 @@ def test_score_requires_current_observed_result_and_counts_actions():
         "claim_audit_complete": True,
         "user_actions": [{"kind": "edit"}, {"kind": "correction"}],
         "useful_analysis_run_ids": ["run-1"],
+        "usefulness_audit_complete": True,
         "tool_errors": [],
         "elapsed_ms": 20,
     }
@@ -40,6 +43,8 @@ def test_score_requires_current_observed_result_and_counts_actions():
     assert scored["human_actions"] == 2
     assert scored["human_corrections"] == 1
     assert scored["useful_analyses"] == 1
+    assert scored["usefulness_audit_complete"] is True
+    assert scored["useful_analysis_run_ids"] == ["run-1"]
     assert scored["latency_ms"] == 20
 
 
@@ -186,3 +191,79 @@ def test_counterfactual_requires_comparison_outcome_not_any_current_result():
         score_run(task, observation, actual_job_ids=set(), actual_run_ids={"r1"})["completion"]
         is True
     )
+
+
+@pytest.mark.parametrize(
+    "review",
+    [
+        {},
+        {"useful_analysis_run_ids": []},
+        {"useful_analysis_run_ids": ["r1"]},
+        {"usefulness_audit_complete": False, "useful_analysis_run_ids": []},
+        {"usefulness_audit_complete": 1, "useful_analysis_run_ids": ["r1"]},
+        {"usefulness_audit_complete": "true", "useful_analysis_run_ids": ["r1"]},
+        {"claim_audit_complete": True, "useful_analysis_run_ids": ["r1"]},
+    ],
+)
+def test_unreviewed_usefulness_remains_unknown(review):
+    observation = {"elapsed_ms": 1, **review}
+    scored = score_run(
+        {"required_operations": []},
+        observation,
+        actual_job_ids=set(),
+        actual_run_ids={"r1"},
+        current_run_ids={"r1"},
+    )
+    assert scored["useful_analyses"] is None
+    assert scored.get("usefulness_audit_complete") is False
+    assert scored.get("useful_analysis_run_ids") is None
+
+
+def test_reviewed_empty_usefulness_is_an_observed_zero():
+    scored = score_run(
+        {"required_operations": []},
+        {
+            "elapsed_ms": 1,
+            "usefulness_audit_complete": True,
+            "useful_analysis_run_ids": [],
+        },
+        actual_job_ids=set(),
+        actual_run_ids={"r1"},
+        current_run_ids={"r1"},
+    )
+    assert scored["useful_analyses"] == 0
+    assert scored.get("usefulness_audit_complete") is True
+    assert scored.get("useful_analysis_run_ids") == []
+
+
+def test_reviewed_usefulness_retains_ids_and_counts_only_current_observed_results():
+    scored = score_run(
+        {"required_operations": []},
+        {
+            "elapsed_ms": 1,
+            "usefulness_audit_complete": True,
+            "useful_analysis_run_ids": ["old", "current", "current"],
+        },
+        actual_job_ids=set(),
+        actual_run_ids={"old", "current"},
+        current_run_ids={"current"},
+    )
+    assert scored["useful_analyses"] == 1
+    assert scored.get("usefulness_audit_complete") is True
+    assert scored.get("useful_analysis_run_ids") == ["current", "old"]
+
+
+def test_unobserved_useful_result_still_rejects_completion():
+    scored = score_run(
+        {"required_operations": []},
+        {
+            "elapsed_ms": 1,
+            "usefulness_audit_complete": True,
+            "useful_analysis_run_ids": ["invented"],
+        },
+        actual_job_ids=set(),
+        actual_run_ids=set(),
+        current_run_ids=set(),
+    )
+    assert scored["completion"] is False
+    assert "unobserved useful analysis run id: invented" in scored["integrity_errors"]

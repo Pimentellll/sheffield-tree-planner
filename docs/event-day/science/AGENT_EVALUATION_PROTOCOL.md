@@ -148,7 +148,7 @@ Classify every non-pass with **one primary class** and keep the raw reason strin
 | `inference unavailable or malformed`, `inference HTTP failure`, connection errors, model not loaded | **Host — inference service** |
 | `incomplete inference response` with `finish_reason: "length"` (`/v1`) or `done_reason: "length"` (native `/api/chat`) | **Config — output cap** (record `max_tokens` or `options.num_predict`, and `reasoning_effort` or `think`) |
 | Native `done: false` without `done_reason: "length"` | **Host — inference service** (incomplete response; record the raw `done` and `done_reason`) |
-| Any request with server-reported prompt tokens (`usage.prompt_tokens` on `/v1`; `prompt_eval_count` on native `/api/chat`) > 8192, or loaded context smaller than the prompt (possible silent truncation); or a native `context_exceeded` refusal with truncation disabled. *(Whether the threshold becomes prompt + output cap > 8,192 is pending Arnav's sign-off; see acceptance X-06 and ledger H-06)* | **Host — context budget; run invalid for the organiser rule** |
+| Any request whose server-reported prompt + output tokens (`usage.prompt_tokens` + `completion_tokens` on `/v1`; `prompt_eval_count` + `eval_count` on native `/api/chat`) > 8,192, or loaded context smaller than that sum (possible silent truncation); or a native `context_exceeded` refusal with truncation disabled (acceptance X-06) | **Host — context budget; run invalid for the organiser rule** |
 | `deadline exceeded` | **Runtime — latency** (record per-turn timing if available; do not attribute to the model without timing evidence) |
 | `Outcome.status` "stopped" / reason "deadline or stop", with a job left `queued` or `running` | **Host — backend (worker)**. Check worker liveness (#72) before attributing to latency |
 | Request refused by the client guard: reported prompt tokens over the configured guard (FIX-1b) while within the acceptance X-06 threshold | **Host — context guard** (record the guard value; the organiser rule was not broken) |
@@ -191,7 +191,7 @@ A run is **invalid** (reported, not scored as model behaviour) if the host conte
 - Ollama: version `<…>`; model tag `<exact tag from ollama ps>`; alias → base tag (`ollama show <alias> --modelfile` `FROM`): `<… / none>`; `ollama show` quantization `<…>`; `/api/ps` context `<…>`; other models loaded: <none / list>
 - Transport: `<native /api/chat | /v1>`   Client: base `<url>`, temperature `<…>`, reasoning_effort `<…>` / think `<…>`, max_tokens `<…>` / options.num_predict `<…>`, options.num_ctx `<… / n/a on /v1>`, truncate/shift `<sent? supported? / n/a>`, max_input_bytes `<…>`, timeout `<…>`, deadline `<…>`, action_budget `<…>`; Modelfile `num_ctx` `<…>`; `OLLAMA_CONTEXT_LENGTH` `<…>`
 - Tool set exposed: `<sorted list>`   Host-context SHA-256: `<…>`   Prompt SHA-256: `<…>`
-- Model turns: <n>   Per-turn server-reported tokens, prompt/output (`usage.prompt_tokens`/`completion_tokens` on /v1; `prompt_eval_count`/`eval_count` on native /api/chat): <t1>, <t2>, … or "usage unavailable" (never estimated)   Max prompt tokens: <…> (within the acceptance X-06 threshold? Y/N)   Max request bytes: <…>   Completion state per turn (`finish_reason`, or `done` + `done_reason`): <…>
+- Model turns: <n>   Per-turn server-reported tokens, prompt/output (`usage.prompt_tokens`/`completion_tokens` on /v1; `prompt_eval_count`/`eval_count` on native /api/chat): <t1>, <t2>, … or "usage unavailable" (never estimated)   Max per-request prompt + output (server-reported): <…> (within acceptance X-06? Y/N)   Max request bytes: <…>   Completion state per turn (`finish_reason`, or `done` + `done_reason`): <…>
 - Tool calls (in order, raw arguments as received: string on /v1, object on native, plus canonical JSON text after normalisation; tool-call id server-provided or host-derived): <…>
 - Jobs: `<job_id>` <status>; Results: `<run_id>` <analytical_outcome>
 - Outcome.status: <…>   Outcome.reason: <…>   evidence_ids: <…>
@@ -204,9 +204,9 @@ A run is **invalid** (reported, not scored as model behaviour) if the host conte
 - Scorer notes:
 ```
 
-Summary table for #55 and the form (fill only from the blocks above; "Model tag" is the organiser base tag, with the transport in brackets, e.g. `<tag> (native)`; "Max prompt tokens" is the server-reported count for that transport):
+Summary table for #55 and the form (fill only from the blocks above; "Model tag" is the organiser base tag, with the transport in brackets, e.g. `<tag> (native)`; "Max prompt + output" is the largest per-request server-reported sum for that transport):
 
-| Case | Attempt | Model tag | Tools called | Outcome.status | Case result | Failure class | Max prompt tokens | Wall ms |
+| Case | Attempt | Model tag | Tools called | Outcome.status | Case result | Failure class | Max prompt + output | Wall ms |
 |---|---|---|---|---|---|---|---|---|
 | C1 | | | | | | | | |
 | C2 | | | | | | | | |
@@ -224,7 +224,7 @@ Summary table for #55 and the form (fill only from the blocks above; "Model tag"
 | FIVE-03 "valid permitted alternative" via `compare_locations` | Expected answer: the move is **not** permitted; numbers are diagnostic | `relocate()` + `check()` produce `candidate mismatch` by design |
 | One operation per live test (`test_live_local.py`) | Same four-tool set for all cases | Single-tool exposure cannot test tool selection |
 | Rubric item `num_ctx` | Record `/api/ps` context **and** per-request server-reported prompt tokens (`usage.prompt_tokens` on `/v1`; `prompt_eval_count` on native `/api/chat`), plus `options.num_ctx` on native | `/v1` requests cannot set `num_ctx`; native `/api/chat` sets `options.num_ctx` per request. Prompt tokens are the organiser-relevant quantity on either route |
-| `/v1`-only field names in §1, §2, §5 and §7 (13 Nov) | Transport-specific fields per [§2a](#2a-transport-mapping-native-apichat-vs-v1-added-13-nov); the driver records the transport; the context-budget threshold is unchanged here (pending Arnav's sign-off, acceptance X-06) | Ben's release may use native `/api/chat` (#54/#62; PR #70 @ `8d24e73` R03, R21, R25, §9). `five_case_prompts.json` is unchanged and its hashes stay valid |
+| `/v1`-only field names in §1, §2, §5 and §7 (13 Nov) | Transport-specific fields per [§2a](#2a-transport-mapping-native-apichat-vs-v1-added-13-nov); the driver records the transport; context-budget failure when server-reported prompt + output > 8,192 per request; FIX-1's 7,168 prompt guard is an engineering margin (acceptance X-06) | Ben's release may use native `/api/chat` (#54/#62; PR #70 @ `8d24e73` R03, R21, R25, §9). `five_case_prompts.json` is unchanged and its hashes stay valid |
 | C4 single expected behaviour | Pre-registered PASS-A / PASS-B / FAIL | Avoids post-hoc grading of a defensible interpretation |
 | "task_success" as one field | D1–D8 plus a primary failure class | Separates model, host and numerical faults ([Kapoor et al., TMLR 2025](https://arxiv.org/abs/2407.01502) on reproducible, cost-aware agent evaluation) |
 

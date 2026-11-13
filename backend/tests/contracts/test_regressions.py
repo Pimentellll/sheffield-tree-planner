@@ -290,7 +290,6 @@ def test_lifecycle_winter_bool_and_conflicts():
     for change in (
         {"budget_basis": "lifecycle"},
         {"at_most_one_profile_per_location": 1},
-        {"winter_limits": [dict(case_id="winter", target_id=None, maximum_loss_m2_h=0)]},
     ):
         with pytest.raises(ValidationError):
             Constraints.model_validate({**source, **change})

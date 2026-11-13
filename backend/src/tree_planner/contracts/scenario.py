@@ -114,8 +114,7 @@ class Constraints(ContractModel):
             [tuple(sorted(pair)) for pair in self.incompatible_candidate_pairs],
             "candidate conflict pair",
         )
-        if self.winter_limits:
-            raise ValueError("winter limits unsupported until validated winter evaluator exists")
+        unique([(limit.case_id, limit.target_id) for limit in self.winter_limits], "winter limit")
         return self
 
     @model_validator(mode="before")
@@ -202,8 +201,12 @@ class ScenarioInput(ContractModel):
             raise ValueError("objective requires one primary benefit case")
         if any(not set(c.target_ids) <= set(self.target_ids) for c in self.evaluation_cases):
             raise ValueError("case has unresolved scenario target")
-        if any(c.role == "winter_check" for c in self.evaluation_cases):
-            raise ValueError("winter evaluation unsupported until validated evaluator exists")
+        for limit in self.constraints.winter_limits:
+            case = cases.get(limit.case_id)
+            if case is None or case.role != "winter_check":
+                raise ValueError("winter limit requires a declared winter_check case")
+            if limit.target_id is not None and limit.target_id not in case.target_ids:
+                raise ValueError("winter limit target unresolved")
         return self
 
 

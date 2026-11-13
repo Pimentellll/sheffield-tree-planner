@@ -1,6 +1,6 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from .base import (
     Array,
@@ -19,9 +19,16 @@ from .base import (
 
 
 class Attenuation(ContractModel):
-    """Only validated opaque mode is currently serializable for execution."""
+    """takeover-v1 adds a bounded, explicitly assumed fixed-crossing scenario."""
 
-    mode: Literal["opaque"]
+    mode: Literal["opaque", "fixed_crossing"]
+    transmission: Annotated[float, Field(ge=0, le=1)] | None = None
+
+    @model_validator(mode="after")
+    def coefficient(self):
+        if (self.mode == "fixed_crossing") != (self.transmission is not None):
+            raise ValueError("only fixed_crossing requires an explicit transmission")
+        return self
 
 
 class TreeState(ContractModel):

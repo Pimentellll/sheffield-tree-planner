@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
+  <title id="t">CANOPY</title>
+  <desc id="d">CANOPY banner: a shade-aware tree-planning workbench. Stylised low-poly trees on a dark green background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d2b1f"/>
+      <stop offset="0.55" stop-color="#14402c"/>
+      <stop offset="1" stop-color="#1f5a3a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.35" r="0.55">
+      <stop offset="0" stop-color="#9bd06a" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#9bd06a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="crownDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5a9a62"/>
+      <stop offset="1" stop-color="#2c6a3f"/>
+    </linearGradient>
+    <linearGradient id="crownLight" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d4ef8f"/>
+      <stop offset="1" stop-color="#8dc456"/>
+    </linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#ffffff" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="320" fill="url(#bg)"/>
+  <rect width="1280" height="320" fill="url(#grid)"/>
+  <rect width="1280" height="320" fill="url(#glow)"/>
+
+  <!-- ground plane and shade footprints -->
+  <g transform="translate(0 0)">
+    <path d="M700 262 L1280 210 L1280 320 L640 320 Z" fill="#a9c79a" fill-opacity="0.10"/>
+    <ellipse cx="884" cy="252" rx="66" ry="14" fill="#04140c" fill-opacity="0.45"/>
+    <ellipse cx="1012" cy="236" rx="52" ry="11" fill="#04140c" fill-opacity="0.40"/>
+    <ellipse cx="1132" cy="246" rx="74" ry="15" fill="#04140c" fill-opacity="0.45"/>
+    <ellipse cx="770" cy="270" rx="40" ry="9" fill="#04140c" fill-opacity="0.35"/>
+    <ellipse cx="1226" cy="228" rx="40" ry="9" fill="#04140c" fill-opacity="0.35"/>
+  </g>
+
+  <!-- existing trees (dark) -->
+  <g>
+    <rect x="1009" y="150" width="5" height="84" rx="2" fill="#4a3727"/>
+    <circle cx="1011" cy="138" r="44" fill="url(#crownDark)"/>
+    <path d="M985 116 L1011 104 L1035 120 L1023 146 L995 150 Z" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="1129" y="138" width="6" height="106" rx="2" fill="#4a3727"/>
+    <circle cx="1132" cy="122" r="58" fill="url(#crownDark)"/>
+    <path d="M1098 96 L1132 80 L1164 100 L1150 134 L1110 138 Z" fill="#ffffff" fill-opacity="0.07"/>
+    <rect x="1224" y="160" width="4" height="66" rx="2" fill="#4a3727"/>
+    <circle cx="1226" cy="150" r="32" fill="url(#crownDark)"/>
+  </g>
+
+  <!-- proposed trees (light) with planting rings -->
+  <g>
+    <ellipse cx="884" cy="252" rx="34" ry="8" fill="none" stroke="#d4ef8f" stroke-opacity="0.75" stroke-width="3"/>
+    <rect x="881" y="176" width="5" height="76" rx="2" fill="#4a3727"/>
+    <circle cx="884" cy="160" r="40" fill="url(#crownLight)"/>
+    <path d="M860 140 L884 128 L906 144 L896 166 L868 170 Z" fill="#ffffff" fill-opacity="0.16"/>
+    <ellipse cx="770" cy="270" rx="22" ry="5" fill="none" stroke="#d4ef8f" stroke-opacity="0.6" stroke-width="2.5"/>
+    <rect x="768" y="222" width="4" height="48" rx="2" fill="#4a3727"/>
+    <circle cx="770" cy="210" r="26" fill="url(#crownLight)"/>
+  </g>
+
+  <!-- sun arc -->
+  <g fill="none" stroke="#f3d27a" stroke-opacity="0.55" stroke-width="2" stroke-dasharray="4 8">
+    <path d="M700 120 Q960 -40 1240 90"/>
+  </g>
+  <circle cx="1196" cy="56" r="14" fill="#f3d27a" fill-opacity="0.9"/>
+
+  <!-- wordmark -->
+  <g font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+    <text x="72" y="104" fill="#9bd06a" font-size="16" font-weight="600" letter-spacing="4">SHEFFIELD TREE PLANNER</text>
+    <text x="68" y="178" fill="#f4f8f1" font-size="78" font-weight="800" letter-spacing="6">CANOPY</text>
+    <text x="72" y="222" fill="#d7e6d2" font-size="24" font-weight="400">Shade-aware tree planning, traceable to its evidence</text>
+    <text x="72" y="262" fill="#9fb8a5" font-size="15" font-weight="500" letter-spacing="1.5">3D WORKBENCH  ·  DETERMINISTIC SHADE  ·  PROVENANCE</text>
+  </g>
+</svg>

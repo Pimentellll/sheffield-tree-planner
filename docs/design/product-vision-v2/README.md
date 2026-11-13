@@ -50,6 +50,8 @@ The implementation handoff lists these and further points (shadow footprint over
 
 Because of the unlabelled runtime and the unrecorded pictures, treat the file as an internal design reference. Do not reuse its pictures or code in the application, the video or the submission without settling those two points.
 
+On 13 November 2026 Arnav, who supplied the file, chose to show six of its scene renders in the repository [README](../../../README.md), as downscaled JPEG copies in `docs/images/concept-*.jpg`. The README labels them as illustrative renders of a synthetic park, not CANOPY output. Their producer and licence terms are still unrecorded, and this use does not extend to the application, the video or the submission.
+
 ## Where the handoff and the event-day plan differ
 
 The handoff is reproduced as Arnav wrote it. Read it together with these, which it does not restate:

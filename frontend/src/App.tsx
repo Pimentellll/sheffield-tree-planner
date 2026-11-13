@@ -6,15 +6,17 @@ import { EvaluationControls, ResultCard, RunHistory, SiteStatus, TreeEditor } fr
 import { ProposalReviewPanel, RequirementsPanel } from './panels/Requirements'
 import { AlternativesPanel } from './panels/Alternatives'
 import CompareScreen from './panels/CompareScreen'
+import ReportScreen from './panels/ReportScreen'
+import OverviewScreen from './panels/OverviewScreen'
 import { layoutRows } from './planning/alternatives'
 import type { Vec3 } from './api/types'
 
 type Screen = 'overview' | 'studio' | 'compare' | 'report'
 const screens: { id: Screen; number: string; label: string }[] = [
-  { id: 'overview', number: '01', label: 'City overview' },
+  { id: 'overview', number: '01', label: 'Sheffield sites' },
   { id: 'studio', number: '02', label: 'Planning studio' },
   { id: 'compare', number: '03', label: 'Compare' },
-  { id: 'report', number: '04', label: 'Report' },
+  { id: 'report', number: '04', label: 'Review pack' },
 ]
 
 function App() {
@@ -36,7 +38,7 @@ function App() {
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">Skip to content</a>
-      <aside className="sidebar">
+      <aside className="sidebar no-print">
         <div className="brand" aria-label="CANOPY Sheffield"><span className="brand-mark" aria-hidden="true">✳</span><span>CANOPY<span className="brand-place">SHEFFIELD</span></span></div>
         <p className="nav-caption">WORKSPACE</p>
         <nav aria-label="Main navigation">
@@ -46,7 +48,7 @@ function App() {
       </aside>
 
       <main id="main" className="main-content">
-        <header className="topbar"><div className="mobile-brand">CANOPY <span>SHEFFIELD</span></div><span className="topbar-label">EVIDENCE LED TREE PLANNING</span><span className="topbar-status" data-testid="backend-status"><span className={`status-dot${connected ? '' : ' warning'}`} /> {connected ? 'Local backend connected' : ws.connection.status === 'connecting' ? 'Connecting…' : 'Backend not connected'}</span></header>
+        <header className="topbar no-print"><div className="mobile-brand">CANOPY <span>SHEFFIELD</span></div><span className="topbar-label">EVIDENCE LED TREE PLANNING</span><span className="topbar-status" data-testid="backend-status"><span className={`status-dot${connected ? '' : ' warning'}`} /> {connected ? 'Local backend connected' : ws.connection.status === 'connecting' ? 'Connecting…' : 'Backend not connected'}</span></header>
         <div className="page-content">
           <div className="eyebrow">WORKSPACE / {selected.number} / {selected.label.toUpperCase()}</div>
           {screen === 'studio' ? <>
@@ -68,7 +70,7 @@ function App() {
                 <SiteStatus ws={ws} transform={transform} />
               </aside>
             </div>
-          </> : screen === 'compare' ? <CompareScreen ws={ws} declaration={declaration} treeState={treeState} /> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
+          </> : screen === 'compare' ? <CompareScreen ws={ws} declaration={declaration} treeState={treeState} /> : screen === 'report' ? <ReportScreen ws={ws} /> : screen === 'overview' ? <OverviewScreen ws={ws} /> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
         </div>
       </main>
     </div>

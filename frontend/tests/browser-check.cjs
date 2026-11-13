@@ -169,6 +169,7 @@ async function online() {
     }
     await requirementsFlow(page)
     await compareFlow(page)
+    await reportFlow(page)
     check('no page errors', errors.length === 0, errors.join('; '))
   } finally { await browser.close() }
 
@@ -188,6 +189,22 @@ async function online() {
     await shot(narrow.page, '13-compare-narrow')
     check('no page errors (narrow)', narrow.errors.length === 0, narrow.errors.join('; '))
   } finally { await narrow.browser.close() }
+
+  // Demo-resolution captures (viewport only, as a projector shows it).
+  const hd = await launch(1920, 1080)
+  try {
+    await hd.page.goto(url)
+    await hd.page.getByText('Local backend connected').waitFor({ timeout: 20000 })
+    await hd.page.waitForTimeout(600)
+    const nav = hd.page.getByRole('navigation', { name: 'Main navigation' })
+    for (const [name, label] of [['16-hd-studio', /Planning studio/], ['17-hd-compare', /Compare/], ['18-hd-report', /Review pack/], ['19-hd-overview', /Sheffield sites/]]) {
+      await nav.getByRole('button', { name: label }).click()
+      await hd.page.waitForTimeout(500)
+      await hd.page.screenshot({ path: join(evidenceDir, `${name}.png`) })
+    }
+    const g = await hd.page.evaluate(() => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth }))
+    check('1920×1080 captures taken without overflow or page errors', g.scroll <= g.viewport && hd.errors.length === 0, JSON.stringify(g))
+  } finally { await hd.browser.close() }
 }
 
 // STP-021: requirement drafts, human acceptance, recompute, refused concurrent edit, proposal review.
@@ -297,6 +314,47 @@ async function compareFlow(page) {
   await page.keyboard.press('Enter')
   check('evidence chain expands with request, job, fingerprint and source hashes', /Input fingerprint[\s\S]*Source hashes/.test(await page.locator('.chain').first().innerText()))
   await shot(page, '12-compare-evidence')
+  await nav.getByRole('button', { name: /Planning studio/ }).click()
+}
+
+// STP-028: review pack and export, plus the Sheffield sites overview.
+async function reportFlow(page) {
+  const nav = page.getByRole('navigation', { name: 'Main navigation' })
+  await nav.getByRole('button', { name: /Review pack/ }).click()
+  await page.getByRole('heading', { name: /Review pack/ }).waitFor()
+  check('report shows the result as CURRENT', /CURRENT\b/.test(await page.getByTestId('report-currentness').innerText()))
+  check('report labels synthetic positions ENU-only (no lat/long)', /placeholder, so no latitude\/longitude/.test(await page.getByTestId('geo-label').first().innerText()))
+  check('report lists standing survey requirements when none are recorded', await page.getByTestId('survey-none').count() === 1 && (await page.locator('.report-sheet').innerText()).includes('Underground services'))
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: /Download review pack/ }).click()
+  const file = await download
+  const pack = JSON.parse(readFileSync(await file.path(), 'utf8'))
+  const stored = (await backend('GET', `/results/${pack.result.run_id}`)).json
+  const h = await head()
+  check('exported pack copies the stored Result unchanged', JSON.stringify(pack.result) === JSON.stringify(stored))
+  check('exported pack copies the accepted Scenario unchanged', JSON.stringify(pack.scenario) === JSON.stringify(h) && pack.scenario.revision === h.revision)
+  check('exported pack metric matches the on-screen metric', (await page.getByTestId('report-metric').innerText()).startsWith(`${pack.result.metrics[0].value} m²·h`))
+  check('exported pack is marked synthetic and names no export handler', /SYNTHETIC/.test(pack.status) && /not available/.test(pack.export_handler))
+  writeFileSync(join(evidenceDir, 'review-pack.json'), JSON.stringify(pack, null, 2))
+  await page.getByRole('button', { name: /Ask the backend to prepare a proposal/ }).click()
+  await page.getByTestId('backend-proposal').waitFor()
+  const reply = await page.getByTestId('backend-proposal').innerText()
+  check('backend prepare_proposal reply is shown verbatim (no handler today)', /HTTP \d+/.test(reply), reply)
+  await shot(page, '14-report')
+  // A draft edit makes the report non-current and blocks export.
+  await nav.getByRole('button', { name: /Planning studio/ }).click()
+  const east = page.getByRole('spinbutton').first()
+  await east.fill('5')
+  await east.press('Enter')
+  await nav.getByRole('button', { name: /Review pack/ }).click()
+  check('unaccepted edits block export and mark the report stale', /STALE/.test(await page.getByTestId('report-currentness').innerText()) &&
+    await page.getByRole('button', { name: /Download review pack/ }).isDisabled() && /not current/.test(await page.getByTestId('export-blocked').innerText()))
+  await nav.getByRole('button', { name: /Planning studio/ }).click()
+  await page.getByRole('button', { name: 'Discard draft' }).click()
+  await nav.getByRole('button', { name: /Sheffield sites/ }).click()
+  const overview = await page.locator('.main-content').innerText()
+  check('overview marks Weston Park / Manor Fields as not accepted and the loaded site as synthetic', /Weston Park[\s\S]*NOT ACCEPTED/.test(overview) && /Manor Fields Park/.test(overview) && /Synthetic test \(not Sheffield\)/.test(overview))
+  await shot(page, '15-overview')
   await nav.getByRole('button', { name: /Planning studio/ }).click()
 }
 

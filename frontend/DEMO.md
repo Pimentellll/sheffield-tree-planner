@@ -1,0 +1,38 @@
+# CANOPY demo runbook (frontend, STP-028)
+
+What the live demo can truthfully show **today**, in order, with what to say and what not to claim. Every number on screen comes from a backend run that you can open in the evidence chain. Follows docs/VALIDATION.md §4 as far as the implemented system allows.
+
+## Before you present
+
+1. Fresh backend workspace each time (the browser checks assume revision 1):
+   `.venv/bin/python frontend/scripts/serve_reference.py --workspace ../canopy-demo-$(date +%H%M) --numerical-source ../repo-numerical-inputs`
+   (PowerShell: `.venv\Scripts\python.exe` and a new folder name.)
+2. `cd frontend && CANOPY_SESSION=<that workspace>/session.json npm run dev`, open http://127.0.0.1:5173 in Chrome or Edge at 1920×1080.
+3. Optional rehearsal: `CANOPY_DEV_WORKSPACE=<workspace> npm run test:browser` against a *separate* fresh workspace. It ends with a full set of screenshots in `frontend/artifacts/`.
+
+## Script (≈4 minutes)
+
+| # | Screen / action | Say | Do **not** say |
+|---|---|---|---|
+| 1 | **Sheffield sites** | "We audited two real candidates, Weston Park and Manor Fields. Neither is loaded yet: the LiDAR tiles, datum and rights checks are still open, and the app says so." | That we have analysed a Sheffield park. |
+| 2 | **Planning studio**, point at the banner and SYNTHETIC tags | "Today's engine runs on an explicit synthetic test site. Everything you see is a real computation of that geometry." | That the site is Sheffield. |
+| 3 | **Evaluate planting** | "The tree blocks the declared sun ray: 2 m²·h of extra shade on the target in this one-hour bin. Here is the run ID, the fingerprint, 13 bound source hashes." | Cooling, energy, CO₂, AQI or any bill saving. |
+| 4 | Move the tree (drag, arrow keys or East = 20) | "The old number is struck through immediately: it describes the old position." | |
+| 5 | **Accept changes & evaluate** | "New accepted revision, real recomputation: a valid zero. Zero is an honest answer, not an error." | |
+| 6 | Requirements: budget £80, max trees 1, then **Discard**, then accept | "Edits are a draft until a human accepts them. Accepting creates a revision; results from earlier revisions are superseded." | That the agent can accept anything. |
+| 7 | **Compare**: base rev 1 vs alternative rev 2 | "A controlled relocation: one placement moved, nothing else changed. 2 → 0, Δ −2 m²·h, from two stored runs." | That the comparison came from a server-side comparison tool (it didn't). |
+| 8 | **Compare → Evidence**, expand the newest job | "Every number traces to a request, job, input fingerprint, code version and source hashes." | That a local model was involved (no inference device is recorded). |
+| 9 | **Review pack** → Download | "The export copies the stored records unchanged, labels positions as ENU metres, and always lists the survey work that still has to happen." | That this is a planting proposal or permission. |
+
+Not available today, and shown as unavailable in the app: search/optimised options (needs STP-016/017), server comparisons (STP-024), winter cases (STP-023), agent narrative (STP-019/022), backend export handler. If those land before the demo, the same screens render their real results; no rehearsal fixtures are used.
+
+## Recovery
+
+| Symptom | Action |
+|---|---|
+| "Backend not connected" | Backend not running or wrong port. Restart `serve_reference.py` with a **new** workspace folder; reload. |
+| `REVISION_CONFLICT` banner | Another accepted change (or a changed asset). The newer head is loaded and your draft is kept; accept again, or **Discard draft**. |
+| Job "Failed" or deadline errors after a long session | Accepting any change renews the job deadline. Otherwise restart with a fresh workspace. |
+| 3D view blank (no WebGL) | Use the East/North fields; every other panel works. |
+| Tree off-screen | **Find tree** or **Reset view** (frames the target and the tree). |
+| Wrong state after rehearsal | Start a new workspace; never reuse a rehearsal workspace for the live run. |

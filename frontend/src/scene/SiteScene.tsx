@@ -296,13 +296,33 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
     }
   }, [treeState, draft, committed, state])
 
+  /** Frame the declared receiver and the proposed tree together, keeping the default viewing angle. */
+  const frameAll = () => {
+    const w = world.current
+    if (!w) return
+    const points = [declaration ? toV(declaration.receiver_point) : new THREE.Vector3(), ...(draft ? [toV(draft)] : [])]
+    const box = new THREE.Box3().setFromPoints(points)
+    const centre = box.getCenter(new THREE.Vector3()).add(new THREE.Vector3(0, 0.5, 0))
+    const span = box.getSize(new THREE.Vector3()).length()
+    const scale = Math.max(1, span / 7)
+    w.controls.target.copy(centre)
+    w.camera.position.copy(centre).add(HOME.clone().multiplyScalar(scale))
+    w.controls.update()
+  }
+  const framed = useRef(false)
+  useEffect(() => {
+    if (state !== 'ready' || framed.current || !draft || !declaration) return
+    framed.current = true
+    frameAll()
+  }, [state, draft, declaration]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const moveCamera = (action: CameraAction) => {
     const w = world.current
     if (!w) return
     const { camera, controls } = w
     if (action === 'reset') {
-      camera.position.copy(HOME)
-      controls.target.set(0, 0.5, 0)
+      frameAll()
+      return
     } else if (action === 'tree') {
       if (!draft) return
       const focus = toV(draft).add(new THREE.Vector3(0, 0.5, 0))

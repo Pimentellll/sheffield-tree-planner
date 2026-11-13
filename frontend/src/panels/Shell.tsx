@@ -171,7 +171,8 @@ export function EvidenceChainDetails({ ws }: { ws: Workspace }) {
   const chain = evidenceChain(record.job, record.result, ws.currentness(record.result))
   return (
     <details className="detail-section evidence-details" data-testid="evidence-chain">
-      <summary>Evidence chain: job → result</summary>
+      <summary>Evidence chain: job → result{chain.ok && chain.feasible === false ? ' · not feasible' : ''}</summary>
+      {chain.ok && chain.feasible === false && <p className="error-box" data-testid="chain-infeasible">The backend computed this result, but it is not a feasible planting outcome. It is evidence, not a success.</p>}
       {chain.ok
         ? <dl className="chain">{chain.steps.map((s, i) => <div key={`${s.kind}-${i}`} className="chain-row"><dt>{s.label}</dt><dd className={s.kind === 'limitation' || s.kind === 'missing-metric' ? 'text-warning' : undefined}>{s.value}</dd></div>)}</dl>
         : <ul className="text-warning">{chain.problems.map(p => <li key={p}>{p}</li>)}</ul>}

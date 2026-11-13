@@ -148,10 +148,20 @@
 @media print{.rail,.agent-bar,.map-key,.studio-left{display:none!important}}
 /* focus: visible on the light palette (ink), lime kept on dark surfaces */
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-.studio .scene-wrap:focus-visible{outline:3px solid var(--ink);outline-offset:-3px}
+/* every scene is light (Studio and Compare): dark ring */
+.scene-wrap:focus-visible{outline:3px solid var(--ink);outline-offset:-3px}
 .rail :focus-visible,.glass-dark :focus-visible,.context-bar :focus-visible,.scene-toolbar :focus-visible,.dark-action:focus-visible{outline-color:var(--lime)}
 .number-field:focus-within{outline-color:var(--ink)}
 .provenance-strip b{font-weight:600;letter-spacing:.05em}
 .provenance-strip .prov-ok{color:var(--lime)}
 .provenance-strip .prov-warn{color:var(--synthetic-stripe)}
 .provenance-strip.not-current span{opacity:.75}
+/* 1101-1320 px: the floating header cannot fit beside the right panel without clipping; put it in flow and let it wrap */
+@media (min-width:1101px) and (max-width:1320px){
+  .main-content.screen-studio{display:flex;flex-direction:column;height:100vh}
+  .main-content.screen-studio .topbar.context-bar{position:static;margin:12px var(--gutter) 0;width:auto;max-width:none;height:auto;min-height:44px;flex-wrap:wrap;row-gap:6px;padding:6px 14px;overflow:visible}
+  .main-content.screen-studio .studio{flex:1 1 auto;height:auto;min-height:0}
+  .studio-left{top:var(--gutter)}
+}
+/* 1101-1320 px: the scene's duplicate synthetic pill can sit behind the open editor; the header pill and site notice still state it */
+@media (min-width:1101px) and (max-width:1320px){.studio .scene-topline .pill{display:none}}

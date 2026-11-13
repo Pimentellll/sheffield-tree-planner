@@ -17,9 +17,14 @@ const scenario = {
 const provenance = { evaluator_version: 'ev-1', solar_version: 'sol-1', search_version: 'greedy-1', seed: 7, execution_mode: 'live' }
 
 describe('headerStatus', () => {
-  const base = { connected: true, revision: 4, draftDirty: false, activeJob: null, jobStatusLost: false, evaluationCurrentness: 'current' as const }
+  const base = { connected: true, connecting: false, revision: 4, draftDirty: false, activeJob: null, jobStatusLost: false, evaluationCurrentness: 'current' as const }
   it('says there is no accepted scenario when offline', () => {
     expect(headerStatus({ ...base, connected: false })).toEqual({ label: 'NO ACCEPTED SCENARIO', tone: 'muted' })
+  })
+  it('says CONNECTING, not "no accepted scenario", while (re)connecting (-51 C)', () => {
+    expect(headerStatus({ ...base, connected: false, connecting: true })).toEqual({ label: 'REV 4 · CONNECTING', tone: 'muted' })
+    expect(headerStatus({ ...base, connected: false, connecting: true, revision: null })).toEqual({ label: 'CONNECTING', tone: 'muted' })
+    expect(dataPillLabel(false, 'synthetic_test', true).label).toBe('CONNECTING…')
   })
   it('names a running job before anything else', () => {
     expect(headerStatus({ ...base, draftDirty: true, activeJob: { status: 'running', operation: 'search_layouts', scenario_revision: 4 } }).label).toBe('REV 4 · SEARCH RUNNING')

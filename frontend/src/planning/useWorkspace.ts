@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, CanopyClient, TERMINAL_JOB_STATES } from '../api/client'
 import { loadDevSession, verifyDeclaration, type DeclarationCheck, type DevSession } from '../api/session'
+import { followJob, isJobRunning } from './followJob'
 import type { Health, Job, JobRequest, Layout, Result, Scenario, ScenarioRef, SiteBundle, TreeProfile, Vec3 } from '../api/types'
 import {
   buildCommit, candidateAt, classifyResult, diffInputs, evaluateRequest, refOf, requirementsOf, sameRequirements, samePosition,
@@ -78,7 +79,7 @@ export interface Workspace {
 }
 
 const POLL_MS = 150
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 export const newRequestId = () => `ui-${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 const defaultClient = new CanopyClient()
@@ -227,18 +228,14 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   }, [])
 
   const poll = useCallback(async (job: Job) => {
-    let current = job
-    while (alive.current && !TERMINAL_JOB_STATES.has(current.status)) {
-      await sleep(POLL_MS)
-      try {
-        current = await client.job(job.job_id)
-      } catch (err) {
-        // The job may still be running on the backend; say its status is unknown rather than keep showing it as running.
-        if (activeJobId.current === job.job_id) setJobStatusLost(true)
-        throw err
-      }
-      if (activeJobId.current === job.job_id) { setActiveJob(current); setJobStatusLost(false) }
-    }
+    // A failed poll marks the status unknown (the job may still be running) rather than leaving it shown as running.
+    const current = await followJob(job, {
+      fetchJob: id => client.job(id),
+      sleep,
+      alive: () => alive.current,
+      onUpdate: j => { if (activeJobId.current === job.job_id) { setActiveJob(j); setJobStatusLost(false) } },
+      onLost: () => { if (activeJobId.current === job.job_id) setJobStatusLost(true) },
+    }, POLL_MS)
     const result = current.status === 'completed' && current.run_id ? await client.result(current.run_id) : null
     if (result && (result.source_job_id !== current.job_id || result.input_fingerprint !== current.input_fingerprint)) {
       throw new Error(`Result ${result.run_id} does not match job ${current.job_id}; not displayed`)
@@ -280,6 +277,9 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
       setActiveJob(job)
       setJobStatusLost(false)
       setBusy(null)
+      // The backend moves the slot's selection when it accepts the job, so the previous run must stop being
+      // shown as CURRENT now, not only after this job finishes. Non-blocking; a failure here is not fatal.
+      refreshSelection(head).catch(() => {})
       await poll(job)
     } catch (err) {
       await handleFailure(err)
@@ -382,7 +382,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   }, [client, poll, handleFailure])
 
   // A job whose status is unknown is not treated as running, so it cannot block planning indefinitely.
-  const jobRunning = activeJob !== null && !TERMINAL_JOB_STATES.has(activeJob.status) && !jobStatusLost
+  const jobRunning = isJobRunning(activeJob, jobStatusLost)
   const connectedOk = connection.status === 'connected' && busy === null &&
     connection.health.available_operations.includes('evaluate_layout') && Boolean(placement)
 

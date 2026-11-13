@@ -15,6 +15,8 @@ export interface HeaderStatus { readonly label: string; readonly tone: ShellTone
 
 export interface HeaderStatusInput {
   readonly connected: boolean
+  /** The connection is being (re)established; a previously loaded scenario may still be shown. */
+  readonly connecting: boolean
   /** Revision of the accepted head scenario, or null when none is loaded. */
   readonly revision: number | null
   readonly draftDirty: boolean
@@ -37,7 +39,8 @@ const OPERATION_WORD: Record<Job['operation'], string> = {
  * job (labelled with ITS revision), an unaccepted draft, then the state of the shown result. Only a
  * CURRENT result earns the green tone.
  */
-export function headerStatus({ connected, revision, draftDirty, activeJob, jobStatusLost, evaluationCurrentness }: HeaderStatusInput): HeaderStatus {
+export function headerStatus({ connected, connecting, revision, draftDirty, activeJob, jobStatusLost, evaluationCurrentness }: HeaderStatusInput): HeaderStatus {
+  if (connecting) return { label: revision === null ? 'CONNECTING' : `REV ${revision} · CONNECTING`, tone: 'muted' }
   if (!connected || revision === null) return { label: 'NO ACCEPTED SCENARIO', tone: 'muted' }
   const rev = `REV ${revision}`
   if (activeJob && !TERMINAL_JOB_STATES.has(activeJob.status)) {
@@ -55,7 +58,8 @@ export function headerStatus({ connected, revision, draftDirty, activeJob, jobSt
 }
 
 /** The data-kind pill. Never claims a site is real or field-verified. */
-export function dataPillLabel(connected: boolean, siteKind: SiteBundle['site_kind'] | null): { label: string; synthetic: boolean } {
+export function dataPillLabel(connected: boolean, siteKind: SiteBundle['site_kind'] | null, connecting = false): { label: string; synthetic: boolean } {
+  if (connecting) return { label: 'CONNECTING…', synthetic: siteKind !== null && siteKind === 'synthetic_test' }
   if (!connected) return { label: 'OFFLINE · NO DATA', synthetic: true }
   if (siteKind === null) return { label: 'NO SITE', synthetic: true }
   if (siteKind === 'synthetic_test') return { label: 'SYNTHETIC TEST SITE · NOT SHEFFIELD', synthetic: true }

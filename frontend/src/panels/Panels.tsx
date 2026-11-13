@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import type { Result, TreeProfile, TreeState, Vec3 } from '../api/types'
+import type { Job, Result, TreeProfile, TreeState, Vec3 } from '../api/types'
 import type { DeclarationCheck } from '../api/session'
 import type { TransformCheck } from '../scene/transform'
 import {
   CURRENTNESS_LABEL, EDIT_LIMIT_M, samePosition, EXECUTION_MODE_LABEL, clampPosition, describeJob, formatPence, formatValue,
-  primaryMetric, unitLabel, type Currentness,
+  primaryMetric, progressView, unitLabel, type Currentness, type ProgressView,
 } from '../planning/evaluation'
 import type { RunRecord, Workspace } from '../planning/useWorkspace'
 import { latestEvaluation } from '../planning/shell'
+import { FOCUS_TARGET, focusAfterRender } from './focus'
 
 function describeAttenuation(a: unknown): string {
   const v = a as { mode?: string; transmission?: number | null } | null
@@ -104,7 +105,7 @@ export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; p
         </>
       )}
       {committed && draftDirty && (
-        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={ws.revertDraft}>Revert draft</button></p>
+        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={() => { ws.revertDraft(); focusAfterRender(FOCUS_TARGET.editorToggle) }}>Revert draft</button></p>
       )}
       {profile && state && (
         <>
@@ -125,6 +126,7 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
   const described = job ? describeJob(job) : null
   const lost = Boolean(job && ws.jobStatusLost && (job.status === 'queued' || job.status === 'running'))
   const running = !lost && (job ? job.status === 'queued' || job.status === 'running' : false)
+  const progress: ProgressView = job && !lost ? progressView(job) : { kind: 'none' }
   const label = ws.busy === 'committing' ? 'Accepting revision…' : ws.busy === 'submitting' ? 'Submitting…' : ws.draftDirty ? 'Accept changes & evaluate' : 'Evaluate planting'
   return (
     <div className="detail-section">
@@ -157,13 +159,13 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
             <strong>{described.label}</strong>
             <span>Job {short(job.job_id, 8)} · scenario rev {job.scenario_revision}</span>
             <span>{described.detail}</span>
-            {job.progress && job.progress.total > 0 && (
-              <progress max={job.progress.total} value={job.progress.completed} aria-label="Job progress" />
+            {progress.kind === 'counts' && (
+              <progress max={progress.total} value={progress.completed} aria-label="Job progress" />
             )}
-            {running && !(job.progress && job.progress.total > 0) && (
+            {progress.kind === 'indeterminate' && (
               <>
                 <progress aria-label="Job in progress; the backend reports no progress counts" data-testid="indeterminate-progress" />
-                <span className="caption">The backend reports no progress counts, so no percentage or phase is estimated.</span>
+                <span className="caption">{progress.caption}</span>
               </>
             )}
           </div>
@@ -199,7 +201,7 @@ export function ResultCard({ ws }: { ws: Workspace }) {
   return (
     <div className={`detail-section result-section result-${currentness}`}>
       <span className="section-kicker">{currentness === 'current' ? 'CURRENT RESULT' : 'LAST RESULT — NOT CURRENT'}</span>
-      <ResultBody result={result} currentness={currentness} primaryCase={primaryCase} />
+      <ResultBody result={result} delivery={record.job.delivery} currentness={currentness} primaryCase={primaryCase} />
       {failureNewer && latestFailure && <p className="error-box">A later job {latestFailure.job.status}: {describeJob(latestFailure.job).detail}</p>}
     </div>
   )
@@ -212,7 +214,10 @@ function constraintSummary(result: Result) {
   return (['fail', 'unknown', 'pass'] as const).filter(k => counts[k]).map(k => `${counts[k]} ${k}`).join(' · ')
 }
 
-function ResultBody({ result, currentness, primaryCase }: { result: Result; currentness: Currentness; primaryCase: string | null }) {
+function ResultBody({ result, delivery, currentness, primaryCase }: { result: Result; delivery: Job['delivery']; currentness: Currentness; primaryCase: string | null }) {
+  // How THIS job was delivered: a cache hit is cached even if the stored run was originally live (same rule as the strip).
+  const delivered = delivery?.execution_mode ?? result.provenance.execution_mode
+  const original = result.provenance.execution_mode
   const metric = primaryMetric(result, primaryCase)
   const layout = result.layouts[0]
   const zero = metric?.value === 0
@@ -234,7 +239,7 @@ function ResultBody({ result, currentness, primaryCase }: { result: Result; curr
       )}
       {result.missing_metrics.length > 0 && <p className="fine-print text-warning">Missing: {result.missing_metrics.map(m => `${m.metric_id} (${m.reason})`).join('; ')}</p>}
       <div className="evidence-grid">
-        <Row label="Mode" value={EXECUTION_MODE_LABEL[result.provenance.execution_mode]} warn={result.provenance.execution_mode !== 'live'} />
+        <Row label="Mode" value={`${EXECUTION_MODE_LABEL[delivered]}${delivered !== original ? ` · originally ${EXECUTION_MODE_LABEL[original].toLowerCase()}` : ''}`} warn={delivered !== 'live'} />
         <Row label="Run" value={short(result.run_id, 12)} />
         <Row label="Scenario rev" value={`${result.scenario_revision} (${result.scope})`} />
         {layout && <Row label="Layout" value={`${layout.layout.layout_id} rev ${layout.layout.revision} · ${layout.tree_count} tree`} />}

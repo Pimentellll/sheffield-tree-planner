@@ -61,7 +61,7 @@ const shot = (page, name) => page.screenshot({ path: join(evidenceDir, `${name}.
     await page.getByText('Local backend connected').waitFor({ timeout: 20000 })
     await page.waitForTimeout(800)
     const status = await page.locator('.detail-panel').last().innerText()
-    check('physical scene bytes verified against the SiteBundle hash', /Verified · sha256/.test(status))
+    check('physical scene bytes match the SiteBundle hash', /Hash matches · sha256/.test(status))
     const notice = await page.getByTestId('site-notice').innerText()
     check('banner is capability-based and no longer claims a chosen sun / unevaluated constraints', /not Sheffield/.test(notice) && /search_layouts/.test(notice) && !/chosen sun/.test(notice) && !/not evaluated/.test(notice))
     check('catalogue positions offered instead of free coordinates', await page.getByRole('radio', { name: /candidate-1/ }).count() === 1 && await page.getByRole('spinbutton').count() === 0)

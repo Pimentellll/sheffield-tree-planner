@@ -8,8 +8,9 @@ export function RequirementsPanel({ ws }: { ws: Workspace }) {
   const draft = ws.draftRequirements
   const accepted = ws.acceptedRequirements
   const editable = ws.connection.status === 'connected' && Boolean(draft)
-  const [budgetText, setBudgetText] = useState('')
-  const [countText, setCountText] = useState('')
+  // Initialised from the draft so the fields are never blank when the editor opens.
+  const [budgetText, setBudgetText] = useState(() => (draft ? poundsText(draft.budgetPence) : ''))
+  const [countText, setCountText] = useState(() => (draft && draft.maxTreeCount !== null ? String(draft.maxTreeCount) : ''))
   const [budgetError, setBudgetError] = useState<string | null>(null)
   const [countError, setCountError] = useState<string | null>(null)
 
@@ -88,7 +89,7 @@ export function RequirementsPanel({ ws }: { ws: Workspace }) {
             ? <ul>{ws.draftChanges.map(c => <li key={c.path}><code>{c.path}</code>: {describeValue(c.before)} → {describeValue(c.after)}</li>)}</ul>
             : <p className="fine-print">Fix the highlighted fields to see the change set.</p>}
           {ws.requirementErrors.length > 0 && <p className="fine-print text-warning">{ws.requirementErrors.join(' ')}</p>}
-          <p className="fine-print">Nothing is saved or computed until you accept. Accepting creates a new revision; earlier results become superseded.</p>
+          <p className="fine-print">Nothing is saved or computed yet. "Accept changes &amp; evaluate" saves these edits as a new accepted revision and then evaluates the current layout; earlier results become superseded.</p>
           <button type="button" className="text-action" onClick={ws.revertDraft}>Discard draft</button>
         </div>
       )}

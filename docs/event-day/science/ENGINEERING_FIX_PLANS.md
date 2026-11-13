@@ -308,6 +308,7 @@ Fill the two `...` by copying the server start/stop block of `live.live_runtime`
 
 **Design decisions (keep them):**
 - **One runtime and one accepted scenario for all five cases**, run in order C1→C5, as the protocol requires. Later cases may receive cached deliveries; the Result's `execution_mode` records this.
+  > *Reconciliation note (13 Nov):* per `docs/CONTRACTS.md` L163, a cached delivery is recorded in `job.delivery.execution_mode`; `Result.provenance.execution_mode` keeps the source computation's mode (acceptance A-04). Record both; Ben's step is otherwise unchanged.
 - No behavioural asserts. The test passes when all five receipts and `SHA256SUMS` are written; failures of the model are data, not test errors.
 - `exist_ok=False` so a rerun can never overwrite earlier receipts (use a new directory per attempt).
 

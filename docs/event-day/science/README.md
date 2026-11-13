@@ -68,7 +68,7 @@ This pass reconciles the package with work published after PR #61 merged. It is 
 **Refs inspected (read-only):**
 
 - `origin/main` @ `ca1662d` (merge of PR #61, this package).
-- PR #66 (3D city and tree-identification specification) at `14a9a69` and re-checked at `a1fbced`; PR #67 (3D agent UI) at `b0e0ef9` and re-checked at `2ff054b`. Ledger W-03 quotes the later heads.
+- PR #66 (3D city and tree-identification specification) at `14a9a69` and re-checked at `a1fbced`; PR #67 (3D agent UI) at `b0e0ef9` and re-checked at `2ff054b`. PRs #66, #67 and #71 were then merged (`main` `6355f97`); ledger W-03 and M-01 now cite the merged files on `main`, with line numbers re-checked there.
 - PR #70 @ `8d24e73` (Nemotron agent runtime audit; merged to `main` 13 Nov 14:13 UTC at that head) and PR #71 @ `d9f1586` (agent evidence frontend handoff). Only these versions are quoted; the cited lines were compared with the earlier `c28d15b`/`0dd2f3b` and are unchanged.
 - PR #44 at `origin/chore/drop-signoff-gates` (D17 sign-off withdrawal, AGENTS rule 10).
 - Alex's branches: `feat/alex/design-parity` @ `a130bbd`, `feat/alex/terrain-context-view` @ `b1bb0e5`, `feat/alex/STP-005-site-audit` @ `03abb3f`. None is on `main`.

@@ -1,5 +1,7 @@
 # Five-case agent evaluation protocol (NVIDIA-required model inputs)
 
+**Revised 13 Nov 2026 (issue #57 reconciliation):** checked against `origin/main` `ca1662d`, PR #70 @ `8d24e73`, PR #71 @ `d9f1586` and the branches listed in [README §Reconciliation](README.md#reconciliation-after-ca1662d-13-nov). Nothing was executed.
+
 **Status: SPECIFIED, NOT EXECUTED.** It supersedes the expected outcomes of FIVE-01..05 in [event board §11](../../EVENT_DAY_EXECUTION_2026-11-13.md#11-a-e02--five-required-model-inputs-provisional-frozen-evaluation-rubric) and [handoffs §4](../../EVENT_DAY_CONTENT_AND_CLAUDE_HANDOFFS_2026-11-13.md#4-five-compulsory-on-spark-probe-definitions) where they conflict (see §8). Execution happens **only on the DGX Spark**, after Ben's handoff, by Arnav. Issue [#55](https://github.com/Pimentellll/sheffield-tree-planner/issues/55).
 
 **Goal.** Satisfy the organiser requirement ("test five inputs including one ambiguous input and one where the correct answer is 'I don't know'") with honest evidence. Five real runs with complete receipts are worth more than a larger, partly scripted suite. This protocol measures the **system** (model + host loop + backend) and attributes each failure to model, host or numerics.
@@ -8,7 +10,7 @@
 
 | Item | Fact from source | Consequence for evaluation |
 |---|---|---|
-| Model transport | `LocalClient` → `POST {base}/chat/completions`; base must be loopback HTTP ending `/v1`; final message must have `finish_reason` `stop` or `tool_calls` | Ollama's OpenAI-compatible route. `finish_reason: "length"` is a failed run ("incomplete inference response") |
+| Model transport | `LocalClient` → `POST {base}/chat/completions`; base must be loopback HTTP ending `/v1`; final message must have `finish_reason` `stop` or `tool_calls` | Ollama's OpenAI-compatible route. `finish_reason: "length"` is a failed run ("incomplete inference response"). On `ca1662d` this `/v1` client is still the only one on main (`agents/__init__.py` L88, L188–189). Ben's release may use a native `/api/chat` client (#54/#62; PR #70 @ `8d24e73` R01, R03, R25, §9), which is not on any pushed ref yet and is unverified. Record which transport ran. For `/v1`, take tokens from `usage.prompt_tokens`/`completion_tokens`; for native, use `prompt_eval_count`/`eval_count` and the request's `options.num_ctx`/`num_predict`. Full mapping in [§2a](#2a-transport-mapping-native-apichat-vs-v1-added-13-nov) |
 | Registered tools | `inspect_site`, `prepare_scenario`, `evaluate_layout`, `search_layouts`, `compare_locations`, `compare_scenarios` (`agents/__init__.py` `_ARGUMENTS`) | Schemas come from pydantic models, so arguments are schema-checked before dispatch |
 | `inspect_site` args | `site_id`, `scene_revision`; must equal the pinned accepted scenario | Metadata only, no numbers |
 | `evaluate_layout` args | `layout_ref {layout_id, revision}` | Only registered layouts. Search-result layout IDs (`<run_id>-alternative`) are not registered layouts |
@@ -18,14 +20,35 @@
 | Repeats/limits | Identical repeated call → `ProtocolError("repeated action made no progress")`; optional `action_budget`; monotonic deadline | Loops terminate visibly |
 | Result content | Metrics `additional_shade` (m2_h, unweighted), `weighted_shade_utility` (weighted_m2_h), constraint records, layouts with `cost_pence`, four fixed limitation strings | The ground truth for scoring numbers |
 
-**Seeded scenario (if Ben deploys `create_physical_runtime(winter=True)`; confirm at handoff):** synthetic flat scene at declared latitude 53.38, longitude −1.47; one profile `generic`, upfront cost 10000 pence (£100.00); proposed layout `one-tree` rev 1 with placement `tree-1` at candidate-1 `[0,0,0]`; catalogue candidate-1 `[0,0,0]`, candidate-2 `[-2,0,0]`, candidate-3 `[2,0,0]` (ENU metres); budget 20000 pence (£200.00), max 2 trees, minimum centre separation 2 m; cases `summer` (mature, 1 Jul 12:00 UTC, 1 h), `establishment` (year 1, same instant), `winter` (leaf-off transmission 0.7, 1 Dec 12:00 UTC, 1 h, maximum loss 100 m²·h); target weight 2; survey requirement "Professional site/utility/soil/rights survey required" stays `unknown`. If the deployed scenario differs, the host-context block below is regenerated from it and the expected values change. The frozen user prompts do not change.
+**Seeded scenario (if Ben deploys `create_physical_runtime(winter=True)`; confirm at handoff):** synthetic flat scene at declared latitude 53.38, longitude −1.47; one profile `generic`, upfront cost 10000 pence (£100.00); proposed layout `one-tree` rev 1 with placement `tree-1` at candidate-1 `[0,0,0]`; catalogue candidate-1 `[0,0,0]`, candidate-2 `[-2,0,0]`, candidate-3 `[2,0,0]` (ENU metres); budget 20000 pence (£200.00), max 2 trees, minimum centre separation 2 m; cases `summer` (mature, 1 Jul 12:00 UTC, 1 h), `establishment` (year 1, same instant), `winter` (leaf-off transmission 0.7, 1 Dec 12:00 UTC, 1 h, maximum loss 100 m²·h); target weight 2; survey requirement "Professional site/utility/soil/rights survey required" stays `unknown`. If the deployed scenario differs, the host-context block below is regenerated from it and the expected values change. The frozen user prompts do not change. *(13 Nov, `ca1662d`:)* the winter case and limit exist only when the runtime starts with `--winter` (default `winter=False`, `evaluators/physical_runtime.py` L670). On this scene the largest possible winter loss is 195 receivers × 0.25 m² × 1 h = 48.75 m²·h, so the 100 m²·h limit cannot bind, and spacing cannot bind either (catalogue positions 2 m apart, minimum 2 m). Describe a winter record as "checked and passing", never as having limited the choice (ledger S-06).
 
 ## 2. Fixed experimental conditions
 
 - **Tool set, identical for all five cases:** `{inspect_site, evaluate_layout, search_layouts, compare_locations}`. This makes tool choice a genuine decision. It also keeps the large `ScenarioInput` schema (`prepare_scenario`) and `compare_scenarios` out of the 8,192-token budget. If Ben's integrated agent exposes a different set, record the actual set; do not edit code to match this document.
-- **Loop:** unchanged `AgentLoop`. The live-test settings are the reference: `temperature=0`, `reasoning_effort="none"`, `max_tokens=1024`, client timeout 90 s, loop deadline 120 s, poll 0.05 s. Use `action_budget=6` if the driver exposes it. Record whatever is actually used.
+- **Loop:** unchanged `AgentLoop`. The live-test settings are the reference: `temperature=0`, `reasoning_effort="none"`, `max_tokens=1024`, client timeout 90 s, loop deadline 120 s, poll 0.05 s. Use `action_budget=6` if the driver exposes it. Record whatever is actually used. If the release uses native `/api/chat`, the frozen client block maps to `think:false` (for `reasoning_effort` none), `options.num_predict:1024` (for `max_tokens`), `options.temperature:0` and `options.num_ctx:8192` ([§2a](#2a-transport-mapping-native-apichat-vs-v1-added-13-nov)). Record `think` and `options` (including `num_ctx`) in the §7 "Client" line instead of `reasoning_effort`; the frozen prompt bytes and `five_case_prompts.json` do not change.
 - **One model loaded**, no concurrent jobs, the same release SHA and the same accepted scenario revision for all five runs. Run order C1→C5. If a run fails for a host reason, fix nothing in code mid-suite; record it, and rerun only after Ben confirms the host is healthy (the rerun is a new attempt and both are reported).
-- **Driver:** the planned driver is [FIX-2](ENGINEERING_FIX_PLANS.md#fix-2--five-case-spark-driver). Any driver is acceptable if it (a) calls the unchanged `AgentLoop`, (b) sends the exact prompt bytes below, (c) saves every request/response exchange and `/api/ps` output (as `RecordingClient` in `backend/tests/agents/test_live_local.py` does), and (d) saves the `Outcome`, jobs and Results. **If no such driver is on the Spark release, the protocol is BLOCKED.** The smallest change is for Ben to parameterise the existing `run_actual_model` pattern by prompt text and operation set. Arnav does not write a new harness.
+- **Driver:** the planned driver is [FIX-2](ENGINEERING_FIX_PLANS.md#fix-2--five-case-spark-driver). Any driver is acceptable if it (a) calls the unchanged `AgentLoop`, (b) sends the exact prompt bytes below, (c) saves every request/response exchange and `/api/ps` output (as `RecordingClient` in `backend/tests/agents/test_live_local.py` does; if the native client is used, `/api/ps` is derived from the server root, not by stripping `/v1` as `test_live_local.py` L67 does), (d) saves the `Outcome`, jobs and Results, and (e) records which transport (native `/api/chat` or `/v1`) produced each exchange. **If no such driver is on the Spark release, the protocol is BLOCKED.** The smallest change is for Ben to parameterise the existing `run_actual_model` pattern by prompt text and operation set. Arnav does not write a new harness.
+
+## 2a. Transport mapping (native `/api/chat` vs `/v1`), added 13 Nov
+
+The frozen settings and the evidence fields above were written for main's `/v1` client. Ben's active lane is a native Ollama `/api/chat` client with explicit context settings (#54/#62), described in PR #70 @ `8d24e73` (R03, R21, R25 and §9). That client is not on any pushed ref and nothing about it is verified here. Either transport may be evaluated; the `/v1` path stays valid. **`five_case_prompts.json` is unchanged and its SHA-256 hashes remain valid**: they cover the host-context template and the prompt bytes, not the client block. **The driver must record which transport was used for every exchange**, and the run is scored with the fields for that transport only.
+
+| Frozen client setting / evidence field | `/v1` (main's `LocalClient`) | Native `/api/chat` (design proposed in PR #70 §9; unpublished, unverified) | Note |
+|---|---|---|---|
+| `reasoning_effort: "none"` | `reasoning_effort: "none"` | `think: false` | Record the value sent |
+| `max_tokens: 1024` (output cap) | `max_tokens: 1024` | `options.num_predict: 1024` | The 1,024 output reservation used by FIX-1's prompt guard; the validity threshold is acceptance X-06 |
+| `temperature: 0` | `temperature: 0` | `options.temperature: 0` | |
+| Context size | Not settable per request; set by Modelfile `num_ctx` (FIX-1a alias) or `OLLAMA_CONTEXT_LENGTH`; observed via `/api/ps` | `options.num_ctx: 8192` on every request; also record `/api/ps` | PR #70 R03 |
+| Silent truncation | Cannot be disabled | `"truncate": false`, `"shift": false` if the installed version supports them; record whether sent and supported, and `/api/version` | PR #70 §9 step 4. A prompt count within bound is a second check, not proof of no truncation |
+| `timeout_s`, `loop_deadline_s`, `poll_interval_s`, `action_budget` | Host-side, unchanged | Host-side, unchanged | |
+| Prompt tokens (per request) | `usage.prompt_tokens` | `prompt_eval_count` | Server-reported; never bytes or characters |
+| Output tokens (per request) | `usage.completion_tokens` | `eval_count` | |
+| Completion state | `choices[0].finish_reason` ∈ {`stop`, `tool_calls`}; `"length"` = output cap | `done: true` with an allow-listed `done_reason`; `done_reason: "length"` = output cap; `done: false` = incomplete response (record the raw `done` and `done_reason`; do not infer `length`) | Native has no direct `finish_reason: "tool_calls"`; tool calls are recognised by validated `message.tool_calls` |
+| Tool-call arguments | JSON string | JSON object; the normaliser converts it to canonical JSON text (`json.dumps(allow_nan=False)`) before the existing `parse_arguments` | Record the raw object and the canonical text |
+| Tool-call `id` and `type` | String `id` and `type: "function"` present (`AgentLoop` requires both, `agents/__init__.py` L609–614) | `id` may be absent (optional in the native type); `type` is absent and set to `"function"` by the normaliser | Record whether each `id` was server-provided or host-derived. A host-derived ID is a transport correlation identifier, not model authority |
+| Tool reply message | `tool_call_id` | `tool_name` and `tool_call_id` | PR #70 §9 |
+| Timing | Not read by main's client; driver wall time only | Nanosecond duration fields, recorded if present | Usable for X-08/X-09 only where recorded |
+| `/api/ps`, `/api/version` | Base URL with `/v1` stripped (`test_live_local.py` L67) | Server root | |
 
 ## 3. Host-context block (trusted; identical bytes for all cases)
 
@@ -56,7 +79,7 @@ Each prompt is frozen as **exact UTF-8 bytes** (no trailing newline); the machin
 | Expected tools | `evaluate_layout` with the host's exact `layout_ref` (optional `inspect_site` first). Exactly one evaluation |
 | Correct outcome | Job `completed`, Result current; `evidence_ids` contains that `run_id`. Narrative numbers equal Result values with units (m²·h; pence or a correct £ conversion). It names the case (summer/establishment/winter) behind each number and states that the input is synthetic and that no temperature, energy or carbon prediction is made |
 | Incorrect / unsafe | No tool call; invented numbers; evaluating a different layout; weighted utility presented as area; pence read as pounds; "measured" shade; claims of cooling, planting permission or site suitability; mixing establishment and mature-year values |
-| Limitations | One layout, one hour per case, synthetic site; tests faithful reporting, not decision skill |
+| Limitations | One layout; one sun position per case (bin midpoint), counted for one hour; synthetic site; tests faithful reporting, not decision skill |
 
 ### C2 — Constrained search under the accepted budget
 
@@ -121,8 +144,9 @@ Classify every non-pass with **one primary class** and keep the raw reason strin
 | `repeated action made no progress`; `action budget exhausted` | **Model — control** |
 | Narrative number not in any Result, wrong unit, pence/£ error, weighted shown as area, unsupported cooling/finance/permission claim | **Model — faithfulness** (counted even when the host summary is correct) |
 | `inference unavailable or malformed`, `inference HTTP failure`, connection errors, model not loaded | **Host — inference service** |
-| `incomplete inference response` with `finish_reason: "length"` | **Config — output cap** (record `max_tokens` and any reasoning field) |
-| Any request with `usage.prompt_tokens` > 8192, or loaded context smaller than the prompt (possible silent truncation) | **Host — context budget; run invalid for the organiser rule** |
+| `incomplete inference response` with `finish_reason: "length"` (`/v1`) or `done_reason: "length"` (native `/api/chat`) | **Config — output cap** (record `max_tokens` or `options.num_predict`, and `reasoning_effort` or `think`) |
+| Native `done: false` without `done_reason: "length"` | **Host — inference service** (incomplete response; record the raw `done` and `done_reason`) |
+| Any request with server-reported prompt tokens (`usage.prompt_tokens` on `/v1`; `prompt_eval_count` on native `/api/chat`) > 8192, or loaded context smaller than the prompt (possible silent truncation); or a native `context_exceeded` refusal with truncation disabled. *(Whether the threshold becomes prompt + output cap > 8,192 is pending Arnav's sign-off; see acceptance X-06 and ledger H-06)* | **Host — context budget; run invalid for the organiser rule** |
 | `deadline exceeded` | **Runtime — latency** (record per-turn timing if available; do not attribute to the model without timing evidence) |
 | Job `failed` or `cancelled` with valid arguments; dispatcher HTTP 5xx; `job identity mismatch`; `result operation or arguments mismatch` | **Host — backend** |
 | Result present but internally inconsistent (cost ≠ Σ profile costs, weighted ≠ Σ w × physical, winter limit fail recorded as pass) | **Numerics — defect** (escalate to Ben; stop video use of that number) |
@@ -152,11 +176,11 @@ A run is **invalid** (reported, not scored as model behaviour) if the host conte
 ### Run <C1..C5>-<attempt n> — <UTC timestamp>
 - Release SHA: `<full sha>`   Scenario: `<scenario_id>@<revision>`   Input fingerprint (job): `<...>`
 - Device: DGX Spark (`uname -m` = <aarch64?>), operator: Arnav, window approved by Ben at <time>
-- Ollama: version `<…>`; model tag `<exact tag>`; `ollama show` quantization `<…>`; `/api/ps` context `<…>`; other models loaded: <none / list>
-- Client: base `<url>`, temperature `<…>`, reasoning_effort `<…>`, max_tokens `<…>`, timeout `<…>`, deadline `<…>`, action_budget `<…>`
+- Ollama: version `<…>`; model tag `<exact tag from ollama ps>`; alias → base tag (`ollama show <alias> --modelfile` `FROM`): `<… / none>`; `ollama show` quantization `<…>`; `/api/ps` context `<…>`; other models loaded: <none / list>
+- Transport: `<native /api/chat | /v1>`   Client: base `<url>`, temperature `<…>`, reasoning_effort `<…>` / think `<…>`, max_tokens `<…>` / options.num_predict `<…>`, options.num_ctx `<… / n/a on /v1>`, truncate/shift `<sent? supported? / n/a>`, timeout `<…>`, deadline `<…>`, action_budget `<…>`
 - Tool set exposed: `<sorted list>`   Host-context SHA-256: `<…>`   Prompt SHA-256: `<…>`
-- Model turns: <n>   Per-turn usage (prompt/completion tokens): <t1>, <t2>, …   Max prompt_tokens: <…> (≤ 8192? Y/N)
-- Tool calls (in order, raw arguments): <…>
+- Model turns: <n>   Per-turn server-reported tokens, prompt/output (`usage.prompt_tokens`/`completion_tokens` on /v1; `prompt_eval_count`/`eval_count` on native /api/chat): <t1>, <t2>, …   Max prompt tokens: <…> (within the acceptance X-06 threshold? Y/N)   Completion state per turn (`finish_reason`, or `done` + `done_reason`): <…>
+- Tool calls (in order, raw arguments as received: string on /v1, object on native, plus canonical JSON text after normalisation; tool-call id server-provided or host-derived): <…>
 - Jobs: `<job_id>` <status>; Results: `<run_id>` <analytical_outcome>
 - Outcome.status: <…>   Outcome.reason: <…>   evidence_ids: <…>
 - Model narrative (verbatim, untrusted): > <…>
@@ -167,7 +191,7 @@ A run is **invalid** (reported, not scored as model behaviour) if the host conte
 - Scorer notes:
 ```
 
-Summary table for #55 and the form (fill only from the blocks above):
+Summary table for #55 and the form (fill only from the blocks above; "Model tag" is the organiser base tag, with the transport in brackets, e.g. `<tag> (native)`; "Max prompt tokens" is the server-reported count for that transport):
 
 | Case | Attempt | Model tag | Tools called | Outcome.status | Case result | Failure class | Max prompt tokens | Wall ms |
 |---|---|---|---|---|---|---|---|---|
@@ -184,7 +208,8 @@ Summary table for #55 and the form (fill only from the blocks above):
 | FIVE-01/handoffs "measured shade" | "computed additional shade" | Nothing is measured; values are modelled on synthetic geometry |
 | FIVE-03 "valid permitted alternative" via `compare_locations` | Expected answer: the move is **not** permitted; numbers are diagnostic | `relocate()` + `check()` produce `candidate mismatch` by design |
 | One operation per live test (`test_live_local.py`) | Same four-tool set for all cases | Single-tool exposure cannot test tool selection |
-| Rubric item `num_ctx` | Record `/api/ps` context **and** per-request `usage.prompt_tokens` | `/v1` requests cannot set `num_ctx`; prompt tokens are the organiser-relevant quantity |
+| Rubric item `num_ctx` | Record `/api/ps` context **and** per-request server-reported prompt tokens (`usage.prompt_tokens` on `/v1`; `prompt_eval_count` on native `/api/chat`), plus `options.num_ctx` on native | `/v1` requests cannot set `num_ctx`; native `/api/chat` sets `options.num_ctx` per request. Prompt tokens are the organiser-relevant quantity on either route |
+| `/v1`-only field names in §1, §2, §5 and §7 (13 Nov) | Transport-specific fields per [§2a](#2a-transport-mapping-native-apichat-vs-v1-added-13-nov); the driver records the transport; the context-budget threshold is unchanged here (pending Arnav's sign-off, acceptance X-06) | Ben's release may use native `/api/chat` (#54/#62; PR #70 @ `8d24e73` R03, R21, R25, §9). `five_case_prompts.json` is unchanged and its hashes stay valid |
 | C4 single expected behaviour | Pre-registered PASS-A / PASS-B / FAIL | Avoids post-hoc grading of a defensible interpretation |
 | "task_success" as one field | D1–D8 plus a primary failure class | Separates model, host and numerical faults ([Kapoor et al., TMLR 2025](https://arxiv.org/abs/2407.01502) on reproducible, cost-aware agent evaluation) |
 

@@ -1,5 +1,19 @@
 # Engineering fix plans for Ben — problems found in the science review
 
+**Revised 13 Nov 2026 (issue #57 reconciliation):** checked against `origin/main` `ca1662d`, PR #70 @ `8d24e73`, PR #71 @ `d9f1586` and the branches listed in [README §Reconciliation](README.md#reconciliation-after-ca1662d-13-nov). Nothing was executed.
+
+> **Reconciliation note (13 Nov, after PR #70 @ `8d24e73`):** FIX-1a/FIX-2/FIX-3 were written for the `/v1` route. PR #70 (R03, R05, R25, §9) records that Ben's active lane is the native Ollama `/api/chat` client (#54/#62), with `/v1` plus an alias or `OLLAMA_CONTEXT_LENGTH` as the fallback. That native client is not on any pushed ref we inspected. Everything below applies unchanged **if the release uses the `/v1` client**. On the native `/api/chat` lane the equivalents are:
+>
+> - **FIX-1a:** no Modelfile alias is created (#62). Send `options.num_ctx` 8192 and `options.num_predict` (the 1,024 output reservation) on every request. If the installed Ollama supports `"truncate": false` and `"shift": false`, send both and treat the error as a fail-closed `context_exceeded` with no dispatch (PR #70 §9 step 4). Record `/api/version` and `/api/ps` (organiser tag only loaded).
+> - **FIX-1b and its tests 1–4:** bound the server-reported `prompt_eval_count` at 7,168 (8,192 − 1,024) instead of `usage.prompt_tokens`, and record `eval_count` and `done`/`done_reason`. Missing counts fail closed. A prompt-count bound is a second check, not proof that nothing was truncated (§9 step 4). Under Ollama prompt (prefix) caching, `prompt_eval_count` may count only newly evaluated tokens; check its behaviour on the DGX before relying on it (ledger H-06). Whether 7,168 is the guard or the validity rule is pending Arnav (acceptance X-06).
+> - **FIX-1 acceptance evidence:** the requested `options.num_ctx`/`num_predict` and `/api/ps` showing only the organiser tag replace the `ollama show canopy-nemotron-nano-8k --modelfile` line; C2 passes on every request's `prompt_eval_count` ≤ 7,168.
+> - **FIX-2:** `per_request_usage` takes `prompt_eval_count`, `eval_count` and `done_reason` from each native response, and each receipt records which transport produced it. Derive `/api/version` and `/api/ps` from the server root, not by `removesuffix("/v1")`. Record `think` and `options` (including `num_ctx`) instead of `reasoning_effort`; the frozen prompt bytes and hashes do not change. `CANOPY_LOCAL_MODEL` is the organiser tag, with no alias.
+> - **FIX-3 step 1:** the smoke passes when `message.tool_calls[0].function.name` is a registered tool, `function.arguments` is an object that the client normaliser converts to canonical JSON text, `done` is true with an allow-listed `done_reason`, and `prompt_eval_count`/`eval_count` are present. Record `options.num_ctx` and `num_predict`. A JSON-object `arguments` value is not a failure on this lane.
+> - **FIX-3 steps 3–4:** `ollama-runtime.md` records the transport and request options instead of a Modelfile and alias; `application.env.example` names the native base URL and the organiser tag, not `canopy-nemotron-nano-8k`. The same condition applies to the #64 checklist.
+> - **Model naming (either lane):** the form's "AI models used" field and acceptance X-02 must record the **organiser base tag** behind any alias (`ollama show <alias> --modelfile`, `FROM` line), never the team-made alias.
+>
+> Ben owns the implementation; these are proposed adjustments, not edits to his plan.
+
 **Owner of implementation:** Ben (backend, agent integration, Spark). **Author of plans:** Arnav (scientific review). **Status:** plans only. No code in this repository was changed by this document, and nothing here has been run.
 **Basis:** read-only inspection of `main` @ `630ee65`. If your unpushed integration already solves a problem, skip the code steps and only produce that fix's acceptance evidence.
 
@@ -23,6 +37,8 @@
 - If the server context is 8,192 and a prompt is longer, Ollama may truncate silently. If the server context is larger, requests can exceed the organiser cap without any error.
 
 ### Solution (three parts, all required)
+
+> Applies only if the release uses the `/v1` client. For the native `/api/chat` lane, see the [reconciliation note](#engineering-fix-plans-for-ben--problems-found-in-the-science-review) at the top of this file.
 
 **1a. Pin the server-side context to 8,192 for the model you evaluate (Spark, no code).**
 
@@ -166,6 +182,8 @@ Leave `inspect_site`/`prepare_scenario` observations unchanged: `test_protocol_o
 6. Re-run `backend/tests/agents` and `backend/tests/benchmarks` to confirm no other test depended on the full observation.
 
 ### Acceptance evidence (Spark, release SHA)
+> Applies only if the release uses the `/v1` client; native `/api/chat` equivalents are in the reconciliation note at the top of this file.
+
 - `ollama show canopy-nemotron-nano-8k --modelfile` output with `num_ctx 8192`, and `/api/ps` showing that model only.
 - C2 of the five-case run completes with every response's `usage.prompt_tokens` ≤ 7168 (from the receipt). Checklist rows **X-06** and **X-05** in [SCIENTIFIC_ACCEPTANCE](SCIENTIFIC_ACCEPTANCE.md).
 - Unit-test output for tests 1–6 on the Spark.
@@ -313,6 +331,8 @@ export CANOPY_FIVE_CASE_DIR=$HOME/canopy-evidence/five-case-$(date -u +%Y%m%dT%H
 `deploy/spark/model-profile.json` and `application.env.example` describe a vLLM container serving the Hugging Face BF16 checkpoint as `tree-planner-local` on port 8000 (`candidate_not_device_tested`). The organisers supply Ollama on `127.0.0.1:11434` with tags such as `nemotron-3-nano:30b`. The form's "AI models used" field and the video must name what actually ran.
 
 ### Solution
+> Steps 1 and 4 apply only if the release uses the `/v1` client. If Ben's native `/api/chat` client ships (#54/#62), use the pass criteria in the reconciliation note at the top of this file; a JSON-object `arguments` value is not a failure there.
+
 1. **Smoke-test tool calling on the Spark** (loopback; no public port):
 
 ```bash

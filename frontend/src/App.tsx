@@ -5,6 +5,7 @@ import { useWorkspace } from './planning/useWorkspace'
 import { EvaluationControls, ResultCard, RunHistory, SiteStatus, TreeEditor } from './panels/Panels'
 import { ProposalReviewPanel, RequirementsPanel } from './panels/Requirements'
 import { AlternativesPanel } from './panels/Alternatives'
+import CompareScreen from './panels/CompareScreen'
 import { layoutRows } from './planning/alternatives'
 import type { Vec3 } from './api/types'
 
@@ -67,7 +68,7 @@ function App() {
                 <SiteStatus ws={ws} transform={transform} />
               </aside>
             </div>
-          </> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : screen === 'compare' ? 'Scenario comparison' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : screen === 'compare' ? 'Comparable plans will appear when genuine evaluated alternatives are available.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
+          </> : screen === 'compare' ? <CompareScreen ws={ws} declaration={declaration} treeState={treeState} /> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
         </div>
       </main>
     </div>

@@ -168,6 +168,7 @@ async function online() {
       check('search provider present: run the live search check (not yet implemented in this script)', false)
     }
     await requirementsFlow(page)
+    await compareFlow(page)
     check('no page errors', errors.length === 0, errors.join('; '))
   } finally { await browser.close() }
 
@@ -180,6 +181,11 @@ async function online() {
     const g = await narrow.page.evaluate(() => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth }))
     check('no horizontal overflow at 390 px', g.scroll <= g.viewport, JSON.stringify(g))
     await shot(narrow.page, '07-narrow')
+    await narrow.page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: /Compare/ }).click()
+    await narrow.page.waitForTimeout(400)
+    const g2 = await narrow.page.evaluate(() => ({ viewport: innerWidth, scroll: document.documentElement.scrollWidth }))
+    check('no horizontal overflow on Compare at 390 px', g2.scroll <= g2.viewport, JSON.stringify(g2))
+    await shot(narrow.page, '13-compare-narrow')
     check('no page errors (narrow)', narrow.errors.length === 0, narrow.errors.join('; '))
   } finally { await narrow.browser.close() }
 }
@@ -258,6 +264,40 @@ async function requirementsFlow(page) {
   try { await backend('POST', '/scenarios/accept', { scenario_id: prepared.scenario_id, revision: prepared.revision, scope: 'hypothetical' }, { 'If-Match': `"${afterAccept.revision}"` }) } catch { refused = true }
   check('the same proposal cannot be accepted twice', refused)
   await shot(page, '11-proposal-accepted')
+}
+
+// STP-025: cases, winter trade-off, controlled comparison of stored runs, evidence chain.
+async function compareFlow(page) {
+  const nav = page.getByRole('navigation', { name: 'Main navigation' })
+  await nav.getByRole('button', { name: /Compare/ }).click()
+  await page.getByRole('heading', { name: /Compare & evidence/ }).waitFor()
+  check('compare screen states that no cooling/AQI/CO2/flood/bill savings are computed', (await page.getByRole('note').innerText()).includes('does not compute temperature, air quality, CO₂, flood or energy-bill savings'))
+  check('winter trade-off is reported as not evaluated, not as zero', /Not evaluated/.test(await page.getByTestId('winter-status').innerText()))
+  check('backend comparison unavailable is stated', await page.getByTestId('compare-unavailable').count() === 1)
+  check('agent narrative absence is stated', /not available/.test(await page.getByTestId('agent-status').innerText()))
+  const labels = await page.getByLabel('Base run').evaluate(el => [...el.options].map(o => o.textContent))
+  const pick = re => labels.find(l => re.test(l))
+  const positive = pick(/^rev 1 · E 0, N -1 · 2 m²·h/)
+  const zero = pick(/^rev 2 · E 20, N -1 · 0 m²·h/)
+  check('stored positive and zero runs are offered for comparison', Boolean(positive && zero), labels.join(' | '))
+  if (positive && zero) {
+    await page.getByLabel('Base run').selectOption({ label: positive })
+    await page.getByLabel('Alternative run').selectOption({ label: zero })
+    await page.waitForTimeout(200)
+    check('rev 1 → rev 2 is recognised as a controlled relocation', /Controlled relocation/.test(await page.getByTestId('comparison-kind').innerText()))
+    const table = await page.getByTestId('comparison-table').innerText()
+    check('comparison shows base 2, alternative 0 and Δ −2 m²·h from stored values', /2 m²·h\s+0 m²·h\s+−2/.test(table), table.replace(/\s+/g, ' ').slice(0, 160))
+  }
+  // Keyboard: change the analysis case radio and expand an evidence entry.
+  await page.getByRole('radio').first().focus()
+  await page.keyboard.press('Space')
+  check('analysis case radio is keyboard operable', await page.getByRole('radio').first().isChecked())
+  const first = page.locator('.evidence-chain .text-action').first()
+  await first.focus()
+  await page.keyboard.press('Enter')
+  check('evidence chain expands with request, job, fingerprint and source hashes', /Input fingerprint[\s\S]*Source hashes/.test(await page.locator('.chain').first().innerText()))
+  await shot(page, '12-compare-evidence')
+  await nav.getByRole('button', { name: /Planning studio/ }).click()
 }
 
 async function offlineCheck() {

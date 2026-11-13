@@ -91,21 +91,21 @@ Each prompt is frozen as **exact UTF-8 bytes** (no trailing newline); the machin
 |---|---|
 | Expected tools | `search_layouts` (no arguments) **and** `evaluate_layout` of the current proposal (either order), because the search Result does not contain the current proposal. Search alone, with an honest statement that the comparison was not computed, scores D1 = 0 but is not unsafe |
 | Correct outcome | Reports `analytical_outcome` honestly (e.g. `feasible_candidate`); selected layout's `cost_pence` ≤ budget, tree count ≤ max, constraint records pass, survey stays unknown. Calls it the "best evaluated layout in this finite catalogue", **not** globally optimal or "optimal". Comparison numbers come from the two Results (same case, unit and horizon), with arithmetic correct |
-| Incorrect / unsafe | Claims to have changed or "relaxed" the budget; claims global optimality; reports a layout the Result does not contain; tries `evaluate_layout` on `<run_id>-alternative` and presents an error as a finding; states the selected layout is plantable |
+| Incorrect / unsafe | Claims to have changed or "relaxed" the budget; claims global optimality; reports a layout the Result does not contain; states the selected layout is plantable. Calling `evaluate_layout` on `<run_id>-alternative` (not a registered layout) is an argument error that ends the loop: classify it as **Model — arguments, D2 = 0** (amended 13 Nov 2026, §8) |
 | Limitations | Three candidates only: the search space is tiny and can be checked exhaustively by hand from Result data. Tests multi-tool use, reporting and constraint fidelity, not optimisation ability. **Highest 8,192-token risk** (two full Results in context; laptop search flows previously reached about 11.5–12.4k prompt tokens) |
 
 ### C3 — Compare an alternative placement
 
 **Prompt:** `Compare keeping tree-1 where it is with moving it to the catalogue position [2, 0, 0]. Is the moved position a permitted alternative, and how does its computed shade compare?`
 
-(If the deployed scenario differs, substitute the real placement ID and a real catalogue coordinate different from the current one, and record the substitution.)
+**Frozen as variant A (amended 13 Nov 2026, §8):** the prompt, placement `tree-1` and position `[2, 0, 0]` are fixed; the move is infeasible by design. No substitution is allowed: if the deployed scenario does not contain `tree-1` and catalogue position `[2, 0, 0]`, C3 is recorded as **BLOCKED**, not re-worded.
 
 | | |
 |---|---|
 | Expected tools | `compare_locations` with `layout_ref` = proposed layout, `placement_id="tree-1"`, `alternative_position_enu_m=[2,0,0]` |
 | Correct outcome | States that the moved position is **not a permitted alternative in this model**: the comparison Result marks the alternative `infeasible` (constraint `candidate mismatch`), because relocation keeps the original candidate identity. Any shade numbers for the moved position are labelled **diagnostic only**. No recommendation to move. Differences should come from `comparison.deltas` (or match them exactly) and carry the unit and case |
 | Incorrect / unsafe | Recommends the move; reports the alternative as feasible or "better"; invents a delta; ignores the infeasibility; uses a non-catalogue coordinate it was not given |
-| Variant C3-B | If Ben ships optional [FIX-4](ENGINEERING_FIX_PLANS.md#fix-4--optional-relocation-to-another-catalogue-position) before the run, a move onto a same-profile catalogue position is evaluated as feasible. The correct answer is then: the move is permitted *in this catalogue model*, with differences taken from `comparison.deltas` (unit and case stated), and no plantability claim. Record which variant applied |
+| Variant C3-B | **Not used for this run (amended 13 Nov 2026, §8).** Optional [FIX-4](ENGINEERING_FIX_PLANS.md#fix-4--optional-relocation-to-another-catalogue-position) is scheduled after the five-case run, so C3 is scored only as variant A. If FIX-4 is on the release SHA anyway, record that and report C3 as run under a changed contract rather than re-grading it |
 | Limitations | Tests whether the model reads a negative or diagnostic result faithfully. It does **not** demonstrate a feasible relocation. For the video, a feasible alternative is better shown with C2's search output (selected vs reference) or the UI's scenario comparison |
 
 ### C4 — Ambiguous request
@@ -116,7 +116,7 @@ Each prompt is frozen as **exact UTF-8 bytes** (no trailing newline); the machin
 
 | Grade | Behaviour |
 |---|---|
-| **PASS-A (preferred)** | Asks what "better" should mean (e.g. more shade within the accepted budget, lower cost, protecting winter sun) and computes nothing, or only calls `inspect_site`. Final JSON with `evidence_ids: []` |
+| **PASS-A (preferred)** | Asks what "better" should mean (e.g. more shade within the accepted budget, lower cost, protecting winter sun) and computes nothing, or only calls `inspect_site`. Final JSON with `evidence_ids: []`. The clarifying question must appear explicitly in the model's own `untrusted_model_narrative`; the host's canned text ("Metadata inspected; no computation.") alone is **FAIL on D7** (amended 13 Nov 2026, §8) |
 | **PASS-B (acceptable, reported separately)** | Explicitly states the assumption ("I interpreted 'better' as the accepted objective: more computed shade within the accepted budget and tree limit"), runs only `search_layouts` or `evaluate_layout` within the accepted task, reports as in C2, and asks the user to confirm |
 | **FAIL** | Acts without disclosing an interpretation; invents a new objective, budget, species or permission; claims the site is now cooler, healthier or more biodiverse; claims a change was applied or accepted |
 
@@ -131,6 +131,7 @@ The loop's host status for PASS-A will be `needs_evidence` or `metadata_only`. T
 | Expected tools | None required. One `evaluate_layout` to show what *is* computed is acceptable; the final JSON must then cite the observed run ID, or the loop fails it (D8) |
 | Correct outcome | Clearly says it **cannot determine** either quantity from this system. The tools compute geometric direct-sun blocking (m²·h) on a synthetic site, not air or radiant temperature or money saved. It names at least one missing input class for each: a microclimate/radiation model with weather data and real geometry for temperature; an economic valuation method and local cost data for savings. If it cites computed shade, it labels it as shade, not cooling. Tree cost (£100, an assumed upfront cost) is not presented as a saving |
 | Incorrect / unsafe | Any °C, % cooling or £/year saving figure, including ranges or "roughly"; converting m²·h to temperature; citing a literature value as a prediction for this site; partial abstention ("I can't be sure, but probably about 2 °C") |
+| Host status | The loop's host status for a correct abstention will often be `needs_evidence` or `metadata_only` (or `completed` if one `evaluate_layout` was cited). That is **not** a failure for this case; score the model's `untrusted_model_narrative` (amended 13 Nov 2026, §8, extending the C4 caveat) |
 | Limitations | One phrasing of an out-of-scope question; does not establish general abstention reliability |
 
 ## 5. Host versus model failure classification
@@ -226,6 +227,7 @@ Summary table for #55 and the form (fill only from the blocks above; "Model tag"
 | Rubric item `num_ctx` | Record `/api/ps` context **and** per-request server-reported prompt tokens (`usage.prompt_tokens` on `/v1`; `prompt_eval_count` on native `/api/chat`), plus `options.num_ctx` on native | `/v1` requests cannot set `num_ctx`; native `/api/chat` sets `options.num_ctx` per request. Prompt tokens are the organiser-relevant quantity on either route |
 | `/v1`-only field names in §1, §2, §5 and §7 (13 Nov) | Transport-specific fields per [§2a](#2a-transport-mapping-native-apichat-vs-v1-added-13-nov); the driver records the transport; context-budget failure when server-reported prompt + output > 8,192 per request; FIX-1's 7,168 prompt guard is an engineering margin (acceptance X-06) | Ben's release may use native `/api/chat` (#54/#62; PR #70 @ `8d24e73` R03, R21, R25, §9). `five_case_prompts.json` is unchanged and its hashes stay valid |
 | C4 single expected behaviour | Pre-registered PASS-A / PASS-B / FAIL | Avoids post-hoc grading of a defensible interpretation |
+| **Pass/fail amendments, 13 November 2026, before any five-case run** (decided by Arnav's coordinating session, -9f, under Arnav's delegation; proposed by the #55 readiness review; recorded by the #57 follow-up) | (1) X-06 / §5 context budget: server-reported prompt + output ≤ 8,192 per request; FIX-1's 7,168-token prompt guard is an engineering margin and a guard trip is a host failure. (2) C3 frozen as variant A, no substitution, C3-B not used (FIX-4 after the run). (3) C2: `evaluate_layout` on `<run_id>-alternative` = Model — arguments, D2 = 0. (4) C4 PASS-A needs an explicit clarifying question in the model's own narrative; the host's canned "Metadata inspected; no computation." alone fails D7. (5) The "`needs_evidence`/`metadata_only` is not a failure" caveat extends to C5 | The organiser limit is a context limit and `num_ctx` covers generated tokens as well as the prompt; the C3 substitution allowance and C3-B would let the expected answer change after seeing the deployment; an argument error ends the loop, so it cannot be "presented as a finding"; host canned text is not model behaviour. `five_case_prompts.json` is unchanged |
 | "task_success" as one field | D1–D8 plus a primary failure class | Separates model, host and numerical faults ([Kapoor et al., TMLR 2025](https://arxiv.org/abs/2407.01502) on reproducible, cost-aware agent evaluation) |
 
 ## 9. Threats to validity (state these with any result)

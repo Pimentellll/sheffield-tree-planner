@@ -1,6 +1,15 @@
 # Sheffield Tree Planner — three-agent execution PRD and issue specifications
 
-**Status:** execution bootstrap, **not implemented work**, prepared 11 November 2026. **Scope:** P0/M0–M5 first, selected P1/M6, then evidence/M7. The canonical product and scientific meanings remain in [SPEC](SPEC.md), [CONTRACTS](CONTRACTS.md), [NUMERICS](NUMERICS.md), [VALIDATION](VALIDATION.md), [FEATURE_PRIORITIES](FEATURE_PRIORITIES.md), and [BUILD](BUILD.md). This document **does not replace** them or create a second task-status authority.
+**Status:** issue specifications prepared 11 November 2026; implementation and evidence have since advanced. [BUILD](BUILD.md) records current completion and remaining acceptance. These task definitions are not implementation proof. **Scope:** P0/M0–M5 first, selected P1/M6, then evidence/M7. The canonical product and scientific meanings remain in [SPEC](SPEC.md), [CONTRACTS](CONTRACTS.md), [NUMERICS](NUMERICS.md), [VALIDATION](VALIDATION.md), [FEATURE_PRIORITIES](FEATURE_PRIORITIES.md), and [BUILD](BUILD.md). This document **does not replace** them or create a second task-status authority.
+
+## Reconciled implementation context
+
+[Architecture design](ARCHITECTURE_DESIGN.md), [architecture audit](ARCHITECTURE_AUDIT.md), [UI reference](UI_DESIGN_REFERENCE.md) and [the pre-implementation baseline](PRE_IMPLEMENTATION_READINESS.md) are preserved supporting references from PR #4. Their historical status and proposed sequencing do not override current BUILD, contracts or evidence. No scientific field or acceptance criterion is changed by adopting these references.
+
+- Site acquisition/rights and the first bounded real-site decision start in STP-005/006; attempt B08 as soon as data, numerical and viewer prerequisites permit. M7 is the final proof, not permission to defer source discovery. Keep synthetic work labelled while site gates are open.
+- STP-022 may expose only implemented, registered inspect/evaluate/search/revision actions. Crown/winter/controlled-comparison investigations require the corresponding STP-023/024 handlers and validated results; a UI panel or model request cannot create a new capability. The current bounded agent is not yet a reliable complete planner.
+- Unsupported environmental objectives remain disabled or rejected. A required winter constraint must be evaluated and independently checked, never silently dropped. Retain exact ENU/north/scale, current-selection and accepted/hypothetical semantics.
+- Reconciliation is authorised through reviewed PRs to the integration branch, then a verified integration-to-main promotion. Preserve contributor branches and commit ancestry; no automatic merging, force resets or branch deletions are introduced.
 
 ## 1. Product and outcome
 
@@ -10,8 +19,8 @@ Build a local-first, evidence-backed Sheffield urban-tree placement workbench. A
 
 ## 2. Repositories, access, branches and PR policy
 
-- Repository: **[bbeennyy860-cyber/sheffield-tree-planner](https://github.com/bbeennyy860-cyber/sheffield-tree-planner)**. Do not push to forks or another project as a workaround
-- **Ben's canonical GitHub handle and repository owner:** `bbeennyy860-cyber`, confirmed by the team. The earlier `bbeennycyber` shorthand referred to Ben, not a separately verified repository account. Each agent must still verify the actual authenticated login and permissions before writing; STP-001 records that live access preflight
+- Repository: **[Pimentellll/sheffield-tree-planner](https://github.com/Pimentellll/sheffield-tree-planner)**. Do not push to forks or another project as a workaround
+- **Ben's canonical GitHub handle (not the current repository owner):** `bbeennyy860-cyber`, confirmed by the team. The earlier `bbeennycyber` shorthand referred to Ben, not a separately verified repository account. Each agent must still verify the actual authenticated login and permissions before writing; STP-001 records that live access preflight
 - **Ben:** backend, contracts, scenario/jobs, local agent and integration. Initial branch `agent/ben`
 - **Arnav (`reverez`):** site geometry, solar/occlusion, optimisation and scientific verification. Initial branch `agent/arnav`
 - **Alex (`akurkar07`):** source/right audit coordination, 3D UI, editing, results and demo. Initial branch `agent/alex`
@@ -513,7 +522,7 @@ Each issue below is a **single reviewable deliverable**. Its acceptance points a
 
 **Tests and evidence:** Actual inference trace with model-selected arguments and execution evidence, plus unavailable-runtime fallback test
 
-**Consumers:** STP-023 agent loop, Alex tool UI
+**Consumers:** STP-022 agent planning loop, Alex tool UI
 
 ### STP-020 | [M5][B01/B10][STP-020][Ben] Enforce accepted revisions and recomputation on changed constraints
 

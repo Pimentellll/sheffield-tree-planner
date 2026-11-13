@@ -7,7 +7,9 @@ What the live demo can truthfully show **today**, in order, with what to say and
 - **Physical runtime (recommended when Ben's `STP-arnav-logic-takeover` work is in your checkout):** real sun positions for each case, multi-tree search within budget, winter check, server-side location and scenario comparisons. From that checkout's environment: `python frontend/scripts/serve_physical.py --workspace ../canopy-physical-$(date +%H%M) --winter`. The tree moves between the three catalogue positions only. Rehearse with `npm run test:physical` (19 checks; every number is compared with the backend's stored record).
 - **Reference runtime (fallback):** the one-tree, chosen-sun evaluator below. The script table that follows was written for it. With the physical runtime the numbers differ, and Search, the winter panel and the backend comparisons show real results instead of "unavailable".
 
-## Before you present
+## Reference-mode rehearsal
+
+The steps and numeric examples below apply only to the reference runtime. For the primary physical demo, follow [README.md](README.md); inspect the actual stored results rather than reusing these values.
 
 1. Fresh backend workspace each time (the browser checks assume revision 1):
    `.venv/bin/python frontend/scripts/serve_reference.py --workspace ../canopy-demo-$(date +%H%M) --numerical-source ../repo-numerical-inputs`
@@ -29,7 +31,7 @@ What the live demo can truthfully show **today**, in order, with what to say and
 | 8 | **Compare → Evidence**, expand the newest job | "Every number traces to a request, job, input fingerprint, code version and source hashes." | That a local model was involved (no inference device is recorded). |
 | 9 | **Review pack** → Download | "The export copies the stored records unchanged, labels positions as ENU metres, and always lists the survey work that still has to happen." | That this is a planting proposal or permission. |
 
-Not available today, and shown as unavailable in the app: search/optimised options (needs STP-016/017), server comparisons (STP-024), winter cases (STP-023), agent narrative (STP-019/022), backend export handler. If those land before the demo, the same screens render their real results; no rehearsal fixtures are used.
+In reference mode search, server comparisons and winter cases are unavailable. The physical runtime supports these on its authored catalogue; agent narrative and a backend export handler remain unavailable.
 
 ## Recovery
 

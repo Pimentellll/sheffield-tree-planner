@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.2.0 — unreleased local backend candidate
+## 0.2.0 — unreleased integrated synthetic workbench
 
-Minor capability expansion from the readiness-only package; shared contracts and integrated product acceptance remain gated.
+Minor capability expansion from the readiness-only package. This train integrates the numerical backend and planning UI; real-site, target-model/device and full-product acceptance remain separate gates.
+
+- Integrated workbench retains Alex's PR51 frontend and Ben's CPU backend through the shared demo merge, with separate physical and reference browser checks and a documented source-distribution demo. Physical geometry remains synthetic; unverified scientific, real-site and model claims remain excluded.
 
 - Strict domain models, derived JSON Schema/OpenAPI and TypeScript types, plus the implemented local HTTP API contract.
 - Immutable typed SQLite scenarios, optimistic revision conflicts, source/asset rights admission and complete source-graph fingerprints.

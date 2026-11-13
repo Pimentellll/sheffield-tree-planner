@@ -5,7 +5,7 @@ This opt-in runtime is in the same **unreleased 0.2.0** feature train. It uses a
 From this checkout, using its Python 3.11 environment:
 
 ```powershell
-uv sync --frozen --extra dev --python .venv/Scripts/python.exe
+uv sync --frozen --extra dev --python 3.11
 .venv/Scripts/python.exe -m tree_planner.evaluators.physical_demo --output .local/proof-001
 .venv/Scripts/python.exe -m tree_planner.evaluators.physical_server --workspace .local/session-001 --winter --port 8000
 ```
@@ -33,7 +33,7 @@ Draft objective policy is explicit: `maximise_shade_under_budget` ranks the decl
 
 Relocation preserves tree identity, profiles, other placements and all scenario inputs. A known candidate moved away from its catalogue coordinate is computed only in explicit diagnostic mode; its failed feasibility remains visible. Scenario comparisons bind both immutable input graphs. Fixed-layout mode preserves placements; redesign reruns search under each declared scenario. Changes are enumerated, each side has its own case/constraint context, and deltas cite exact metric instances with matching units, quantity, horizon and target. Incompatible metric meanings receive no delta.
 
-Alex's latest PR50 consumer was inspected and tested in an isolated copy. A trusted built frontend can optionally be served with `physical_server --frontend-dist <built-directory>` and the printed `?scenario=...` URL. This does not supply the legacy one-point geometry declaration: the UI must retain its missing/unverified geometry label. Metrics and evidence use the API. Rendering is not numerical or human acceptance evidence.
+The integrated frontend includes Alex's PR51 physical consumer. Use `frontend/scripts/serve_physical.py` with the Vite session bootstrap in [frontend setup](../frontend/README.md) for declared physical geometry, catalogue editing and comparisons. A trusted built frontend can also be served with `physical_server --frontend-dist <built-directory>`, but that mode does not supply the session bootstrap: geometry remains explicitly missing/unverified. Metrics and evidence still use the API. Rendering is not scientific or human acceptance evidence.
 
 For affected checks use the exact environment and a profile-owned scratch directory:
 

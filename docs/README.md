@@ -2,13 +2,13 @@
 
 **Baseline:** 0.1 · 11 November 2026  
 **Team:** Ben, Arnav and Alex  
-**State:** implementation specification; application not implemented or verified by this documentation work.
+**State:** integrated synthetic CPU backend and planning studio implemented; [BUILD](BUILD.md) contains current issue-level proof and remaining gates. The specification is not itself acceptance evidence.
 
 ## Start here
 
 Build a site-based tree-planning application that can calculate a proposal, investigate a challenge and explain its evidence. The numerical tools own physics and feasibility; one local planning agent chooses useful investigations. This is a reusable product with a Sheffield demonstration, not a chatbot attached to a render.
 
-These are the **living development documents**, replacing the research-era team plan as the place to edit implementation decisions. The comprehensive handoff remains background research, not a second specification. The canonical working copy is now this repository, [bbeennyy860-cyber/sheffield-tree-planner](https://github.com/bbeennyy860-cyber/sheffield-tree-planner), under `docs/`. Earlier Desktop/ZIP copies are historical snapshots, not parallel editable plans. Repository setup does not establish an implemented application, deployment or Spark run.
+These are the **living development documents**, replacing the research-era team plan as the place to edit implementation decisions. The comprehensive handoff remains background research, not a second specification. The canonical working copy is now this repository, [Pimentellll/sheffield-tree-planner](https://github.com/Pimentellll/sheffield-tree-planner), under `docs/`. Earlier Desktop/ZIP copies are historical snapshots, not parallel editable plans. Repository setup does not establish an implemented application, deployment or Spark run.
 
 Read only what your task needs:
 
@@ -16,6 +16,9 @@ Read only what your task needs:
 - [CONTRACTS.md](CONTRACTS.md): exact shared data meanings, operations, job states, errors and cache identity. Read before producer/consumer work.
 - [NUMERICS.md](NUMERICS.md): shading equations, optimisation and modelling limits. Arnav's technical reference; Ben and Alex need the units/conventions.
 - [BUILD.md](BUILD.md): ordered work items, proposed owners, dependencies, decisions and the next integration gate. **Only task-status home.**
+- [Site desk audit](site-audit/STP-005-desk-audit.md): Alex’s sources, candidate coverage and pending asset/context controls; not an accepted site.
+- [Architecture design](ARCHITECTURE_DESIGN.md) and [audit](ARCHITECTURE_AUDIT.md): preserved design references, not new completion or owner-approval evidence.
+- [UI reference](UI_DESIGN_REFERENCE.md) and [pre-implementation baseline](PRE_IMPLEMENTATION_READINESS.md): historical visual and analysis inputs; BUILD supersedes their old status and merge sequencing.
 - [VALIDATION.md](VALIDATION.md): test specifications, acceptance matrix, runtime evidence and demo/recovery runbook.
 - [DGX_SPARK.md](DGX_SPARK.md): event SSH/tunnels, pinned local-inference candidate, executable readiness diagnostic and full-application deployment gates. Prepared locally, not a claimed Spark run.
 - [AGENTS.md](../AGENTS.md): project-specific boundaries for coding assistants, not personal agent configuration.

@@ -1,9 +1,51 @@
 # Build plan, task state and decisions
 
 **This is the only task-status/decision home until a shared tracker is explicitly adopted.**  
-Documentation baseline 0.1. **Project active:** isolated development, test probes and integration coordination are underway. Shared application integration is **Blocked** at B01's contract/owner gate; draft components do not establish accepted product capabilities. B09 separately records completed readiness preparation without claiming device/domain acceptance. Named owners are proposed and must acknowledge their lane; they can use scoped coding assistants without giving away scientific or integration accountability.
+**Status:** integrated synthetic CPU evaluator/search and planning studio implemented; exact-head build/browser verification and GitHub reconciliation are being finalised. Canonical repository: **Pimentellll/sheffield-tree-planner**, public; authenticated Ben account has push/maintain permission. Real-site data/rights/parity, target-model/device execution, autonomous planning evidence, independent AI-value scoring, named human reviews and organiser eligibility remain distinct open gates. Advance-work disclosure remains required; this is not a competition-submission claim.
 
 Related: [Spec](SPEC.md) · [Contracts](CONTRACTS.md) · [Numerics](NUMERICS.md) · [Validation](VALIDATION.md).
+
+## Current issue reconciliation
+
+This is an acceptance audit of the integrated synthetic implementation, not a declaration that the whole product is finished. **Ready** below means the engineering criteria have evidence and can close only after the verified merge. **Open** names the remaining requirement; it does not discard already implemented work. Code reviews, explicit human/scientific approvals and device proof are separate facts.
+
+| Issue | Engineering disposition | Remaining acceptance or scope |
+| --- | --- | --- |
+| [#5](https://github.com/Pimentellll/sheffield-tree-planner/issues/5) | Open — partial implementation | E; x; a; c; t;  ; c; o; n; t; r; a; c; t; /; n; u; m; e; r; i; c; s;  ; a; c; k; n; o; w; l; e; d; g; e; m; e; n; t; s;  ; f; r; o; m;  ; a; l; l;  ; t; h; r; e; e;  ; a; r; e;  ; e; x; p; r; e; s; s; l; y;  ; r; e; q; u; i; r; e; d;  ; a; n; d;  ; a; b; s; e; n; t; ;;  ; c; u; r; r; e; n; t;  ; s; e; s; s; i; o; n;  ; p; e; r; m; i; s; s; i; o; n;  ; n; o; t;  ; i; n; d; e; p; e; n; d; e; n; t; l; y;  ; c; h; e; c; k; e; d; ;;  ; r; u; l; e; s;  ; r; e; m; a; i; n;  ; u; n; k; n; o; w; n; . |
+| [#6](https://github.com/Pimentellll/sheffield-tree-planner/issues/6) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#7](https://github.com/Pimentellll/sheffield-tree-planner/issues/7) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#8](https://github.com/Pimentellll/sheffield-tree-planner/issues/8) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#9](https://github.com/Pimentellll/sheffield-tree-planner/issues/9) | Open — partial implementation | A; r; n; a; v;  ; t; e; c; h; n; i; c; a; l;  ; r; e; v; i; e; w;  ; i; s;  ; r; e; c; o; r; d; e; d;  ; i; n;  ; i; s; s; u; e;  ; c; o; m; m; e; n; t; s; ;;  ; h; i; s;  ; r; e; s; p; o; n; s; e;  ; t; o;  ; t; h; e;  ; l; a; t; e; r;  ; p; r; o; p; o; s; e; d;  ; c; o; n; t; e; x; t;  ; e; n; v; e; l; o; p; e;  ; a; n; d;  ; a; s; s; e; t; -; s; p; e; c; i; f; i; c;  ; r; i; g; h; t; s; /; t; i; l; e;  ; e; v; i; d; e; n; c; e;  ; r; e; m; a; i; n;  ; o; p; e; n; .;  ; T; h; e;  ; a; u; d; i; t;  ; i; s;  ; a; b; s; e; n; t;  ; f; r; o; m;  ; t; h; e;  ; c; a; n; d; i; d; a; t; e;  ; a; n; d;  ; s; h; o; u; l; d;  ; b; e;  ; p; r; e; s; e; r; v; e; d; . |
+| [#10](https://github.com/Pimentellll/sheffield-tree-planner/issues/10) | Open — partial implementation | R; e; p; r; o; j; e; c; t; i; o; n; /; f; i; l; e; -; l; e; v; e; l;  ; d; a; t; u; m;  ; a; n; d;  ; m; e; a; s; u; r; e; d;  ; s; i; t; e; -; s; i; z; e;  ; m; e; s; h;  ; e; v; i; d; e; n; c; e;  ; n; o; t;  ; e; s; t; a; b; l; i; s; h; e; d;  ; b; y;  ; c; i; t; e; d;  ; s; y; n; t; h; e; t; i; c;  ; p; r; o; o; f; ;;  ; n; o; n; f; l; a; t;  ; e; v; a; l; u; a; t; o; r;  ; f; a; i; l; s;  ; c; l; o; s; e; d; . |
+| [#11](https://github.com/Pimentellll/sheffield-tree-planner/issues/11) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#12](https://github.com/Pimentellll/sheffield-tree-planner/issues/12) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#13](https://github.com/Pimentellll/sheffield-tree-planner/issues/13) | Open — partial implementation | C; a; n; d; i; d; a; t; e;  ; t; e; s; t; s;  ; c; o; v; e; r;  ; h; i; t; ,;  ; t; a; n; g; e; n; t; ,;  ; i; n; s; i; d; e; ,;  ; t; r; u; n; k;  ; a; n; d;  ; t; r; i; a; n; g; l; e; .;  ; P; R;  ; #; 4; 1;  ; s; e; p; a; r; a; t; e; l; y;  ; t; e; s; t; e; d;  ; n; e; a; r; -; g; r; a; z; i; n; g; ,;  ; b; u; t;  ; i; t; s;  ; d; r; a; f; t;  ; r; a; y;  ; i; m; p; l; e; m; e; n; t; a; t; i; o; n;  ; d; i; f; f; e; r; s; ;;  ; c; a; n; d; i; d; a; t; e; -; s; p; e; c; i; f; i; c;  ; g; r; a; z; i; n; g; /; s; i; g; n; e; d; -; d; i; r; e; c; t; i; o; n;  ; a; n; d;  ; w; a; l; l; /; p; o; l; e;  ; c; h; e; c; k; s;  ; a; r; e;  ; n; o; t;  ; e; s; t; a; b; l; i; s; h; e; d;  ; b; y;  ; t; h; e;  ; c; i; t; e; d;  ; t; e; s; t; s; . |
+| [#14](https://github.com/Pimentellll/sheffield-tree-planner/issues/14) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#15](https://github.com/Pimentellll/sheffield-tree-planner/issues/15) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#16](https://github.com/Pimentellll/sheffield-tree-planner/issues/16) | Open — partial implementation | E; x; a; c; t;  ; i; s; s; u; e;  ; c; a; l; l; s;  ; f; o; r;  ; k; n; o; w; n; -; p; o; i; n; t; /; n; o; r; t; h; /; c; r; o; w; n; -; s; i; z; e;  ; c; o; m; p; a; r; i; s; o; n;  ; w; i; t; h;  ; A; r; n; a; v; ;;  ; n; o;  ; s; u; c; h;  ; h; u; m; a; n;  ; c; o; m; p; a; r; i; s; o; n;  ; e; s; t; a; b; l; i; s; h; e; d; .;  ; t; r; a; n; s; f; o; r; m;  ; f; i; l; e;  ; i; s;  ; t; r; a; n; s; f; o; r; m; .; t; s; . |
+| [#17](https://github.com/Pimentellll/sheffield-tree-planner/issues/17) | Open — partial implementation | E; v; i; d; e; n; c; e;  ; h; a; s;  ; n; o; t;  ; e; s; t; a; b; l; i; s; h; e; d;  ; e; v; e; r; y;  ; r; e; q; u; e; s; t; e; d;  ; c; a; n; c; e; l; l; e; d; /; c; a; c; h; e; d; /; p; r; o; v; i; s; i; o; n; a; l; /; f; i; x; t; u; r; e;  ; p; r; e; s; e; n; t; a; t; i; o; n;  ; s; t; a; t; e;  ; o; n;  ; c; a; n; d; i; d; a; t; e; ;;  ; i; n; s; p; e; c; t;  ; a; n; d;  ; v; e; r; i; f; y;  ; b; e; f; o; r; e;  ; c; l; o; s; u; r; e; . |
+| [#18](https://github.com/Pimentellll/sheffield-tree-planner/issues/18) | Open — partial implementation | I; s; s; u; e;  ; e; x; p; l; i; c; i; t; l; y;  ; r; e; q; u; i; r; e; s;  ; A; r; n; a; v;  ; a; n; d;  ; A; l; e; x;  ; r; e; v; i; e; w; ;;  ; n; o;  ; s; u; c; h;  ; r; e; v; i; e; w;  ; i; s;  ; e; s; t; a; b; l; i; s; h; e; d; . |
+| [#19](https://github.com/Pimentellll/sheffield-tree-planner/issues/19) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#20](https://github.com/Pimentellll/sheffield-tree-planner/issues/20) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#21](https://github.com/Pimentellll/sheffield-tree-planner/issues/21) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#22](https://github.com/Pimentellll/sheffield-tree-planner/issues/22) | Open — partial implementation | I; s; s; u; e;  ; s; p; e; c; i; f; i; c; a; l; l; y;  ; r; e; q; u; i; r; e; s;  ; A; r; n; a; v;  ; f; e; e; d; b; a; c; k;  ; o; n;  ; p; h; y; s; i; c; a; l;  ; m; e; a; n; i; n; g; ;;  ; n; o; t;  ; e; v; i; d; e; n; c; e; d; . |
+| [#23](https://github.com/Pimentellll/sheffield-tree-planner/issues/23) | Open — partial implementation | Genuine local Qwen tool/numerical round-trip exists; selected Nemotron model on the DGX still needs exercised inference/tool dispatch with the exact model/runtime recorded. |
+| [#24](https://github.com/Pimentellll/sheffield-tree-planner/issues/24) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#25](https://github.com/Pimentellll/sheffield-tree-planner/issues/25) | Open — partial implementation | Exact browser/currentness tests cover budget acceptance, duplicate submission, changed-scenario failure and late-result guards; retain a focused manual exclusion-edit/failed-new-selection review before full issue closure. |
+| [#26](https://github.com/Pimentellll/sheffield-tree-planner/issues/26) | Open — partial implementation | A; c; t; u; a; l;  ; m; o; d; e; l; /; t; o; o; l;  ; t; r; a; c; e; s;  ; f; o; r;  ; a; l; l;  ; r; e; q; u; e; s; t; e; d;  ; a; c; t; i; o; n; ,;  ; f; a; i; l; u; r; e; ,;  ; u; n; s; u; p; p; o; r; t; e; d;  ; a; n; d;  ; s; t; a; l; e;  ; c; a; s; e; s;  ; a; r; e;  ; n; o; t;  ; e; s; t; a; b; l; i; s; h; e; d; ;;  ; e; x; p; e; r; i; m; e; n; t; a; l;  ; a; d; a; p; t; i; v; e;  ; g; u; a; r; d;  ; f; a; i; l; e; d; . |
+| [#27](https://github.com/Pimentellll/sheffield-tree-planner/issues/27) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#28](https://github.com/Pimentellll/sheffield-tree-planner/issues/28) | Ready for verified merge | Issue-specific engineering acceptance is supported by source and prior receipts; merge alone does not establish scientific, site or team signoff. |
+| [#29](https://github.com/Pimentellll/sheffield-tree-planner/issues/29) | Open — partial implementation | A; c; t; u; a; l;  ; a; g; e; n; t;  ; t; o; o; l;  ; h; i; s; t; o; r; y;  ; a; n; d;  ; f; u; l; l;  ; r; e; q; u; e; s; t; e; d;  ; k; e; y; b; o; a; r; d; /; v; i; s; u; a; l;  ; e; v; i; d; e; n; c; e;  ; n; o; t;  ; e; s; t; a; b; l; i; s; h; e; d; ;;  ; r; e; a; l;  ; m; o; d; e; l;  ; l; o; o; p;  ; r; e; m; a; i; n; s;  ; o; p; e; n; . |
+| [#30](https://github.com/Pimentellll/sheffield-tree-planner/issues/30) | Open — partial implementation | A; c; t; u; a; l;  ; S; h; e; f; f; i; e; l; d;  ; s; i; t; e;  ; r; u; n; ,;  ; l; a; w; f; u; l;  ; a; s; s; e; t; -; l; e; v; e; l;  ; u; s; e; /; d; i; s; p; l; a; y; /; e; x; p; o; r; t;  ; a; n; d;  ; s; o; l; v; e; r; /; U; I;  ; r; e; v; i; e; w;  ; a; b; s; e; n; t; .;  ; I; s; s; u; e;  ; a; s; k; s;  ; a; c; t; u; a; l;  ; r; u; n;  ; e; v; e; n;  ; t; h; o; u; g; h;  ; r; e; j; e; c; t; e; d;  ; s; i; t; e;  ; i; s;  ; a;  ; p; e; r; m; i; t; t; e; d;  ; o; u; t; p; u; t; . |
+| [#31](https://github.com/Pimentellll/sheffield-tree-planner/issues/31) | Open — partial implementation | M; i; s; s; i; n; g;  ; m; a; n; u; a; l;  ; a; r; m; ,;  ; i; n; d; e; p; e; n; d; e; n; t; l; y;  ; s; c; o; r; e; d;  ; h; e; l; d; -; o; u; t;  ; c; o; m; p; a; r; i; s; o; n; s;  ; a; n; d;  ; u; s; e; f; u; l;  ; a; d; a; p; t; i; v; e;  ; r; u; n; s; ;;  ; n; o;  ; a; d; v; a; n; t; a; g; e;  ; c; l; a; i; m; . |
+| [#32](https://github.com/Pimentellll/sheffield-tree-planner/issues/32) | Open — partial implementation | A client-built review pack exists and viewport/recovery evidence is available; complete the specified backend export handler and final exact-source 1920x1080 manual/recovery acceptance. |
+| [#33](https://github.com/Pimentellll/sheffield-tree-planner/issues/33) | Open — partial implementation | A; n; o; t; h; e; r;  ; t; e; a; m; m; a; t; e;  ; c; l; e; a; n;  ; i; n; s; t; a; l; l;  ; a; n; d;  ; s; c; o; p; e; d;  ; d; e; m; o; /; c; l; a; i; m;  ; l; e; d; g; e; r;  ; a; c; c; e; p; t; a; n; c; e;  ; a; r; e;  ; n; o; t;  ; e; v; i; d; e; n; c; e; d; ;;  ; g; e; n; u; i; n; e;  ; m; o; d; e; l;  ; r; e; m; a; i; n; s;  ; e; x; p; l; i; c; i; t; l; y;  ; i; n; c; o; m; p; l; e; t; e; . |
+
+The source joins Alex’s frontend at `9e35d9364f3c8d0cdb8b605a7f16f106cf86c50d` and Ben’s numerical/backend candidate at `b5539a1d5feac37f6f7fbb8c4e0be00eb282caf2` through Alex’s shared `demo/hackathon` merge `4d89113b50237263ae2cf3d15cdb468c472648c3`. The integration does not replace teammates’ source branches. The separate site desk audit and historical design references are preserved with source provenance; automatic merge/safeguard-removal proposals are not adopted.
+
+Reconciliation verification: Python 3.11.15 returned 543 passed, 8 skipped and 134 subtests; 53 frontend units and real fresh-session browser checks (19 physical, 60 reference) passed. The eight local skips are five opt-in model tests and three Windows symlink-privilege tests—not passes. Generated types, lint, lock, workflow validation and four injected CI lifecycle scenarios passed. Those are scoped local receipts; the PR checks and installed-artifact replay must bind the final revision before merge. No numerical runtime module changed in this reconciliation.
+
+Next execution order: verified integration/main merge and issue readback → exact-artifact DGX full-stack deployment behind SSH tunnels → Ben’s hands-on browser acceptance → same-tools NVIDIA/model comparisons. No benchmark winner, real-site validation or DGX inference is implied by repository maintenance. Existing model services and AEOLUS workloads must not be disrupted.
 
 ## 1. Delivery policy
 
@@ -26,7 +68,7 @@ At each integration checkpoint provide: exact revision, what ran, output/evidenc
 
 ### B01 — Contract and portable application foundation
 
-- **Owner:** Ben; reviews: Arnav + Alex. **State:** Blocked for shared implementation; STP-001 coordination and explicitly synthetic probes have started. **Dependencies:** this working spec; explicit acknowledgement before parallel consumers build against it.
+- **Owner:** Ben; reviews: Arnav + Alex. **State:** schemas, persistence, rights and jobs implemented and exercised with the UI; STP-001 exact-revision acknowledgements/eligibility still open. **Dependencies:** this working spec; explicit acknowledgement before parallel consumers build against it.
 - Create typed backend models, generated API/frontend types and the minimal local API/UI shell. Select versions through imports and an actual smoke; record tested install/start commands. Establish immutable revisions, structured errors and a central asset registry.
 - The dedicated private repository is established under D08; B01 covers application/schema work, not another repository. Use this checkout or an isolated worktree and preserve unrelated work.
 - **Acceptance:** V01 and the validation portion of V05; one valid synthetic site/scenario is accepted, malformed units/refs are rejected, generated types match backend. Setup can be repeated. No invented successful numerical response.
@@ -49,14 +91,14 @@ At each integration checkpoint provide: exact revision, what ran, output/evidenc
 
 ### B02 — Analytic solar and geometry reference
 
-- **Owner:** Arnav. **State:** Planned. **Dependencies:** B01 shared models.
+- **Owner:** Arnav foundations; Ben authorised numerical integration. **State:** synthetic solar/ray reference implemented and tested; real-site/scientific acceptance is separate. **Dependencies:** B01 shared models.
 - Implement solar direction, UTC/time bins, analytic ellipsoid/trunk intersections and a minimal static occluder reference. Tests use authored, explicitly synthetic inputs; maintain correct normals/areas and no double-counting.
 - **Acceptance:** V02's B02 analytic/opaque-geometry subset, finite/units tests and same-input repeatability. Solar-reference comparisons are separate from hand-computed shadow tests. Multi-tree evaluation and transmission wait for their named later gates.
 - **Evidence:** test command/output and input/expected/actual values. **Next consumer:** B04 and accelerator comparison.
 
 ### B03 — Real-site and rights audit (parallel lane)
 
-- **Owner:** Arnav + Alex, one named writer per asset/manifest. **State:** Planned. **Dependencies:** SiteBundle contract, not the full solver.
+- **Owner:** Arnav + Alex, one named writer per asset/manifest. **State:** source desk audit and synthetic importer exist; real-site acquisition/context/datum/rights acceptance is open. **Dependencies:** SiteBundle contract, not the full solver.
 - Audit one park/playground candidate plus a fallback; verify lawful team sharing/display/export, geometry scale/north/context, semantic masks and existing-tree assumptions. Keep unknown utilities/soil/permission visible. Do not substitute historical planting areas or School Localities for site permission/geometry.
 - **Data-source candidate, not selected:** assess Environment Agency 1 m composite DTM/DSM via [Defra Survey](https://environment.data.gov.uk/survey) against a Sheffield park site and fallback. Pilot a small rights-checked crop and verify local survey year, DSM/DTM alignment, elevations/datum, real building-versus-canopy semantics, missing shadow-casting context, metre/north transform and the resulting viewer/solver geometry. This is *raster elevation*, not a ready-made semantic 3D map or evidence of plantability. See [SOURCES: LiDAR candidate](SOURCES.md#candidate-site-geometry-source-environment-agency-lidar-11-november-2026-desk-audit); V03 is still required.
 - **Acceptance:** V03; a reviewed manifest and usable source assets, or an explicit failed-site decision and replacement. Unknown rights do not pass.
@@ -64,42 +106,42 @@ At each integration checkpoint provide: exact revision, what ran, output/evidenc
 
 ### B04 — Baseline versus one tree, real computation
 
-- **Owner:** Arnav evaluator; Ben job wrapper. **State:** Planned. **Dependencies:** B01 + B02. B03 only for real-site claims.
+- **Owner:** Arnav foundations; Ben evaluator integration/job wrapper. **State:** real CPU baseline/proposal computation through HTTP jobs is implemented and exercised on synthetic geometry. **Dependencies:** B01 + B02. B03 only for real-site claims.
 - Evaluate unchanged scene and one proposed tree on identical samples/bins. Return actual metrics, constraints, identity and provenance through the API. Capture real runtime fixtures from this implementation for UI development; label synthetic scene provenance.
 - **Acceptance:** V02's B04 single-tree subset + V04 baseline/single-tree metric cases; valid zero gain and already-shaded target. Multi-proposed-tree overlap/constraint tests belong to B06. No optimiser/model prerequisite.
 - **Evidence:** reproducible run IDs, input snapshot and baseline/proposal result. **Next consumer:** B05/B06/B07/B08.
 
 ### B05 — Interactive vertical slice
 
-- **Owner:** Alex with Ben. **State:** Planned. **Dependencies:** B01 for shell; B04 for actual data.
+- **Owner:** Alex with Ben. **State:** physical/reference studio integrated; evaluate/search/edit/comparison/export browser proof exists, with exact-final reconciliation verification in progress and named reviews tracked per issue. **Dependencies:** B01 for shell; B04 for actual data.
 - Show site, target, existing/proposed tree and computed difference. Add manual evaluation, progress, cancellation, error/provisional/cached labels and revision-safe edits. Validate viewer/solver transform with Arnav.
 - **Acceptance:** V05 + V10's B05 single-tree UI subset; edit a scenario while an old run finishes and prove the old result cannot overwrite the draft/current revision. A rendered sun slider does not silently change analytical metrics. Search/comparison and multi-zone/case panels are integrated with B06/B07/B10 and covered fully at B12, not prerequisites for G1.
 - **Evidence:** end-to-end trace and actual UI capture, including failure/stale state. **Next gate:** G1.
 
 ### B06 — Candidate search and independent feasibility
 
-- **Owner:** Arnav semantics; Ben may implement search/job plumbing under agreed ownership. **State:** Planned. **Dependencies:** B04 and candidate/profile contract.
+- **Owner:** Arnav semantics; Ben authorised implementation/integration. **State:** finite catalogue, independent feasibility and reference/greedy/local search implemented and tested; not global optimality or planting approval. **Dependencies:** B04 and candidate/profile contract.
 - Build candidate masks, deterministic competent reference, marginal-gain greedy plus local improvement. Implement maximise-shade first, then target-seeking least-cost search. Keep a separate final-layout validator.
 - **Acceptance:** V04 and V06 plus V02's B06 multi-tree overlap subset; compare tiny exact cases, enforce pins/spacing/budget/winter rules, show actual spend/count, preserve empty/target-miss outcomes. Supported winter-case evaluation is supplied by B07 before that portion is verified; B06's portable search work can proceed first. Never claim proven infeasibility from a heuristic miss.
 - **Evidence:** reference/selected layouts, constraint report and method/seed. **Next consumer:** B10.
 
 ### B07 — Cases, uncertainty and controlled comparison
 
-- **Owner:** Arnav with Ben; Alex consumes results. **State:** Planned. **Dependencies:** B04.
+- **Owner:** Arnav with Ben; Alex consumes results. **State:** supported growth/leaf/winter cases, relocation and scenario comparisons implemented and tested on synthetic inputs. **Dependencies:** B04.
 - Add establishment/target/leaf-state cases, fixed-crossing crown transmission, supported winter checks, controlled one-tree relocation and fixed-layout sensitivity. Test spatial/time/context refinement and correct cache invalidation. Full redesign reuses B06; path-length attenuation is not required in this core.
 - **Acceptance:** V07 plus V02's B07 fixed-transmission subset; separate horizon from uncertainty, record all changed inputs, keep other trees fixed in relocation, and flag infeasible alternatives instead of silently modifying them. Validate matching comparison/case UI panels with Alex before G2/G3.
 - **Evidence:** comparisons/ranking and convergence records, including stable rankings when that is what occurs. **Next consumer:** B10.
 
 ### B08 — Real Sheffield integration proof
 
-- **Owner:** all three, Arnav accountable for physical validity. **State:** Planned. **Dependencies:** B03 + B04 + B05.
+- **Owner:** all three, Arnav accountable for physical validity. **State:** open; no rights-cleared real Sheffield scene, survey controls or solver/viewer parity accepted. **Dependencies:** B03 + B04 + B05.
 - Replace synthetic input with the accepted real site without changing API meaning. Re-run transform, baseline, one-tree and context checks on the actual assets. Inspect independent reference/observation evidence where available.
 - **Acceptance:** V03 + applicable V02/V07; real-site claim is supported and provisional assumptions are prominent. A visually convincing mesh alone does not pass.
 - **Evidence:** rights-cleared manifest, reproducible real runs and matching UI. **Next gate:** real-site portion of G2.
 
-### B09 — Local model/runtime proof (start early when available)
+### B09 — Local model/runtime proof (target device now accessible)
 
-- **Owner:** Ben. **State:** Active — preparation implemented; device acceptance blocked until event access. **Dependencies:** tool schema from B01 for domain integration; actual Spark access for Spark evidence.
+- **Owner:** Ben. **State:** a genuine laptop model/tool round trip exists; DGX SSH and model-registration inventory are verified, but DGX inference/tool and application execution remain untested. **Dependencies:** tool schema from B01 for domain integration; actual Spark access for Spark evidence.
 - **Prepared:** [DGX_SPARK.md](DGX_SPARK.md), SSH/tunnel template, ARM64-pinned inference recipe/model manifest, and installable `sheffield-tree-planner-readiness` diagnostic. This diagnostic is not the product agent, domain dispatcher or application package.
 - **Local evidence:** initial worker suite passed eight protocol/CLI test methods on Python 3.11; integrated parent suite passed ten methods on Python 3.13, including deployment/document invariants. These use a labelled synthetic HTTP protocol fixture, not a model. `uv build` produced wheel/sdist. Compose 5.7.1 parsed the service configuration; OpenSSH 10.2 parsed the placeholder SSH config without connecting. Registry metadata was digest-checked for the exact Linux ARM64 image; no weights/image layers were downloaded. Final independent-review, clean-artifact and hosted-CI receipts belong to the exact PR revision, not inferred from these preliminary checks.
 - **Merge verification (11 November):** reconciled [PR #1](https://github.com/bbeennyy860-cyber/sheffield-tree-planner/pull/1) with main `9833748430c9197bc7184e89391e9fd07094bd11`, preserving the source audit, feature priorities and research dossier. Parent and independent reviewer each passed all twelve tests using a fresh Python 3.11.9 wheel installation outside the checkout; installed version/help/environment and non-loopback rejection checks passed. `uv build` reproduced the previously checked wheel/sdist SHA-256 values. Source, tests, deployment templates and CI are unchanged from the original PR head. Independent integration review passed on tree `d8b64a85fb86bce696a600f4167ee1c220b4ab6c`; subsequent edits only clarify this BUILD status/evidence. Ruff 0.17.4 explicit core checks (`E4,E7,E9,F`) and formatting passed; its broader defaults report six existing style findings, not merge regressions. Integration release impact is **none**; the diagnostic retains its initial minor version **0.1.0**. See the PR for final hosted-CI and merge receipts; this does not establish a model, GPU, device or domain run.
@@ -110,21 +152,21 @@ At each integration checkpoint provide: exact revision, what ran, output/evidenc
 
 ### B10 — Adaptive planning investigator
 
-- **Owner:** Ben; Arnav validates tools, Alex validates interaction. **State:** Planned. **Dependencies:** B06 + B07 + B09, B05 for visible product.
+- **Owner:** Ben; Arnav validates tools, Alex validates interaction. **State:** bounded domain dispatcher and safeguards implemented; reliable complete adaptive planning remains unproved. **Dependencies:** B06 + B07 + B09, B05 for visible product.
 - Implement interpret/inspect/choose/analyse/explain loop over immutable scenarios. Include relocation, redesign after an accepted change, and justified sensitivity. Guard claims, permissions, prompt injection and no-progress termination.
 - **Acceptance:** V09; unfamiliar requests choose appropriate real operations, preserve constraints and cite actual current result IDs. No hardcoded “AI demonstration” replacing the model path.
 - **Evidence:** traces for success, ambiguity, unsupported savings, tool failure, no-progress and stale scenarios. **Next gate:** G3.
 
 ### B11 — Same-tools value comparison
 
-- **Owner:** all three; someone other than the agent-loop author checks scoring. **State:** Planned. **Dependencies:** B10 + working manual/fixed workflow.
+- **Owner:** all three; someone other than the agent-loop author checks scoring. **State:** harness and frozen negative local-model trial exist; held-out/manual arms and independent usefulness/numerical scoring remain incomplete. **Dependencies:** B10 + working manual/fixed workflow.
 - Run held-out ordinary, compound, counterfactual, infeasible and failure tasks through manual controls, fixed workflow and agent, with identical backend/constraints. Include manual effort and all failures.
 - **Acceptance:** V11; report completion, claim accuracy, corrections, useful analyses and latency without assuming the agent wins. Narrow the claim if evidence does not support superiority.
 - **Evidence:** task definitions, immutable inputs, runs and scoring. **Next consumer:** B12/pitch.
 
 ### B12 — Reproducible build and demo candidate
 
-- **Owner:** Ben integration, Alex demonstration, Arnav scientific claims. **State:** Planned. **Dependencies:** B05–B11; event eligibility is additionally required before submission claims/actions.
+- **Owner:** Ben integration, Alex demonstration, Arnav scientific claims. **State:** scoped synthetic build/export/recovery evidence exists; final exact-head CI/package review and named clean-install/full-system acceptance remain open. **Dependencies:** B05–B11; event eligibility is additionally required before submission claims/actions.
 - Test clean setup, complete smoke, permissions-safe export and known-good recovery. Record exact dependency/model/data manifest. Set feature freeze against the actual submission deadline once confirmed; use later work for repairs/rehearsal, not unrelated feature expansion.
 - **Acceptance:** V12; another teammate runs the instructions, genuine local-agent evidence exists, no hard-constraint/stale/claim failures remain, fallback labels and limitations are visible.
 - **Evidence:** verified runbook, clean setup output, final demo trace and claim ledger. Remote CI, publication and submission are separate authorised actions, not inferred from local tests.
@@ -138,7 +180,9 @@ At each integration checkpoint provide: exact revision, what ran, output/evidenc
 
 Owners report the first failed gate rather than declaring the whole product finished. Reuse one working path throughout.
 
-## 4a. Ben-owned local 0.2.0 candidate receipt — 12 November 2026
+## 4a. Historical local 0.2.0 candidate receipt — 12 November 2026
+
+These dated receipts preserve what was proved and authorised at the time. Current reconciliation above supersedes their publication/branch status, not their test scope or missing human/scientific evidence.
 
 This is **isolated local implementation evidence under D18**, not shared acceptance, merged code, scientific approval or M7 completion. It supersedes earlier prototype-only descriptions for this candidate, without changing teammates' status. Branch `feat/ben/STP-002-backend-contracts`, base `c94a5d2e86a30b2d04481aaf593bfd3c1af51713`; publication and shared merges remain separately gated.
 
@@ -172,6 +216,12 @@ The numerical dependency is exact same-repository commit `33493a327a99e5de2e579b
 Local replay: install `.[dev]` or use `uv sync --frozen --extra dev`, set `CANOPY_NUMERICS_SOURCE` to that verified checkout, run the full pytest suite and `scripts/generate_api_types.py --check`; use [REFERENCE_RUNTIME.md](REFERENCE_RUNTIME.md) for actual installed numerical replay. Native model tests require explicit local runtime/model variables and must not be inferred from the default suite. No unsupported energy/carbon/temperature, real-site feasibility, scientific accuracy or organiser-eligibility claim is supported by these results.
 
 ## 4b. Isolated local M2 browser slice — 13 November 2026
+
+**Combined physical UI candidate (13 November, Ben integration lane):** local branch `feat/ben/STP-combined-physical-ui` combines backend `b5539a1d5feac37f6f7fbb8c4e0be00eb282caf2` with Alex PR51 `9e35d9364f3c8d0cdb8b605a7f16f106cf86c50d`; no shared contract or numerical implementation changed. Imported frontend files, frontend workflow, README, demo runbook and changelog are the changed paths. The primary two-process demo uses the rights-checked physical session and Vite proxy; reference mode remains available. No static frontend-dist bootstrap equivalence is claimed.
+
+On Windows Python 3.11.9, Node 24.12.0 and npm 12.0.2, `uv sync --frozen --extra dev`, `npm ci`, frontend build and 53 unit tests passed. Fresh-workspace Edge runs passed 19 physical checks and 60 reference checks, including 390 px, stale/zero and source corruption; an extracted source distribution installed and rebuilt independently and passed the 19 physical checks. `pytest -q` with pinned numerical source returned 543 passed, 8 skipped, 134 subtests; five skips require an opt-in live model and three require unavailable Windows symlink privilege. Ruff, generated types, `uv lock --check` and diff whitespace checks passed. CI shell syntax was checked locally; hosted workflow and independent workflow review remain unrun. npm warned its version does not support this Node version; build succeeded. Owned server processes were stopped and ports checked. Evidence and exact run identities are under `workspaces/canopy-sheffield/execution/combined-integration/worker/` outside source.
+
+The extracted-distribution test used the pre-receipt documentation snapshot; final artifact freeze and independent browser/code review belong to Helios. Physical data is authored synthetic geometry, not Sheffield, plantability or science acceptance; model/planner proof and human contract review remain separate gates. Next: Helios verifies this candidate and its CI lifecycle on the final revision; no push, merge, publication or deployment is authorised by this receipt.
 
 **Owner:** Ben integration lane. **State:** local technical proof verified; Alex/Arnav acceptance and shared integration remain open. Ben separately approved wiring the existing UI on an isolated local integration branch, leaving Alex's branch and PR45 untouched and authorising no further push/merge. The local branch is `feat/ben/STP-014-ui-integration`, based on backend `7d86c78f53ae00b4861c3530e89a7f6304c0de41`, importing frontend subtree `7b67722ac31e6a46f91f8d065cceeca08917d7a9`. Its push URL is deliberately disabled. No new remote publication, reviewer request, merge, tag, release or issue closeout is claimed.
 

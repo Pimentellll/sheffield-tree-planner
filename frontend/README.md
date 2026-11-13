@@ -1,10 +1,14 @@
 # CANOPY frontend: planning studio (STP-007 / STP-012 / STP-013)
 
-React + Three.js planning studio wired to the real local backend (`backend/`, PR #45). It places one proposed tree, saves the move as a new immutable layout and accepted scenario revision, submits an `evaluate_layout` job, polls it, and shows the stored Result with its run identity, units, cost, provenance and currentness. The UI never computes or invents a metric: with no backend, no number is shown.
+React + Three.js planning studio wired to the combined local CPU backend. The UI shows stored Results with their identity, units, provenance and currentness; it does not invent metrics.
 
-The only site the backend can evaluate today is Ben's **explicit synthetic one-tree reference** (receiver sample, chosen sun direction). It is labelled synthetic throughout; it is not Sheffield.
+The primary physical runtime uses authored synthetic geometry, not Sheffield, field accuracy or plantability acceptance. It supports catalogue-position editing, evaluation, search, winter cases and backend comparisons. Physical shade and weighted utility retain separate units.
 
 ## Run locally
+
+For the primary physical demo, install the backend with `uv sync --frozen --extra dev` and run `npm ci --prefix frontend`. Start `.venv/bin/python frontend/scripts/serve_physical.py --workspace ../canopy-physical-run --winter` from the root, then in a second terminal run `CANOPY_SESSION=../../canopy-physical-run/session.json npm run dev` from `frontend/`. On Windows use `.venv/Scripts/python.exe`, `npm.cmd` and `$env:CANOPY_SESSION='..\..\canopy-physical-run\session.json'`. Open http://127.0.0.1:5173; stop both processes with Ctrl-C. Use a fresh workspace each time. Vite serves the rights-checked session bytes, not the private workspace; a static frontend-dist alone does not supply this bootstrap.
+
+The following reference mode remains available for regression:
 
 Requires Node.js 20.19+/22.12+, Python 3.11+, the repository installed into `.venv` (see the root README), and Arnav's numerical checkout at the commit pinned in `docs/REFERENCE_RUNTIME.md` (`33493a3…`, branch `spike/arnav/STP-010-mask-reference`) as a sibling directory `repo-numerical-inputs`.
 
@@ -23,7 +27,9 @@ Without the launcher you can still open `?scenario=<id>&revision=<n>` against an
 
 ## Physical runtime (Ben's takeover-v1)
 
-With Ben's `feat/ben/STP-arnav-logic-takeover` checkout (or later), start `python frontend/scripts/serve_physical.py --workspace <fresh> --winter` from that checkout's environment, then run the dev server with `CANOPY_SESSION=<fresh>/session.json`. The launcher calls `create_physical_runtime` unchanged, reads the scene asset through the registry's rights-checked `read(..., "public_display_status")`, and the UI verifies its SHA-256 before drawing the 195 receiver samples, planting region and catalogue positions. Because this backend evaluates catalogue candidates only, the editor becomes a candidate picker: drags snap to positions and the arrow keys step between them. Search, winter cases, `compare_locations` and `compare_scenarios` then show real results. `npm run test:physical` checks all of this against the live server (19 checks).
+The included launcher calls `create_physical_runtime`, reads the scene asset through the registry's rights-checked `read(..., "public_display_status")`, and the UI verifies its SHA-256 before drawing receiver samples, planting region and catalogue positions. Because this backend evaluates catalogue candidates only, the editor becomes a candidate picker: drags snap to positions and the arrow keys step between them. Search, winter cases, `compare_locations` and `compare_scenarios` show computed results. `npm run test:physical` checks these against a live server.
+
+The source distribution contains the frontend, lockfile and launch scripts. Extract it, create an isolated Python environment, install the extracted directory (`uv pip install --python <venv-python> .`), then run `npm ci --prefix frontend` and follow the same physical launch instructions above. A wheel alone does not contain the frontend.
 
 ## Tests
 
@@ -48,4 +54,4 @@ Saving a move registers layout revision *n+1* and replaces the scenario with `If
 
 - Live cancellation is implemented and unit-tested, but the reference evaluator finishes in tens of milliseconds, so it has not been exercised against a running job.
 - With the reference backend, a changed source asset is refused at admission as `REVISION_CONFLICT` (409), not as a failed job. The UI shows the backend's code and message and does not guess the cause. The failed-job path is covered by unit tests only.
-- Search, comparison, multi-tree, seasons and the agent panel are later STP items (018, 021, 025).
+- Physical search and comparisons operate on the authored catalogue and declared cases. The autonomous agent and real-site acceptance remain separate gates.

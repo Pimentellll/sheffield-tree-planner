@@ -57,7 +57,7 @@ untrusted_model_narrative: string | null
 reason_code: safe enum | null
 ```
 
-These names mirror the companion audit §3, including its mapping from the existing `AgentLoop` outcomes. Final names follow Ben's generated OpenAPI in #73. Do not call `completed_with_evidence` a success if the job's actual Result was superseded. C4 clarification and C5 safe refusal are **human-scored, model-behaviour results**; they have no numerical metric and must not require a fake `run_id`.
+These names mirror the companion audit §3, including its mapping from the existing `AgentLoop` outcomes. Final names follow Ben's generated OpenAPI in #73. Do not call `completed_with_evidence` a success if the job's actual Result was superseded. C4 clarification and C5 safe refusal are **human-scored, model-behaviour results**; they have no numerical metric and must not require a fake `run_id`. The live server status for such runs is `needs_evidence`: `clarification_requested` and `safe_abstention` appear only as reviewer labels on the stored receipt, unless #73 defines a deterministic rule (companion audit §3).
 
 ## 4. Frontend implementation slices Arnav can own
 

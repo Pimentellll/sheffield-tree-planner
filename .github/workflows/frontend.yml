@@ -1,0 +1,74 @@
+name: frontend checks
+
+on:
+  pull_request:
+    paths: ['frontend/**', 'generated/**', 'backend/**', '.github/workflows/frontend.yml']
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Pimentellll/sheffield-tree-planner
+          ref: 33493a327a99e5de2e579b5c3070ada137047c7e
+          path: .ci-numerics
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        id: python
+        with:
+          python-version: '3.12'
+      - name: Install frontend and backend
+        env:
+          UV_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          npm ci --prefix frontend --no-audit --no-fund
+          python -m pip install --require-hashes -r ci/uv-requirements.txt
+          uv sync --frozen
+      - name: Typecheck, build and unit tests
+        working-directory: frontend
+        run: |
+          npm run build
+          npm test
+      - name: Integrated browser check against the real reference backend
+        env:
+          CANOPY_DEV_WORKSPACE: ${{ runner.temp }}/canopy-dev
+          CANOPY_SESSION: ${{ runner.temp }}/canopy-dev/session.json
+          CANOPY_BROWSER: /usr/bin/google-chrome
+        run: |
+          uv run --frozen --no-sync python frontend/scripts/serve_reference.py \
+            --workspace "$CANOPY_DEV_WORKSPACE" --numerical-source .ci-numerics > "$RUNNER_TEMP/backend.log" 2>&1 &
+          for i in $(seq 60); do curl -sf http://127.0.0.1:8765/api/v1/health && break; sleep 1; done
+          (cd frontend && npx vite --host 127.0.0.1 --port 5173 > "$RUNNER_TEMP/vite.log" 2>&1 &)
+          for i in $(seq 60); do curl -sf http://127.0.0.1:5173/ > /dev/null && break; sleep 1; done
+          cd frontend
+          node tests/browser-check.cjs
+      - name: Show server logs
+        if: failure()
+        run: cat "$RUNNER_TEMP/backend.log" "$RUNNER_TEMP/vite.log" || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: frontend-browser-evidence
+          path: frontend/artifacts/
+          if-no-files-found: ignore

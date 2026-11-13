@@ -60,6 +60,12 @@ export default function ReportScreen({ ws }: { ws: Workspace }) {
           <h2 id="report-title">{site.name}</h2>
           <p>Accepted scenario {scenario.scenario_id.slice(0, 8)}… revision {scenario.revision} · generated from stored backend records · CANOPY API {apiVersion}</p>
         </header>
+        <div className="report-kpis">
+          <div className="kpi"><span className="kpi-label">Proposed trees</span><span className="kpi-value">{layout.placements.length}</span><span className="kpi-sub">{layout.layout_id} rev {layout.revision}</span></div>
+          <div className="kpi"><span className="kpi-label">Installation · <em>estimate</em></span><span className="kpi-value">{formatPence(profile.cost_pence * layout.placements.length)}</span><span className="kpi-sub">{profile.cost_scope}; not a contractor quote</span></div>
+          <div className="kpi"><span className="kpi-label">Direct shade · <em className="ok">modelled</em></span><span className="kpi-value">{metric ? `${formatValue(metric.value)} ${unitLabel(metric.unit)}` : '—'}</span><span className="kpi-sub">{metric ? `case ${metric.case_id} · ${metric.horizon_years}-year tree state` : 'no evaluation yet'}</span></div>
+          <div className="kpi"><span className="kpi-label">Budget</span><span className="kpi-value">{formatPence(scenario.input.constraints.budget_pence)}</span><span className="kpi-sub">{scenario.input.constraints.budget_basis} · hard limit</span></div>
+        </div>
 
         <section className="report-block" aria-labelledby="r-result">
           <h3 id="r-result">1. Result</h3>

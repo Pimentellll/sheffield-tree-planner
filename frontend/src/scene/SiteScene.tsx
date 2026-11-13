@@ -352,9 +352,9 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       : scene?.kind === 'physical' ? scene.scene.samples.map(x => toV(x.position_enu_m)) : [new THREE.Vector3()]
     const points = [...sceneVolume, ...candidates.map(c => toV(c.position)), ...(draft ? [toV(draft)] : [])]
     const box = new THREE.Box3().setFromPoints(points)
-    const centre = box.getCenter(new THREE.Vector3()).add(new THREE.Vector3(0, 0.5, 0))
+    const centre = box.getCenter(new THREE.Vector3()).add(new THREE.Vector3(0, 1.8, 0))
     const span = box.getSize(new THREE.Vector3()).length()
-    const scale = Math.max(1, span / 7)
+    const scale = Math.max(1.35, span / 5.2)
     w.controls.target.copy(centre)
     w.camera.position.copy(centre).add(HOME.clone().multiplyScalar(scale))
     w.controls.update()

@@ -19,6 +19,8 @@ export function RequirementsPanel({ ws }: { ws: Workspace }) {
   if (!draft || !accepted || !ws.scenario) return null
   const constraints = ws.scenario.input.constraints
   const exclusions = ws.site?.exclusions ?? []
+  const sliderStep = Math.max(100, ws.profile?.cost_pence ? Math.round(ws.profile.cost_pence / 2) : 500)
+  const sliderMax = Math.max(accepted.budgetPence * 2, draft.budgetPence, sliderStep * 10)
 
   const commitBudget = () => {
     const pence = parsePounds(budgetText)
@@ -40,23 +42,24 @@ export function RequirementsPanel({ ws }: { ws: Workspace }) {
   }
 
   return (
-    <div className="detail-section">
-      <span className="section-kicker">REQUIREMENTS</span>
-      <h3 className="section-title">
-        Accepted revision {ws.scenario.revision}
-        {ws.draftDirty ? <span className="tag tag-warning" data-testid="draft-badge">DRAFT · NOT ACCEPTED</span> : <span className="tag tag-ok">NO DRAFT EDITS</span>}
-      </h3>
-      <div className="field-grid">
-        <label className="number-field">
-          <span>Budget £</span>
-          <input aria-label="Upfront budget in pounds" inputMode="decimal" value={budgetText} disabled={!editable}
-            onChange={e => setBudgetText(e.target.value)} onBlur={commitBudget} onKeyDown={e => { if (e.key === 'Enter') commitBudget() }} />
-        </label>
-        <label className="number-field">
-          <span>Max trees</span>
-          <input aria-label="Maximum tree count (blank for no limit)" inputMode="numeric" placeholder="no limit" value={countText} disabled={!editable}
-            onChange={e => setCountText(e.target.value)} onBlur={commitCount} onKeyDown={e => { if (e.key === 'Enter') commitCount() }} />
-        </label>
+    <div className="detail-section requirements">
+      <div className="budget-card">
+        <div className="budget-top"><span>Capital planting budget</span><em>£0 – {formatPence(sliderMax).replace(/\.00$/, '')}</em></div>
+        <div className="budget-value"><strong>{formatPence(draft.budgetPence)}</strong><span>{constraints.budget_basis}</span>{ws.draftDirty ? <span className="tag tag-warning" data-testid="draft-badge">DRAFT · NOT ACCEPTED</span> : <span className="tag tag-ok">ACCEPTED REV {ws.scenario.revision}</span>}</div>
+        <input className="budget-slider" type="range" aria-label="Budget slider" min={0} max={sliderMax} step={sliderStep} value={Math.min(draft.budgetPence, sliderMax)} disabled={!editable} style={{ ['--fill' as string]: `${Math.min(100, (draft.budgetPence / sliderMax) * 100)}%` }}
+          onChange={e => ws.setDraftRequirements({ ...draft, budgetPence: Number(e.target.value) })} />
+        <div className="field-grid">
+          <label className="number-field">
+            <span>Budget £</span>
+            <input aria-label="Upfront budget in pounds" inputMode="decimal" value={budgetText} disabled={!editable}
+              onChange={e => setBudgetText(e.target.value)} onBlur={commitBudget} onKeyDown={e => { if (e.key === 'Enter') commitBudget() }} />
+          </label>
+          <label className="number-field">
+            <span>Max trees</span>
+            <input aria-label="Maximum tree count (blank for no limit)" inputMode="numeric" placeholder="no limit" value={countText} disabled={!editable}
+              onChange={e => setCountText(e.target.value)} onBlur={commitCount} onKeyDown={e => { if (e.key === 'Enter') commitCount() }} />
+          </label>
+        </div>
       </div>
       {(budgetError || countError) && <p className="fine-print text-warning" role="alert">{budgetError ?? countError}</p>}
       <p className="fine-print">Accepted: {formatPence(accepted.budgetPence)} {constraints.budget_basis} budget · {accepted.maxTreeCount === null ? 'no tree-count limit' : `at most ${accepted.maxTreeCount} trees`}.</p>

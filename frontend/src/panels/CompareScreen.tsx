@@ -161,6 +161,21 @@ function RunComparison({ ws, scene, candidates, treeState }: { ws: Workspace; sc
                     <tr><th scope="row">Upfront cost</th><td>{formatPence(base!.result.layouts[0]?.cost_pence ?? 0)}</td><td>{formatPence(alt!.result.layouts[0]?.cost_pence ?? 0)}</td><td>—</td></tr>
                   </tbody>
                 </table>
+                <div className="butterfly" aria-hidden="true">
+                  <div className="butterfly-head"><span>BASE</span><span>ALTERNATIVE</span></div>
+                  {comparison.pairs.filter(p => p.base && p.alternative).map(p => {
+                    const max = Math.max(Math.abs(p.base!.value), Math.abs(p.alternative!.value), 1e-9)
+                    return (
+                      <div key={p.key} className="butterfly-row">
+                        <em>{formatValue(p.base!.value)}</em>
+                        <div className="bar left"><i style={{ width: `${(Math.abs(p.base!.value) / max) * 100}%` }} /></div>
+                        <span>{p.label}</span>
+                        <div className="bar right"><i style={{ width: `${(Math.abs(p.alternative!.value) / max) * 100}%` }} /></div>
+                        <em>{formatValue(p.alternative!.value)}</em>
+                      </div>
+                    )
+                  })}
+                </div>
                 <p className="fine-print">Δ is the UI's subtraction of two stored backend values with identical metric, case, target, unit, kind and horizon; it is not a backend comparison result. Runs: base {base!.result.run_id.slice(0, 12)}… ({ws.currentness(base!.result) === 'current' ? 'current' : CURRENTNESS_LABEL[ws.currentness(base!.result)].label.toLowerCase()}), alternative {alt!.result.run_id.slice(0, 12)}… ({ws.currentness(alt!.result) === 'current' ? 'current' : CURRENTNESS_LABEL[ws.currentness(alt!.result)].label.toLowerCase()}).</p>
                 <details className="evidence-details" open={comparison.changes.length > 0 && comparison.changes.length < 6}>
                   <summary>Changed inputs ({comparison.changes.length}) · moved placements ({comparison.movedPlacements.length})</summary>

@@ -78,6 +78,7 @@ const shot = (page, name) => page.screenshot({ path: join(evidenceDir, `${name}.
     // Search.
     await waitJob(page, page.getByRole('button', { name: 'Find planting options' }))
     const s = await latest('search_layouts')
+    await page.locator('.layout-table tbody tr').first().waitFor({ timeout: 15000 })
     const panel = await page.getByTestId('alternatives').innerText()
     check('search outcome shown for the stored result', s !== null && (await page.getByTestId('search-outcome').innerText()).length > 10, s?.analytical_outcome)
     const rows = page.locator('.layout-table tbody tr')

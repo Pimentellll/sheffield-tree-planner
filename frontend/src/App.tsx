@@ -8,21 +8,22 @@ import { AlternativesPanel } from './panels/Alternatives'
 import CompareScreen from './panels/CompareScreen'
 import ReportScreen from './panels/ReportScreen'
 import OverviewScreen from './panels/OverviewScreen'
-import { layoutRows } from './planning/alternatives'
+import { layoutRows, objectiveView } from './planning/alternatives'
 import type { Vec3 } from './api/types'
-import { nearestCandidate, samePosition, stepCandidate } from './planning/evaluation'
+import { CURRENTNESS_LABEL, formatPence, formatValue, nearestCandidate, primaryMetric, samePosition, stepCandidate, unitLabel } from './planning/evaluation'
+import { IconArrow, IconAlert, IconChat, IconCheck, IconCompare, IconDownload, IconMap, IconReport, IconSliders, IconTree } from './ui/icons'
+import type { ReactNode } from 'react'
 
 type Screen = 'overview' | 'studio' | 'compare' | 'report'
-const screens: { id: Screen; number: string; label: string }[] = [
-  { id: 'overview', number: '01', label: 'Sheffield sites' },
-  { id: 'studio', number: '02', label: 'Planning studio' },
-  { id: 'compare', number: '03', label: 'Compare' },
-  { id: 'report', number: '04', label: 'Review pack' },
+const screens: { id: Screen; number: string; label: string; icon: ReactNode }[] = [
+  { icon: <IconMap />, id: 'overview', number: '01', label: 'Sheffield sites' },
+  { icon: <IconSliders />, id: 'studio', number: '02', label: 'Planning studio' },
+  { icon: <IconCompare />, id: 'compare', number: '03', label: 'Compare' },
+  { icon: <IconReport />, id: 'report', number: '04', label: 'Review pack' },
 ]
 
 function App() {
   const [screen, setScreen] = useState<Screen>('studio')
-  const selected = screens.find(item => item.id === screen)!
   const ws = useWorkspace()
   const transform = useMemo(() => (ws.site ? checkSiteTransform(ws.site) : null), [ws.site])
   const primaryCase = ws.scenario?.input.evaluation_cases.find(c => c.case_id === ws.scenario?.input.objective.primary_case_id) ?? null
@@ -51,48 +52,115 @@ function App() {
     .filter(row => row.role !== 'baseline')
     .map(row => ({ id: row.layoutId, positions: row.placements.map(p => p.position_enu_m as Vec3), highlighted: row.layoutId === selectedLayoutId })), [searchRecord, selectedLayoutId])
 
+  const evalRecord = ws.runs.find(r => r.job.operation === 'evaluate_layout' && r.result) ?? null
+  const evalMetric = evalRecord?.result ? primaryMetric(evalRecord.result, ws.scenario?.input.objective.primary_case_id ?? null) : null
+  const evalCurrentness = evalRecord?.result ? ws.currentness(evalRecord.result) : null
+  const objective = ws.scenario ? objectiveView(ws.scenario) : null
+  const constraints = ws.scenario?.input.constraints ?? null
+  const dataPill = !connected ? 'OFFLINE · NO DATA' : synthetic ? 'SYNTHETIC TEST SITE · NOT SHEFFIELD' : 'SITE DATA · SEE PROVENANCE'
+  const crumb = { overview: ['City overview', 'Sheffield sites'], studio: ['Optimisation Studio', ws.site?.name ?? 'No site loaded'], compare: ['Scenario comparison', ws.site?.name ?? 'No site loaded'], report: ['Reports', ws.site?.name ?? 'No site loaded'] }[screen]
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell screen-${screen}`}>
       <a className="skip-link" href="#main">Skip to content</a>
-      <aside className="sidebar no-print">
-        <div className="brand" aria-label="CANOPY Sheffield"><span className="brand-mark" aria-hidden="true">✳</span><span>CANOPY<span className="brand-place">SHEFFIELD</span></span></div>
-        <p className="nav-caption">WORKSPACE</p>
+      <aside className="rail no-print">
+        <div className="rail-logo" aria-label="CANOPY Sheffield"><IconTree /></div>
         <nav aria-label="Main navigation">
-          {screens.map(item => <button key={item.id} type="button" className={`nav-item ${screen === item.id ? 'active' : ''}`} aria-current={screen === item.id ? 'page' : undefined} onClick={() => setScreen(item.id)}><span className="nav-number">{item.number}</span>{item.label}<span className="nav-arrow" aria-hidden="true">↗</span></button>)}
+          {screens.map(item => <button key={item.id} type="button" title={item.label} className={`rail-item ${screen === item.id ? 'active' : ''}`} aria-current={screen === item.id ? 'page' : undefined} onClick={() => setScreen(item.id)}>{item.icon}<span className="sr-only">{item.label}</span></button>)}
         </nav>
-        <div className="sidebar-foot"><span className={`status-dot${connected ? '' : ' warning'}`} /> Local workspace <span className="muted">· {connected ? `API ${ws.connection.status === 'connected' ? ws.connection.health.version : ''}` : 'offline'}</span></div>
+        <div className="rail-foot" title={connected ? `Local workspace · API ${ws.connection.status === 'connected' ? ws.connection.health.version : ''}` : 'Local workspace · offline'}><span className={`status-dot${connected ? '' : ' warning'}`} /></div>
       </aside>
 
-      <main id="main" className="main-content">
-        <header className="topbar no-print"><div className="mobile-brand">CANOPY <span>SHEFFIELD</span></div><span className="topbar-label">EVIDENCE LED TREE PLANNING</span><span className="topbar-status" data-testid="backend-status"><span className={`status-dot${connected ? '' : ' warning'}`} /> {connected ? 'Local backend connected' : ws.connection.status === 'connecting' ? 'Connecting…' : 'Backend not connected'}</span></header>
-        <div className="page-content">
-          <div className="eyebrow">WORKSPACE / {selected.number} / {selected.label.toUpperCase()}</div>
-          {screen === 'studio' ? <>
-            <div className="page-heading"><div><h1>Planting studio<span className="heading-dot">.</span></h1><p>Place a tree, evaluate it on the local engine, search for options, and see exactly which run every number came from.</p></div><span className="pill pill-muted">M2 VERTICAL SLICE</span></div>
-            {(synthetic || !connected) && <div className="notice" role="status" data-testid="site-notice"><span className="notice-icon" aria-hidden="true">ⓘ</span><div><strong>{connected ? 'Synthetic test site: not Sheffield' : 'Not connected to an evaluator'}</strong><p>{connected
-              ? `Every number is a live computation by the local backend on this authored synthetic geometry and the assumptions listed with each result. It is not a surveyed site or a forecast of real benefit. Available here: ${ops.join(', ') || 'no operations'}. Each result states which constraints were evaluated and which remain unknown.`
-              : 'Start the local backend (see frontend/README.md). No numbers are shown without a backend run.'}</p></div></div>}
-            <div className="studio-grid">
-              <section className="site-panel" aria-labelledby="site-heading"><div className="panel-head"><div><span className="section-kicker">ACTIVE SITE</span><h2 id="site-heading">{ws.site?.name ?? 'No site loaded'}</h2></div><span className="tiny-tag">{synthetic ? 'SYNTHETIC TEST' : ws.site ? ws.site.site_kind.toUpperCase() : 'OFFLINE'}</span></div>
-                <SiteScene scene={scene} candidates={candidates} onStep={candidateMode ? stepTree : undefined} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={moveTree} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} />
-                <div className="map-legend"><span><i className="legend-dot proposed" /> Proposed tree</span>{ws.draftDirty && <span><i className="legend-dot ghost" /> Last evaluated position</span>}{scene?.kind === 'reference' && <><span><i className="legend-dot target" /> Target receiver (represented area)</span><span><i className="legend-line sun" /> Declared sun direction (input, view only)</span></>}{scene?.kind === 'physical' && <><span><i className="legend-dot target" /> Receiver samples ({scene.scene.samples.length})</span><span><i className="legend-line region" /> Planting region</span></>}{candidateMode && <span><i className="legend-dot candidate" /> Catalogue positions ({catalogue.length})</span>}{overlays.length > 0 && <span><i className="legend-dot option" /> Search option placements</span>}<span>{candidateMode ? 'Drag tree to snap between catalogue positions' : 'Drag tree to move'} · drag elsewhere to orbit · scroll to zoom</span></div>
-              </section>
-              <aside className="detail-panel" aria-label="Planning controls and evidence">
-                <ResultCard ws={ws} />
-                <EvaluationControls ws={ws} />
-                <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
-                <AlternativesPanel ws={ws} selectedLayoutId={selectedLayoutId} onSelectLayout={setSelectedLayoutId} />
-                <RequirementsPanel ws={ws} />
-                <ProposalReviewPanel ws={ws} />
-                <RunHistory ws={ws} />
-                <SiteStatus ws={ws} transform={transform} />
-              </aside>
-            </div>
-          </> : screen === 'compare' ? <CompareScreen ws={ws} scene={scene} candidates={candidates} treeState={treeState} /> : screen === 'report' ? <ReportScreen ws={ws} /> : screen === 'overview' ? <OverviewScreen ws={ws} /> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
+      <header className="topbar no-print">
+        <div className="wordmark">CANOPY <span>Urban Intelligence · Sheffield</span></div>
+        <div className="crumb"><span>{crumb[0]}</span><i aria-hidden="true">/</i><strong>{crumb[1]}</strong></div>
+        <span className={`data-pill${connected && !synthetic ? ' ok' : ''}`} role="status" title={connected && synthetic ? `Every number is a live computation by the local backend on authored synthetic geometry. It is not a surveyed site or a forecast of real benefit. Available operations: ${ops.join(', ') || 'none'}.` : undefined}><i aria-hidden="true" />{dataPill}</span>
+        <span className="topbar-status" data-testid="backend-status"><span className={`status-dot${connected ? '' : ' warning'}`} /> {connected ? 'Local backend connected' : ws.connection.status === 'connecting' ? 'Connecting…' : 'Backend not connected'}</span>
+        <div className="topbar-actions">
+          {screen !== 'studio' && <button type="button" className="ghost-btn" onClick={() => setScreen('studio')}><IconSliders /> Open studio</button>}
+          {screen !== 'compare' && <button type="button" className="ghost-btn" onClick={() => setScreen('compare')}><IconCompare /> Compare plans</button>}
+          {screen !== 'report' && <button type="button" className="ghost-btn" onClick={() => setScreen('report')}><IconDownload /> Report</button>}
         </div>
+      </header>
+
+      <main id="main" className="main-content">
+          {screen === 'studio' ? <div className="studio">
+            <aside className="param-panel" aria-label="Plan parameters">
+              <div className="param-scroll">
+                <div className="param-head">
+                  <div className="param-title"><h1>Plan parameters</h1><span className="rev-tag">{ws.scenario ? `REV ${ws.scenario.revision}${ws.draftDirty ? ' · DRAFT' : ''}` : 'NO SCENARIO'}</span></div>
+                  <p>{connected ? `${catalogue.length || 'No'} catalogue position${catalogue.length === 1 ? '' : 's'}${scene?.kind === 'physical' ? ` · ${scene.scene.samples.length} receiver samples` : ''}` : 'Start the local backend (see frontend/README.md). No numbers are shown without a backend run.'}</p>
+                  {(synthetic || !connected) && <p className="param-note" data-testid="site-notice">{connected ? <><strong>Synthetic test site: not Sheffield.</strong> Every number is a live backend computation on authored geometry, not a surveyed site or a forecast of real benefit. Available: {ops.join(', ') || 'no operations'}.</> : <strong>Not connected to an evaluator.</strong>}</p>}
+                </div>
+                <RequirementsPanel ws={ws} />
+                {objective && <section className="param-section">
+                  <div className="param-section-head"><span>OBJECTIVE</span><em>1 modelled</em></div>
+                  <div className="chip-row"><span className="chip active">Direct shade</span><span className="chip off" title="Not modelled by this backend">Flood</span><span className="chip off" title="Not modelled by this backend">Air quality</span><span className="chip off" title="Not modelled by this backend">Equity</span></div>
+                  <div className="weight-row"><span><i className="sq heat" />Shade on targets</span><em>{ws.scenario?.input.objective.quantity_kind}</em><strong>100%</strong></div>
+                  <div className="weight-track"><div style={{ width: '100%' }} /></div>
+                  <p className="fine-print">{objective.text}{objective.target ? ` · target ${objective.target}` : ''}. Flood, air quality and equity are not computed here, so they cannot be weighted.</p>
+                </section>}
+                <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
+                {constraints && <section className="param-section">
+                  <div className="param-section-head"><span>CONSTRAINTS</span><em>enforced by backend</em></div>
+                  <ConstraintRow title={`Budget ${formatPence(constraints.budget_pence)}`} sub={`${constraints.budget_basis} · hard limit`} />
+                  <ConstraintRow title={constraints.max_tree_count == null ? 'No tree-count limit' : `At most ${constraints.max_tree_count} trees`} sub="Tree count" on={constraints.max_tree_count != null} />
+                  <ConstraintRow title={constraints.spacing_rules.length ? `Min. ${constraints.spacing_rules.map(r => r.minimum_centre_separation_m).join(' / ')} m between trees` : 'No spacing rule declared'} sub="Centre separation" on={constraints.spacing_rules.length > 0} />
+                  <ConstraintRow title={constraints.winter_limits.length ? `Protect winter sun ≤ ${constraints.winter_limits.map(w => w.maximum_loss_m2_h).join(' / ')} m²·h` : 'No winter limit declared'} sub={constraints.winter_limits.map(w => w.case_id).join(', ') || 'Winter check'} on={constraints.winter_limits.length > 0} />
+                  <ConstraintRow title="Respect exclusion zones" sub={`${ws.site?.exclusions.length ?? 0} region${(ws.site?.exclusions.length ?? 0) === 1 ? '' : 's'} in this SiteBundle`} on={(ws.site?.exclusions.length ?? 0) > 0} />
+                  <ConstraintRow title="Survey still required" sub={constraints.survey_requirements.join('; ') || 'Utilities, soil, ownership, permits: unknown'} warn />
+                </section>}
+              </div>
+              <div className="param-foot">
+                <EvaluationControls ws={ws} />
+              </div>
+            </aside>
+
+            <section className="site-panel map-stage" aria-labelledby="site-heading">
+              <h2 id="site-heading" className="sr-only">{ws.site?.name ?? 'No site loaded'}</h2>
+              <SiteScene scene={scene} candidates={candidates} onStep={candidateMode ? stepTree : undefined} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={moveTree} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} />
+              <div className="map-chips" aria-hidden="true">
+                <span className="map-chip"><i className="sq lime" />Proposed tree</span>
+                {scene?.kind === 'physical' && <span className="map-chip"><i className="sq water" />Receiver samples</span>}
+                {candidateMode && <span className="map-chip"><i className="ring" />Candidates</span>}
+                {overlays.length > 0 && <span className="map-chip"><i className="sq sky" />Search options</span>}
+              </div>
+              {evalRecord?.result && evalMetric && <div className={`map-toast${evalCurrentness === 'current' ? '' : ' stale'}`} role="status">
+                {evalCurrentness === 'current' ? <IconCheck /> : <IconAlert />}
+                <span><strong>{evalCurrentness === 'current' ? 'Evaluation computed' : 'Last evaluation is not current'}</strong> · {formatValue(evalMetric.value)} {unitLabel(evalMetric.unit)} · rev {evalRecord.result.scenario_revision} · run {evalRecord.result.run_id.slice(0, 8)}</span>
+                <button type="button" onClick={() => setScreen('compare')}>See evidence</button>
+              </div>}
+              <div className="map-legend"><strong>LEGEND</strong><span><i className="legend-dot proposed" /> Proposed tree</span>{ws.draftDirty && <span><i className="legend-dot ghost" /> Last evaluated position</span>}{scene?.kind === 'reference' && <><span><i className="legend-dot target" /> Target receiver (represented area)</span><span><i className="legend-line sun" /> Declared sun direction (input, view only)</span></>}{scene?.kind === 'physical' && <><span><i className="legend-dot target" /> Receiver samples ({scene.scene.samples.length})</span><span><i className="legend-line region" /> Planting region</span></>}{candidateMode && <span><i className="legend-dot candidate" /> Catalogue positions ({catalogue.length})</span>}{overlays.length > 0 && <span><i className="legend-dot option" /> Search option placements</span>}<span className="legend-hint">{candidateMode ? 'Drag tree to snap between catalogue positions' : 'Drag tree to move'} · drag elsewhere to orbit · scroll to zoom</span></div>
+              <div className="map-foot">{synthetic ? 'Authored synthetic geometry · not survey-grade' : 'Geometry from the verified SiteBundle asset'}</div>
+            </section>
+
+            <aside className="detail-panel result-panel" aria-label="Planning controls and evidence">
+              <div className="result-head">
+                <div className="result-status"><span className={`status-dot${evalCurrentness === 'current' ? '' : ' warning'}`} />{evalCurrentness ? CURRENTNESS_LABEL[evalCurrentness].label.split(' ')[0] : 'NO RESULT'}{ws.scenario ? ` · REV ${ws.scenario.revision}` : ''}{evalRecord?.result ? ` · ${evalRecord.result.provenance.compute_finished_at_utc.slice(11, 16)} UTC` : ''}</div>
+                <h2>{ws.site?.name ?? 'No site loaded'}</h2>
+                {objective && <p>{objective.text}</p>}
+              </div>
+              <ResultCard ws={ws} />
+              <AlternativesPanel ws={ws} selectedLayoutId={selectedLayoutId} onSelectLayout={setSelectedLayoutId} />
+              <ProposalReviewPanel ws={ws} />
+              <RunHistory ws={ws} />
+              <SiteStatus ws={ws} transform={transform} />
+              <div className="detail-section agent-box">
+                <div className="agent-title"><IconChat /> Investigate with the planning agent</div>
+                <div className="agent-input" aria-disabled="true"><span>No agent endpoint on this backend yet</span><i><IconArrow /></i></div>
+                <p className="fine-print">When the local model is connected, its answers will re-run these planning tools and cite each run. Nothing is scripted in its place.</p>
+              </div>
+            </aside>
+          </div> : <div className="page-content">
+            {screen === 'compare' ? <CompareScreen ws={ws} scene={scene} candidates={candidates} treeState={treeState} /> : screen === 'report' ? <ReportScreen ws={ws} /> : <OverviewScreen ws={ws} onOpenStudio={() => setScreen('studio')} />}
+          </div>}
       </main>
     </div>
   )
+}
+
+function ConstraintRow({ title, sub, on = true, warn = false }: { title: string; sub: string; on?: boolean; warn?: boolean }) {
+  return <div className="constraint-row"><div><strong>{title}</strong><span>{sub}</span></div>{warn ? <span className="lock-tag warn">SURVEY</span> : <span className={`toggle${on ? ' on' : ''}`} role="img" aria-label={on ? 'Enforced by the backend (read-only)' : 'Not declared in this scenario'}><i /></span>}</div>
 }
 
 export default App

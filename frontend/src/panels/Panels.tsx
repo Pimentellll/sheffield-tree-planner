@@ -178,7 +178,7 @@ export function ResultCard({ ws }: { ws: Workspace }) {
   return (
     <div className={`detail-section result-section result-${currentness}`}>
       <span className="section-kicker">{currentness === 'current' ? 'CURRENT RESULT' : 'LAST RESULT — NOT CURRENT'}</span>
-      <ResultBody result={result} currentness={currentness} primaryCase={primaryCase} />
+      <ResultBody result={result} currentness={currentness} primaryCase={primaryCase} budgetPence={ws.scenario?.input.constraints.budget_pence ?? null} />
       {failureNewer && latestFailure && <p className="error-box">A later job {latestFailure.job.status}: {describeJob(latestFailure.job).detail}</p>}
     </div>
   )
@@ -191,7 +191,7 @@ function constraintSummary(result: Result) {
   return (['fail', 'unknown', 'pass'] as const).filter(k => counts[k]).map(k => `${counts[k]} ${k}`).join(' · ')
 }
 
-function ResultBody({ result, currentness, primaryCase }: { result: Result; currentness: Currentness; primaryCase: string | null }) {
+function ResultBody({ result, currentness, primaryCase, budgetPence }: { result: Result; currentness: Currentness; primaryCase: string | null; budgetPence: number | null }) {
   const metric = primaryMetric(result, primaryCase)
   const layout = result.layouts[0]
   const zero = metric?.value === 0
@@ -201,16 +201,21 @@ function ResultBody({ result, currentness, primaryCase }: { result: Result; curr
         <strong>{CURRENTNESS_LABEL[currentness].label}</strong>
         <span>{CURRENTNESS_LABEL[currentness].detail}</span>
       </div>
-      {metric ? (
-        <div className={`metric${currentness !== 'current' ? ' metric-stale' : ''}`}>
-          <span className="metric-value" data-testid="metric-value">{formatValue(metric.value)}</span>
-          <span className="metric-unit">{unitLabel(metric.unit)}</span>
-          <span className="metric-label">{metric.metric_id.replace(/_/g, ' ')} · {metric.quantity_kind} · case {metric.case_id} · {metric.horizon_years} y{metric.target_id ? ` · target ${metric.target_id}` : ''}</span>
-          {zero && <span className="metric-note">Valid zero: the evaluator found no additional shade on the target for this placement and time bin.</span>}
-        </div>
-      ) : (
-        <p className="fine-print text-warning">The result contains no metric.</p>
-      )}
+      <div className="kpi-grid">
+        <div className="kpi"><span className="kpi-label">Trees proposed</span><span className="kpi-value">{layout ? layout.tree_count : '—'}</span><span className="kpi-sub">{layout ? `${layout.layout.layout_id} rev ${layout.layout.revision}` : 'no layout'}</span></div>
+        <div className="kpi"><span className="kpi-label">Capital cost · <em>est.</em></span><span className="kpi-value">{layout ? formatPence(layout.cost_pence) : '—'}</span><span className="kpi-sub">{layout && budgetPence ? `${((layout.cost_pence / budgetPence) * 100).toFixed(1)}% of ${formatPence(budgetPence)} budget` : 'upfront'}</span></div>
+        {metric ? (
+          <div className={`kpi metric${currentness !== 'current' ? ' metric-stale' : ''}`}>
+            <span className="kpi-label">New direct shade · <em className="ok">modelled</em></span>
+            <span className="kpi-value"><span className="metric-value" data-testid="metric-value">{formatValue(metric.value)}</span> <span className="metric-unit">{unitLabel(metric.unit)}</span></span>
+            <span className="kpi-sub metric-label">{metric.metric_id.replace(/_/g, ' ')} · {metric.quantity_kind} · case {metric.case_id} · {metric.horizon_years} y{metric.target_id ? ` · target ${metric.target_id}` : ''}</span>
+          </div>
+        ) : (
+          <div className="kpi"><span className="kpi-label">New direct shade</span><span className="kpi-value">—</span><span className="kpi-sub text-warning">The result contains no metric.</span></div>
+        )}
+        <div className="kpi"><span className="kpi-label">Feasibility</span><span className={`kpi-value kpi-word${layout && layout.feasibility !== 'feasible' ? ' text-warning' : ''}`}>{layout ? layout.feasibility.replace('_', ' ') : '—'}</span><span className="kpi-sub">{constraintSummary(result)}</span></div>
+      </div>
+      {metric && zero && <span className="metric-note">Valid zero: the evaluator found no additional shade on the target for this placement and time bin.</span>}
       {result.missing_metrics.length > 0 && <p className="fine-print text-warning">Missing: {result.missing_metrics.map(m => `${m.metric_id} (${m.reason})`).join('; ')}</p>}
       <div className="evidence-grid">
         <Row label="Mode" value={EXECUTION_MODE_LABEL[result.provenance.execution_mode]} warn={result.provenance.execution_mode !== 'live'} />

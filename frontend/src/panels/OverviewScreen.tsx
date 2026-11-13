@@ -33,47 +33,63 @@ const OPEN_ITEMS = [
   'Asset-level rights for local use, team sharing, public display and export',
 ]
 
-export default function OverviewScreen({ ws }: { ws: Workspace }) {
+export default function OverviewScreen({ ws, onOpenStudio }: { ws: Workspace; onOpenStudio: () => void }) {
   const active = ws.site
+  const synthetic = active?.site_kind === 'synthetic_test'
   return (
-    <>
-      <div className="page-heading"><div><h1>Sheffield sites<span className="heading-dot">.</span></h1><p>Where the planner can be used today, and what real Sheffield sites still need before any result there could be trusted.</p></div><span className="pill pill-muted">STP-005 STATUS</span></div>
-      <TerrainView name="weston-park" />
-      <div className="overview-grid">
-        <section className="detail-panel" aria-labelledby="active-site">
-          <div className="detail-section">
-            <span className="section-kicker">LOADED IN THE PLANNER</span>
-            <h2 id="active-site" className="card-title">{active ? active.name : 'No site loaded'}</h2>
-            {active ? (
-              <>
-                <div className="readiness-row"><span>Kind</span><strong className={active.site_kind === 'synthetic_test' ? 'text-warning' : undefined}>{active.site_kind === 'synthetic_test' ? 'Synthetic test (not Sheffield)' : 'Real site'}</strong></div>
-                <div className="readiness-row"><span>Scene / semantics</span><strong>rev {active.scene_revision} / {active.semantic_revision}</strong></div>
-                <div className="readiness-row"><span>Blockers</span><strong>{active.readiness.blockers.length || 'none recorded'}</strong></div>
-                <p className="fine-print">Only this site can be evaluated now. Real terrain on this page is a view-only context; it is not loaded into the planner.</p>
-              </>
-            ) : <p className="fine-print">Start the local backend to load a site.</p>}
+    <div className="overview">
+      <div className="overview-main">
+        <div className="hero">
+          <span className="hero-kicker">SHEFFIELD · SITE READINESS</span>
+          <h1>Plan greener streets. Prove the impact.</h1>
+          <p>Where the planner can be used today, and what real Sheffield sites still need before any result there could be trusted. Site-level geometry, shade modelling and constraint checks run only inside a loaded study site.</p>
+        </div>
+        <div className="stat-row">
+          <div className="stat"><span>Loaded in the planner</span><strong>{active ? 1 : 0}</strong><em>{active ? (synthetic ? 'synthetic test site' : 'site') : 'backend offline'}</em></div>
+          <div className="stat"><span>Sheffield candidates</span><strong>{CANDIDATES.length}</strong><em>not accepted · V03 pending</em></div>
+          <div className="stat warn"><span>Open audit items</span><strong>{OPEN_ITEMS.length}</strong><em>desk audit, 12 Nov 2026</em></div>
+          <div className="stat"><span>Catalogue positions</span><strong>{active?.candidate_catalogue?.length ?? 0}</strong><em>in the loaded site</em></div>
+        </div>
+        <TerrainView name="weston-park" />
+      </div>
+      <aside className="ivory-card overview-side" aria-label="Sites and readiness">
+        <div className="side-head"><h2>Study sites</h2><span>{CANDIDATES.length + (active ? 1 : 0)} listed</span></div>
+        <p className="fine-print">A public park name or downloadable data is not planting permission, a current tree inventory or a feasible position.</p>
+        <section className="site-row active" aria-labelledby="active-site">
+          <i>1</i>
+          <div>
+            <h3 id="active-site">{active ? active.name : 'No site loaded'}</h3>
+            {active ? <>
+              <span className={`tag ${synthetic ? 'tag-warning' : 'tag-ok'}`}>{synthetic ? 'SYNTHETIC TEST · NOT SHEFFIELD' : 'REAL SITE'}</span>
+              <p>scene rev {active.scene_revision} / semantics {active.semantic_revision} · blockers {active.readiness.blockers.length || 'none recorded'}</p>
+              <p className="fine-print">Only this site can be evaluated now. Real terrain on this page is a view-only context; it is not loaded into the planner.</p>
+            </> : <p className="fine-print">Start the local backend to load a site.</p>}
           </div>
         </section>
-        {CANDIDATES.map(c => (
-          <section key={c.name} className="detail-panel" aria-labelledby={`cand-${c.name}`}>
-            <div className="detail-section">
-              <span className="section-kicker">{c.role.toUpperCase()}</span>
-              <h2 id={`cand-${c.name}`} className="card-title">{c.name}</h2>
+        {CANDIDATES.map((c, i) => (
+          <section key={c.name} className="site-row" aria-labelledby={`cand-${c.name}`}>
+            <i>{i + 2}</i>
+            <div>
+              <h3 id={`cand-${c.name}`}>{c.name}</h3>
               <span className="tag tag-warning">NOT ACCEPTED · V03 PENDING</span>
+              <p>{c.role}</p>
               <ul className="bin-list">{c.facts.map(f => <li key={f}>{f}</li>)}</ul>
               <a className="text-action" href={c.link} target="_blank" rel="noreferrer">Council page ↗</a>
             </div>
           </section>
         ))}
-      </div>
-      <section className="detail-panel overview-open" aria-labelledby="open-items">
-        <div className="detail-section">
-          <span className="section-kicker">BEFORE A REAL SITE CAN BE LOADED</span>
-          <h2 id="open-items" className="card-title">Open items (desk audit, 12 Nov 2026)</h2>
-          <ol className="bin-list">{OPEN_ITEMS.map(i => <li key={i}>{i}</li>)}</ol>
-          <p className="fine-print">A public park name or downloadable data is not planting permission, a current tree inventory or a feasible position. See docs/site-audit/ for sources and licences.</p>
+        <details className="evidence-details" open>
+          <summary id="open-items">Before a real site can be loaded ({OPEN_ITEMS.length})</summary>
+          <ol>{OPEN_ITEMS.map(i => <li key={i}>{i}</li>)}</ol>
+          <p className="fine-print">See docs/site-audit/ for sources and licences.</p>
+        </details>
+        <div className="next-step">
+          <span>NEXT STEP</span>
+          <strong>Optimise {active ? active.name : 'the loaded site'}</strong>
+          <p>Shade modelling and constraint checks run only inside a study site.</p>
+          <button type="button" className="primary-action" onClick={onOpenStudio}>Open Optimisation Studio <span aria-hidden="true">→</span></button>
         </div>
-      </section>
-    </>
+      </aside>
+    </div>
   )
 }

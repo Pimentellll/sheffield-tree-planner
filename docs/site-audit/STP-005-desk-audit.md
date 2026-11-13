@@ -90,6 +90,27 @@ This environment cannot reach the EA download service, so **tile hashes, nodata 
 
 Next owner: Arnav accepts or changes the 10° cutoff and the 200 m / per-structure buffer, then crops SK38NW for the STP-006 import. Whoever downloads the tiles records the hashes here.
 
+## Tile manifest and first real crop (13 November 2026, 11:40–11:50)
+
+Reported by Alex's laptop session, which downloaded the tiles from the [Defra Survey Data Download](https://environment.data.gov.uk/survey), copied them to the venue DGX Spark and ran `frontend/scripts/prepare_terrain.py` at `b1bb0e5` (branch `feat/alex/terrain-context-view`). The figures below are that run's output; the author of this section did not handle the files. Raw tiles and the crop stay out of git.
+
+| Asset | Download file | Download SHA-256 | GeoTIFF SHA-256 |
+| --- | --- | --- | --- |
+| DTM, 1 m, 2022 composite, tile SK38NW | `lidar_composite_dtm-2022-1-SK38nw.zip` | `2ce69bcad6c0d1d519086334e29091833d3de71f84d595bb794519f474a45f02` | `64a9168a5a884042ed4edd97f4358e4aac614627093541e36f511f15dc17d828` |
+| First-return DSM, 1 m, 2022 composite, tile SK38NW | `lidar_composite_first_return_dsm-2022-1-SK38nw.zip` | `797026fdf7982db448dbbe6058b29e81db8c7cde90d5eb5b74373b8c3ad928e5` | `1f131b5a1282754ef524b8b466e36f445bc5b065d59b50229956344029e35b36` |
+
+**Checked by the script (it refuses otherwise):** both GeoTIFFs are EPSG:27700 with 1 m cells, and the buffered Weston Park box (433389, 386799 → 434611, 388013) lies inside the tile. **Crop:** 611 × 607 cells at 2 m (DTM block mean, DSM block max), 2,967,016 bytes, **0 no-data cells**.
+
+**Findings**
+
+- **Ground relief is 115 m across the crop** (DTM 61.67–176.75 m). This is a steep site. The takeover-v1 engine supports flat ground only and fails closed on anything else, so Weston Park cannot be evaluated as it stands; a real-site pilot needs either a near-flat sub-area chosen from the DTM or terrain support in the engine. This is the main B08 consequence of this check.
+- **Arts Tower confirmed in the surface model.** The tallest surface within 50 m of the tower's published position is 80.4 m above ground, consistent with the published 78 m plus rooftop structures and the 2 m block maximum. It stands where the envelope section above places it, just east of the discovery box.
+- **The crop's maximum height above ground, 93.1 m, is not the Arts Tower.** It is at about E434160 N387522, roughly 90 m north-west of the tower: a thin diagonal line of 75–93 m cells crossing a flat roof about 50 m high. That shape suggests a crane, mast or scan artefact. Unidentified; do not quote 93.1 m as a building height.
+- **A second tall block** of 66–83 m, about 450 cells, sits in the south-west of the buffer around E433774 N386980. Its position is consistent with the Royal Hallamshire Hospital, which was not checked against a source. It is a second tall shadow-caster for the context envelope, south-west of the park.
+- **198 cells have the surface more than 1 m below the ground model.** Minor DSM/DTM disagreement, noted and not corrected.
+
+**Still not established:** the file-level no-data value and any vertical-datum tag (not in the pasted output; they are in the crop's metadata JSON on Alex's laptop); co-registration against a surveyed control point; building-versus-canopy classification; Arnav's review. **V03 is not passed.** The crop is used only as a view-only context in the frontend, labelled "not analysed".
+
 ## Source and rights register
 
 Rights below apply to the **named source product** under its published terms. No source asset has been downloaded, hashed, transformed or committed. A future SiteBundle must attach the specific acquired tile/version and rights evidence before display or export.
@@ -114,4 +135,4 @@ Rights below apply to the **named source product** under its published terms. No
 3. Choose permitted context/boundary assets separately. Source downloadability or a public park name never certifies team sharing, app display, export, planting permission, current canopy or a feasible tree location.
 4. Ben's registry and rights validator should distinguish `permitted`, `restricted` and `unknown` for local use, team sharing, public display and export. This document is not a runtime registry or accepted site status.
 
-**Current disposition (13 Nov):** neither candidate passes V03. The context envelope is proposed and catalogue coverage of the buffered extents is confirmed (one March 2021 survey each). Tile hashes, file-level datum and nodata, and Arnav's acceptance of the envelope are outstanding. Continue with the labelled synthetic frontend scene and analytic tests. No real Sheffield geometry or dataset asset has been added to the product.
+**Current disposition (13 Nov):** neither candidate passes V03. The context envelope is proposed and catalogue coverage of the buffered extents is confirmed (one March 2021 survey each). Tile SK38NW is now downloaded and hashed and a first crop is checked (see the tile manifest): the site has 115 m of ground relief, which the flat-ground engine cannot evaluate. File-level datum, a control-point check and Arnav's review are outstanding. Continue with the labelled synthetic frontend scene and analytic tests. No real Sheffield geometry or dataset asset has been added to the product.

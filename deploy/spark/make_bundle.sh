@@ -73,11 +73,14 @@ for plat in "${PLATFORMS[@]}"; do
   esac
   echo "== wheelhouse linux-$plat cp${PY/./}"
   dest="$STAGE/wheelhouse/linux-$plat-cp${PY/./}"
-  uvx --quiet --from "pip==$PIP_VERSION" pip download --disable-pip-version-check --no-deps \
+  # pip must RUN under the target Python version: requirement markers such as
+  # python_full_version >= '3.12' are evaluated against the running interpreter, not
+  # --python-version, and the lock pins different numpy/scipy per Python version.
+  uvx --quiet --python "$PY" --from "pip==$PIP_VERSION" pip download --disable-pip-version-check --no-deps \
     --only-binary=:all: --implementation cp --python-version "$PY" "${tags[@]}" \
     --require-hashes -r "$STAGE/requirements.txt" -d "$dest" --quiet
   # pip itself, so a Python without ensurepip can bootstrap: python pip.whl/pip install ...
-  uvx --quiet --from "pip==$PIP_VERSION" pip download --disable-pip-version-check --no-deps \
+  uvx --quiet --python "$PY" --from "pip==$PIP_VERSION" pip download --disable-pip-version-check --no-deps \
     --only-binary=:all: "pip==$PIP_VERSION" -d "$dest" --quiet
 done
 

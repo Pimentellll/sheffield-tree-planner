@@ -1,6 +1,6 @@
 # STP-005 — Sheffield site and source desk audit
 
-**Author:** Alex's coding assistant for Alex · **checked:** 12 November 2026 · **state:** candidate assessment, not an accepted SiteBundle or planting permission.
+**Author:** Alex's coding assistant for Alex · **checked:** 12 November 2026, context/coverage update 13 November 2026 · **state:** candidate assessment, not an accepted SiteBundle or planting permission.
 
 ## Site decision for the next data check
 
@@ -18,6 +18,77 @@ The boxes below are the min/max node coordinates of [OSM way 16641193](https://w
 | Manor Fields Park | 53.3654730–53.3743068 | −1.4372009 to −1.4277104 | Fallback coverage search; verify the mapped way matches the intended park. |
 
 The [EA composite catalogue FeatureServer](https://environment.data.gov.uk/KB6uNVj5ZcJr7jUP/ArcGIS/rest/services/LIDAR_Composite_Catalogues/FeatureServer) returned one intersecting record for **each** box in its 1 m first-return DSM, last-return DSM and DTM 2022 extent layers (0, 1 and 2). All six records give survey start **16 March 2021**, end **17 March 2021**, `year=2021`, `resolution=1`, `comp_year=2022`; the internal polygon filenames are `FZ_DSM_P_10706`, `D_DSM_P_10706` and `F_DTM_P_10706`. The catalogue returned `tilename=n/a`, so these are **not** downloadable tile IDs. This shows catalogue coverage and matching survey dates at the query boxes; actual tile contents, co-registration and completeness still need inspection.
+
+## Shadow-context envelope and tile coverage (13 November 2026, response to Arnav's review on #39)
+
+Arnav asked for an agreed low-sun cutoff and an obstruction-height envelope (horizontal reach *H* / tan *e*) before a real crop is selected, then actual tile coverage and height evidence. This section proposes the envelope and records what could be checked without downloading tiles. **The cutoff and buffers are proposals for Arnav to accept or change; nothing here is an accepted analysis setting.**
+
+### Method and accuracy
+
+- Sun positions: `pvlib` 0.16.1 NREL SPA (`get_solarposition`, apparent elevation with refraction), park centroids, 100 m altitude. Computed locally, 13 Nov 2026.
+- WGS84 → BNG: `pyproj` 3.8.0 / PROJ 9.8.1 default EPSG:4326 → EPSG:27700 operation **without the OSTN15 grid** (none installed here). Expect metre-level horizontal error, which is adequate for choosing an envelope and tile but **not** for co-registration. The real-site import must use OSTN15, as Arnav's STP-006 work already requires.
+- Discovery boxes are still the OSM way node extents above, not surveyed boundaries.
+
+### Solar geometry at the candidates
+
+Values for Weston Park (Manor Fields differs by under 0.05°):
+
+| Case | Sun elevation |
+| --- | --- |
+| 15 July (summer design day) | 58.1° max at 12:10 UTC; 24.2° at 07:00 UTC (08:00 BST); 10.3° at 19:00 UTC (20:00 BST) |
+| 21 June | 60.1° max; 11.4° at 19:00 UTC |
+| 20 March | 36.6° max |
+| 21 December | **13.2° max** at 12:00 UTC; ≥ 10° only 10:20–13:48 UTC (3.5 h); ≥ 5° 09:15–14:54 UTC (5.7 h); never reaches 15° |
+
+### Proposed cutoff and reach
+
+**Proposal:** a **10° low-sun cutoff** for the summer benefit case (the 08:00–20:00 BST window on the July design day never drops below 10.3°), and the same 10° for the winter check, stated as a limitation that it covers only 3.5 h on 21 December. A 5° winter cutoff would more than double the reach (table) and needs a decision from Arnav.
+
+Horizontal shadow reach *H* / tan *e*, in metres:
+
+| Obstruction height *H* | *e* = 5° | 10° | 15° | 20° | 24.2° (07:00 UTC, July) |
+| --- | --- | --- | --- | --- | --- |
+| 10 m | 114 | 57 | 37 | 27 | 22 |
+| 20 m | 229 | 113 | 75 | 55 | 45 |
+| 30 m (mature trees, most buildings) | 343 | **170** | 112 | 82 | 67 |
+| 50 m | 572 | 284 | 187 | 137 | 111 |
+| 78 m (Arts Tower) | 892 | **442** | 291 | 214 | 174 |
+
+**Proposed context envelope:** the study box plus a **200 m all-round buffer** (covers obstructions up to about 35 m at 10°). For each named structure taller than 35 m, extend to that structure's own *H* / tan 10° on its sun-facing side. A directional (azimuth-limited) envelope would be smaller. That is a later optimisation, which needs Arnav's sign-off that no shading direction is dropped.
+
+### Named tall obstruction: Arts Tower next to Weston Park
+
+The University of Sheffield's [Arts Tower](https://sheffield.ac.uk/news/iconic-arts-tower-university-sheffield-celebrates-60-years) is 78 m tall. Its published coordinates, [53.382738° N, 1.487289° W](https://en.wikipedia.org/wiki/Arts_Tower), convert to about BNG (434201, 387444). That is **about 40 m east of the Weston Park discovery box**, within the box's northing range. On 15 July the sun's azimuth is 86° at 07:00 UTC (08:00 BST) and its 24.2° elevation gives a 174 m reach, so the tower's shadow points almost due west across the park's east side during the start of the benefit window. Before 07:00 UTC the reach is longer still (217 m at 06:30, 282 m at 06:00 UTC). **The Weston Park scene must include the tower and the surrounding university buildings in its context DSM.** Omitting them would overstate the shade added by new trees on the east side in the morning. Other nearby buildings (Western Bank Library, Firth Court, Weston Park Museum, the Children's Hospital) need heights from the DSM itself. No height for them is asserted here.
+
+### Tile coverage at the buffered extents (catalogue check, no download)
+
+Buffered boxes (BNG, metres, with a 450 m buffer, enough for the Arts Tower at 10°):
+
+| Candidate | Box (E min, N min → E max, N max) | 5 km OS tile |
+| --- | --- | --- |
+| Weston Park | 433389, 386799 → 434611, 388013 | **SK38NW** (430000–435000 E, 385000–390000 N) |
+| Manor Fields Park | 437091, 385098 → 438630, 386986 | **SK38NE** (435000–440000 E, 385000–390000 N) |
+
+Both boxes fall inside a single 5 km tile each, even at the 450 m buffer. A 5° winter cutoff with the Arts Tower (892 m) would push Weston Park's east edge past 435000 E into SK38NE.
+
+On 13 November the [EA composite catalogue FeatureServer](https://environment.data.gov.uk/KB6uNVj5ZcJr7jUP/ArcGIS/rest/services/LIDAR_Composite_Catalogues/FeatureServer) was queried with these buffered boxes (EPSG:27700 envelopes). The DTM layer (2), last-return DSM layer (1) and first-return DSM layer (0) each returned **one** survey polygon, `P_10706` (area 395.1 km²; filenames `F_DTM_P_10706`, `D_DSM_P_10706`, `FZ_DSM_P_10706`; flown 16–17 March 2021; `comp_year` 2022). `spatialRel=esriSpatialRelWithin` returned that polygon and `esriSpatialRelContains` returned nothing. So each buffered box lies **entirely within one survey**: no composite seam or mixed survey dates in the context. `tilename` is still `n/a`, so the downloadable tile names above are derived from the OS grid, not from the catalogue.
+
+Mid-March flight dates mean deciduous canopy is **leaf-off** in the DSM. First-return heights of deciduous trees will under-represent summer crowns. That is a modelling gap for existing-tree shading, which Arnav should decide how to handle; it is not a reason to reject the source.
+
+### Vertical datum evidence
+
+EA states that composite LIDAR data is presented in metres, referenced to Ordnance Survey Newlyn using the OSTN'15 transformation, aligned to the OS National Grid, with a stated ±15 cm vertical RMSE per survey. Sources: the [data.gov.uk DSM record](https://www.data.gov.uk/dataset/cf3f1137-c12b-44a1-a835-e80fe4a60b92/lidar-composite-digital-surface-model-dsm-1m); provider text reproduced in the [Earth Engine catalogue entry for the 2022 composite](https://developers.google.com/earth-engine/datasets/catalog/UK_EA_ENGLAND_1M_TERRAIN_2022); the EA [time-stamped tile metadata](https://www.data.gov.uk/api/2/rest/harvestobject/96bc1d9e-9341-40c2-aaa0-c24d40accb2d/html) (OS Newlyn, 5 km GeoTIFF zips). The EA dataset page itself renders client-side and could not be read here. **Record as: ODN heights (OSGM15-based, via OSTN15), status "documented by publisher, not yet confirmed from the file".** Confirm against the *LIDAR Composite Technical Information Guide* linked from the [EA DSM page](https://environment.data.gov.uk/dataset/9ba4d5ac-d596-445a-9056-dae3ddec0178) and the downloaded GeoTIFF metadata. To compare with GNSS or ellipsoidal heights, use the EPSG:7405 → ellipsoidal path Arnav prepared (OSTN15 + OSGM15), not a constant offset.
+
+### Still blocked, and exactly what unblocks it
+
+This environment cannot reach the EA download service, so **tile hashes, nodata values and actual file CRS/datum tags are not recorded**. To unblock, someone with a normal browser does the following:
+
+1. Go to https://environment.data.gov.uk/survey and draw an area covering the Weston Park box above.
+2. Choose *LIDAR Composite DTM* and *LIDAR Composite DSM* (first and last return), 2022, 1 m. Download **SK38NW** (and **SK38NE** for the fallback).
+3. Record each downloaded file name, byte size and SHA-256 (`sha256sum` / `Get-FileHash`), and from `gdalinfo` the CRS, nodata value and any vertical datum tag.
+4. Add those rows to this audit as the asset manifest. Keep raw tiles out of git: they are OGL, but large, and need the EA attribution statement wherever displayed.
+
+Next owner: Arnav accepts or changes the 10° cutoff and the 200 m / per-structure buffer, then crops SK38NW for the STP-006 import. Whoever downloads the tiles records the hashes here.
 
 ## Source and rights register
 
@@ -43,4 +114,4 @@ Rights below apply to the **named source product** under its published terms. No
 3. Choose permitted context/boundary assets separately. Source downloadability or a public park name never certifies team sharing, app display, export, planting permission, current canopy or a feasible tree location.
 4. Ben's registry and rights validator should distinguish `permitted`, `restricted` and `unknown` for local use, team sharing, public display and export. This document is not a runtime registry or accepted site status.
 
-**Current disposition:** neither candidate passes V03. Continue with the labelled synthetic frontend scene and analytic tests. No real Sheffield geometry or dataset asset has been added to the product.
+**Current disposition (13 Nov):** neither candidate passes V03. The context envelope is proposed and catalogue coverage of the buffered extents is confirmed (one March 2021 survey each). Tile hashes, file-level datum and nodata, and Arnav's acceptance of the envelope are outstanding. Continue with the labelled synthetic frontend scene and analytic tests. No real Sheffield geometry or dataset asset has been added to the product.

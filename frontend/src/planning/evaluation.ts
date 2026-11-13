@@ -27,7 +27,7 @@ export function classifyResult({ result, head, currentRunId, draftDirty }: Curre
 
 export const CURRENTNESS_LABEL: Record<Currentness, { label: string; detail: string }> = {
   current: { label: 'CURRENT', detail: 'Computed for the accepted revision you are viewing, and selected by the backend.' },
-  'stale-draft': { label: 'STALE · UNSAVED EDITS', detail: 'You have moved the tree since this run. The number describes the last evaluated position, not your draft.' },
+  'stale-draft': { label: 'STALE · UNSAVED EDITS', detail: 'You have unaccepted edits (tree position or requirements) since this run. The number describes the accepted revision, not your draft.' },
   'not-selected': { label: 'NOT CURRENT', detail: 'The backend no longer selects this run for this revision (a newer run or a failure replaced it).' },
   superseded: { label: 'SUPERSEDED', detail: 'Computed for an older scenario revision. Kept for history; it cannot describe the current scenario.' },
 }
@@ -109,39 +109,100 @@ export function nudge(p: Vec3, east: number, north: number): Vec3 {
 export const DEADLINE_MARGIN_MS = 10 * 60 * 1000
 export const DEADLINE_RENEWAL_MS = 2 * 60 * 60 * 1000
 
+/** Human-editable hard requirements. Budget basis stays upfront integer GBP pence. */
+export interface Requirements {
+  readonly budgetPence: number
+  readonly maxTreeCount: number | null
+  readonly excludedRegionIds: readonly string[]
+}
+
+export function requirementsOf(scenario: Pick<Scenario, 'input'>): Requirements {
+  const c = scenario.input.constraints
+  return { budgetPence: c.budget_pence, maxTreeCount: c.max_tree_count, excludedRegionIds: [...c.excluded_region_ids].sort() }
+}
+
+export function sameRequirements(a: Requirements, b: Requirements): boolean {
+  const ea = [...a.excludedRegionIds].sort()
+  const eb = [...b.excludedRegionIds].sort()
+  return a.budgetPence === b.budgetPence && a.maxTreeCount === b.maxTreeCount && ea.length === eb.length && ea.every((id, i) => id === eb[i])
+}
+
+export const MAX_BUDGET_PENCE = 100_000_000_00 // £100m: a sanity bound for the editor, not a policy
+
+/** Parse "1234", "1234.5" or "£1,234.50" to integer pence without floating point. Null when invalid. */
+export function parsePounds(text: string): number | null {
+  const cleaned = text.trim().replace(/^£/, '').replace(/,/g, '')
+  const match = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(cleaned)
+  if (!match) return null
+  const pence = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'))
+  return Number.isSafeInteger(pence) && pence <= MAX_BUDGET_PENCE ? pence : null
+}
+
+export const poundsText = (pence: number) => `${Math.floor(pence / 100)}.${String(pence % 100).padStart(2, '0')}`
+
+export function validateRequirements(r: Requirements, knownExclusionIds: readonly string[]): string[] {
+  const errors: string[] = []
+  if (!Number.isSafeInteger(r.budgetPence) || r.budgetPence < 0 || r.budgetPence > MAX_BUDGET_PENCE) errors.push('Budget must be a whole number of pence between £0 and £100,000,000.')
+  if (r.maxTreeCount !== null && (!Number.isSafeInteger(r.maxTreeCount) || r.maxTreeCount < 0 || r.maxTreeCount > 10_000)) errors.push('Maximum tree count must be blank (no limit) or a whole number from 0 to 10,000.')
+  const unknown = r.excludedRegionIds.filter(id => !knownExclusionIds.includes(id))
+  if (unknown.length) errors.push(`Unknown exclusion region(s): ${unknown.join(', ')}.`)
+  return errors
+}
+
+export interface FieldChange { readonly path: string; readonly before: unknown; readonly after: unknown }
+
+/** Structural diff of two scenario inputs, as dotted paths. Arrays compare as whole values. */
+export function diffInputs(before: unknown, after: unknown, path = ''): FieldChange[] {
+  const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+  if (isObject(before) && isObject(after)) {
+    const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()
+    return keys.flatMap(k => diffInputs(before[k], after[k], path ? `${path}.${k}` : k))
+  }
+  return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ path: path || '(root)', before, after }]
+}
+
+export const describeValue = (v: unknown) => (v === undefined ? '—' : v === null ? 'none' : typeof v === 'string' ? v : JSON.stringify(v))
+
 export interface CommitPlan {
-  readonly layout: Layout
+  /** Next layout revision, or null when the tree did not move. */
+  readonly layout: Layout | null
   readonly input: ScenarioInput_Input
   readonly ifMatch: number
   readonly deadlineRenewedTo: string | null
+  readonly changes: readonly FieldChange[]
 }
 
 const isoZ = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z')
 
 /**
- * Build the next immutable layout revision and the scenario input that points at it.
- * Only the moved placement's position (and, if nearly expired, the job deadline) change.
+ * Build the next accepted scenario input from the user's draft. A moved tree becomes the next
+ * immutable layout revision; requirement edits change only the named constraint fields.
  */
-export function buildCommit(scenario: Scenario, layout: Layout, placementId: string, position: Vec3, nowMs: number): CommitPlan {
+export function buildCommit(
+  scenario: Scenario, layout: Layout, placementId: string, position: Vec3, nowMs: number, requirements?: Requirements,
+): CommitPlan {
   const ref = scenario.input.proposed_layout_ref
   if (!ref || ref.layout_id !== layout.layout_id || ref.revision !== layout.revision) {
     throw new Error('Scenario does not point at the layout being edited')
   }
-  if (!layout.placements.some(p => p.placement_id === placementId)) throw new Error(`Unknown placement ${placementId}`)
-  const nextLayout: Layout = {
-    ...layout,
-    revision: layout.revision + 1,
-    placements: layout.placements.map(p => (p.placement_id === placementId ? { ...p, position_enu_m: roundPosition(position) } : p)),
-  }
+  const placement = layout.placements.find(p => p.placement_id === placementId)
+  if (!placement) throw new Error(`Unknown placement ${placementId}`)
+  const moved = !samePosition(placement.position_enu_m as Vec3, roundPosition(position))
+  const nextLayout: Layout | null = moved
+    ? { ...layout, revision: layout.revision + 1, placements: layout.placements.map(p => (p.placement_id === placementId ? { ...p, position_enu_m: roundPosition(position) } : p)) }
+    : null
   const deadline = Date.parse(scenario.input.search.deadline_utc)
-  const renew = !(deadline - nowMs > DEADLINE_MARGIN_MS)
-  const deadlineRenewedTo = renew ? isoZ(nowMs + DEADLINE_RENEWAL_MS) : null
+  const deadlineRenewedTo = deadline - nowMs > DEADLINE_MARGIN_MS ? null : isoZ(nowMs + DEADLINE_RENEWAL_MS)
+  const constraints = requirements
+    ? { ...scenario.input.constraints, budget_pence: requirements.budgetPence, max_tree_count: requirements.maxTreeCount, excluded_region_ids: [...requirements.excludedRegionIds] }
+    : scenario.input.constraints
   const input: ScenarioInput_Input = {
     ...(scenario.input as unknown as ScenarioInput_Input),
-    proposed_layout_ref: { layout_id: nextLayout.layout_id, revision: nextLayout.revision },
+    constraints,
+    proposed_layout_ref: nextLayout ? { layout_id: nextLayout.layout_id, revision: nextLayout.revision } : ref,
     search: deadlineRenewedTo ? { ...scenario.input.search, deadline_utc: deadlineRenewedTo } : scenario.input.search,
   }
-  return { layout: nextLayout, input, ifMatch: scenario.revision, deadlineRenewedTo }
+  return { layout: nextLayout, input, ifMatch: scenario.revision, deadlineRenewedTo, changes: diffInputs(scenario.input, input) }
 }
 
 export function evaluateRequest(scenario: Scenario, requestId: string): JobRequest {

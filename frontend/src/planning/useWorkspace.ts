@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, CanopyClient, TERMINAL_JOB_STATES } from '../api/client'
 import { loadDevSession, verifyDeclaration, type DeclarationCheck, type DevSession } from '../api/session'
-import type { Health, Job, Layout, Result, Scenario, SiteBundle, TreeProfile, Vec3 } from '../api/types'
-import { buildCommit, classifyResult, evaluateRequest, refOf, samePosition, type Currentness } from './evaluation'
+import type { Health, Job, JobRequest, Layout, Result, Scenario, ScenarioRef, SiteBundle, TreeProfile, Vec3 } from '../api/types'
+import {
+  buildCommit, classifyResult, diffInputs, evaluateRequest, refOf, requirementsOf, sameRequirements, samePosition,
+  validateRequirements, type Currentness, type FieldChange, type Requirements,
+} from './evaluation'
 
 export type ConnectionState =
   | { readonly status: 'connecting' }
@@ -13,6 +16,14 @@ export type ConnectionState =
 export interface RunRecord {
   readonly job: Job
   readonly result: Result | null
+}
+
+/** A hypothetical scenario prepared elsewhere (for example by the planning agent) awaiting a human decision. */
+export interface ProposalReview {
+  readonly proposal: Scenario
+  readonly changes: readonly FieldChange[]
+  /** Accepting is only possible when the proposal's base is the current accepted head. */
+  readonly baseIsHead: boolean
 }
 
 export interface Workspace {
@@ -26,28 +37,44 @@ export interface Workspace {
   readonly placementId: string | null
   readonly committedPosition: Vec3 | null
   readonly draftPosition: Vec3 | null
+  readonly positionDirty: boolean
+  readonly acceptedRequirements: Requirements | null
+  readonly draftRequirements: Requirements | null
+  readonly requirementsDirty: boolean
+  readonly requirementErrors: readonly string[]
+  readonly draftChanges: readonly FieldChange[]
+  /** Any unaccepted edit: tree position or requirements. */
   readonly draftDirty: boolean
   readonly activeJob: Job | null
   readonly runs: readonly RunRecord[]
   readonly currentRunId: string | null
-  readonly busy: 'committing' | 'submitting' | 'cancelling' | null
+  readonly busy: 'committing' | 'submitting' | 'cancelling' | 'loading-proposal' | 'accepting-proposal' | null
   readonly notice: string | null
   readonly error: string | null
   readonly canEvaluate: boolean
+  readonly review: ProposalReview | null
   readonly currentness: (result: Result) => Currentness
   readonly setDraftPosition: (p: Vec3) => void
+  readonly setDraftRequirements: (r: Requirements) => void
   readonly revertDraft: () => void
   readonly evaluate: () => Promise<void>
+  readonly submit: (build: (head: Scenario, requestId: string) => JobRequest) => Promise<void>
   readonly cancel: () => Promise<void>
-  readonly reconnect: () => void
+  readonly loadProposal: (scenarioId: string, revision: number) => Promise<void>
+  readonly acceptProposal: () => Promise<void>
+  readonly dismissProposal: () => void
+  readonly reload: () => void
 }
 
 const POLL_MS = 150
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
-const newRequestId = () => `ui-${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
-
+export const newRequestId = () => `ui-${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`
 const defaultClient = new CanopyClient()
+
+function conflictText(err: ApiError) {
+  return `${err.message}. The backend refused because the accepted revision or input identity no longer matches (another accepted change, or a changed source asset). Nothing was saved or computed; your draft is kept. Reload to see the latest accepted scenario.`
+}
 
 export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const [connection, setConnection] = useState<ConnectionState>({ status: 'connecting' })
@@ -58,12 +85,14 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const [scenario, setScenario] = useState<Scenario | null>(null)
   const [layout, setLayout] = useState<Layout | null>(null)
   const [draftPosition, setDraft] = useState<Vec3 | null>(null)
+  const [draftRequirements, setDraftRequirements] = useState<Requirements | null>(null)
   const [activeJob, setActiveJob] = useState<Job | null>(null)
   const [runs, setRuns] = useState<RunRecord[]>([])
   const [currentRunId, setCurrentRunId] = useState<string | null>(null)
   const [busy, setBusy] = useState<Workspace['busy']>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [review, setReview] = useState<ProposalReview | null>(null)
   const [attempt, setAttempt] = useState(0)
   const scenarioRef = useRef<Scenario | null>(null)
   const activeJobId = useRef<string | null>(null)
@@ -77,13 +106,44 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
 
   const placement = layout?.placements[0] ?? null
   const committedPosition = placement ? (placement.position_enu_m as Vec3) : null
-  const draftDirty = Boolean(draftPosition && committedPosition && !samePosition(draftPosition, committedPosition))
+  const positionDirty = Boolean(draftPosition && committedPosition && !samePosition(draftPosition, committedPosition))
+  const acceptedRequirements = useMemo(() => (scenario ? requirementsOf(scenario) : null), [scenario])
+  const requirementsDirty = Boolean(draftRequirements && acceptedRequirements && !sameRequirements(draftRequirements, acceptedRequirements))
+  const draftDirty = positionDirty || requirementsDirty
+  const exclusionIds = useMemo(() => site?.exclusions.map(e => e.feature_id) ?? [], [site])
+  const requirementErrors = useMemo(() => (draftRequirements ? validateRequirements(draftRequirements, exclusionIds) : []), [draftRequirements, exclusionIds])
+
+  const draftChanges = useMemo(() => {
+    if (!scenario || !layout || !placement || !draftPosition || !draftDirty || requirementErrors.length) return []
+    try {
+      return buildCommit(scenario, layout, placement.placement_id, draftPosition, Date.now(), draftRequirements ?? undefined).changes
+        .filter(c => c.path !== 'search.deadline_utc')
+    } catch {
+      return []
+    }
+  }, [scenario, layout, placement, draftPosition, draftRequirements, draftDirty, requirementErrors])
 
   /** Re-read the backend's evaluation selection for the head revision. */
   const refreshSelection = useCallback(async (head: Scenario) => {
     const selections = await client.selections(refOf(head))
     if (!alive.current || scenarioRef.current?.revision !== head.revision) return
     setCurrentRunId(selections.evaluation.current_job?.run_id ?? null)
+  }, [client])
+
+  /** Adopt a new accepted head: its layout becomes the committed (and draft) position. */
+  const adoptHead = useCallback(async (head: Scenario, keepDraft = false) => {
+    const ref = head.input.proposed_layout_ref
+    if (!ref) throw new Error('Scenario has no proposed layout')
+    const nextLayout = await client.layout(ref.layout_id, ref.revision)
+    scenarioRef.current = head
+    setScenario(head)
+    setLayout(nextLayout)
+    if (!keepDraft) {
+      setDraft(nextLayout.placements[0]?.position_enu_m as Vec3)
+      setDraftRequirements(requirementsOf(head))
+    }
+    setCurrentRunId(null)
+    return nextLayout
   }, [client])
 
   // Initial load: health, dev session, head scenario, site, layout and profile.
@@ -125,8 +185,11 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
         setScenario(head)
         scenarioRef.current = head
         setDraft(layoutValue.placements[0].position_enu_m as Vec3)
+        setDraftRequirements(requirementsOf(head))
         setCurrentRunId(selectedRun)
-        if (existing && selections.evaluation.current_job) setRuns([{ job: selections.evaluation.current_job, result: existing }])
+        setRuns(existing && selections.evaluation.current_job ? [{ job: selections.evaluation.current_job, result: existing }] : [])
+        setActiveJob(null)
+        setReview(null)
         setConnection({ status: 'connected', health })
       } catch (err) {
         if (!cancelled) setConnection({ status: 'error', reason: err instanceof ApiError && err.code === 'NETWORK' ? 'Backend not reachable on this origin.' : message(err) })
@@ -136,10 +199,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   }, [client, attempt])
 
   const record = useCallback((job: Job, result: Result | null) => {
-    setRuns(previous => {
-      const others = previous.filter(r => r.job.job_id !== job.job_id)
-      return [{ job, result }, ...others].slice(0, 20)
-    })
+    setRuns(previous => [{ job, result }, ...previous.filter(r => r.job.job_id !== job.job_id)].slice(0, 30))
   }, [])
 
   const poll = useCallback(async (job: Job) => {
@@ -158,40 +218,65 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     if (head) await refreshSelection(head)
   }, [client, record, refreshSelection])
 
-  const evaluate = useCallback(async () => {
+  const handleFailure = useCallback(async (err: unknown) => {
+    setBusy(null)
+    if (!(err instanceof ApiError && err.code === 'REVISION_CONFLICT')) { setError(message(err)); return }
+    setError(conflictText(err))
+    // Never keep presenting the old head as current after a refused write: re-read the real head.
     const head = scenarioRef.current
-    if (!head || !layout || !placement || !draftPosition) return
-    setError(null)
-    setNotice(null)
+    if (!head) return
     try {
-      let target = head
-      if (!samePosition(draftPosition, placement.position_enu_m as Vec3) || Date.parse(head.input.search.deadline_utc) <= Date.now()) {
-        setBusy('committing')
-        const plan = buildCommit(head, layout, placement.placement_id, draftPosition, Date.now())
-        const storedLayout = await client.registerLayout(plan.layout)
-        target = await client.replaceScenario(head.scenario_id, plan.input, plan.ifMatch)
-        scenarioRef.current = target
-        setScenario(target)
-        setLayout(storedLayout)
-        setDraft(storedLayout.placements.find(p => p.placement_id === placement.placement_id)!.position_enu_m as Vec3)
-        setCurrentRunId(null)
-        setNotice(`Saved as scenario revision ${target.revision} (layout revision ${storedLayout.revision}).${plan.deadlineRenewedTo ? ` Job deadline renewed to ${plan.deadlineRenewedTo}.` : ''}`)
+      const latest = await client.latestScenario(head.scenario_id, head.revision)
+      if (latest.revision !== head.revision) {
+        await adoptHead(latest, true)
+        await refreshSelection(latest)
+        setError(`${conflictText(err)} A newer accepted revision ${latest.revision} now exists; it is loaded and your draft is kept on top of it. Review the changes and accept again.`)
       }
+    } catch (probe) {
+      setError(`${conflictText(err)} The latest revision could not be re-read: ${message(probe)}`)
+    }
+  }, [client, adoptHead, refreshSelection])
+
+  /** Submit any registered job for the head accepted revision and follow it to completion. */
+  const submit = useCallback(async (build: (head: Scenario, requestId: string) => JobRequest) => {
+    const head = scenarioRef.current
+    if (!head) return
+    setError(null)
+    try {
       setBusy('submitting')
-      const job = await client.submitJob(evaluateRequest(target, newRequestId()))
+      const job = await client.submitJob(build(head, newRequestId()))
       activeJobId.current = job.job_id
       setActiveJob(job)
       setBusy(null)
       await poll(job)
     } catch (err) {
-      setBusy(null)
-      if (err instanceof ApiError && err.code === 'REVISION_CONFLICT') {
-        setError(`${err.message}. The backend refused because stored revision or input identity no longer matches (another accepted change, or a changed source asset). Nothing was computed; reload to see the latest scenario.`)
-      } else {
-        setError(message(err))
-      }
+      await handleFailure(err)
     }
-  }, [client, draftPosition, layout, placement, poll])
+  }, [client, poll, handleFailure])
+
+  /** Accept every draft edit as the next accepted revision (a human action), then recompute. */
+  const evaluate = useCallback(async () => {
+    const head = scenarioRef.current
+    if (!head || !layout || !placement || !draftPosition) return
+    if (requirementErrors.length) { setError(requirementErrors.join(' ')); return }
+    setError(null)
+    setNotice(null)
+    try {
+      let target = head
+      if (draftDirty || Date.parse(head.input.search.deadline_utc) <= Date.now()) {
+        setBusy('committing')
+        const plan = buildCommit(head, layout, placement.placement_id, draftPosition, Date.now(), draftRequirements ?? undefined)
+        const storedLayout = plan.layout ? await client.registerLayout(plan.layout) : null
+        target = await client.replaceScenario(head.scenario_id, plan.input, plan.ifMatch)
+        await adoptHead(target)
+        const changed = plan.changes.filter(c => c.path !== 'search.deadline_utc').map(c => c.path)
+        setNotice(`Accepted as scenario revision ${target.revision}${storedLayout ? ` (layout revision ${storedLayout.revision})` : ''}${changed.length ? `: ${changed.join(', ')}` : ''}.${plan.deadlineRenewedTo ? ` Job deadline renewed to ${plan.deadlineRenewedTo}.` : ''}`)
+      }
+      await submit(evaluateRequest)
+    } catch (err) {
+      await handleFailure(err)
+    }
+  }, [client, draftPosition, draftRequirements, draftDirty, layout, placement, requirementErrors, adoptHead, submit, handleFailure])
 
   const cancel = useCallback(async () => {
     const id = activeJobId.current
@@ -207,24 +292,70 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     }
   }, [client])
 
+  const loadProposal = useCallback(async (scenarioId: string, revision: number) => {
+    const head = scenarioRef.current
+    if (!head) return
+    setError(null)
+    setBusy('loading-proposal')
+    try {
+      const proposal = await client.scenario({ scenario_id: scenarioId, revision, scope: 'hypothetical' })
+      const base = proposal.base_scenario_ref
+      setReview({
+        proposal,
+        changes: diffInputs(head.input, proposal.input),
+        baseIsHead: Boolean(base && base.scenario_id === head.scenario_id && base.revision === head.revision && base.scope === 'accepted'),
+      })
+    } catch (err) {
+      setError(err instanceof ApiError && err.code === 'UNKNOWN_REVISION' ? `No hypothetical scenario ${scenarioId} revision ${revision} exists.` : message(err))
+    } finally {
+      setBusy(null)
+    }
+  }, [client])
+
+  const acceptProposal = useCallback(async () => {
+    const head = scenarioRef.current
+    if (!head || !review) return
+    setError(null)
+    setBusy('accepting-proposal')
+    try {
+      const ref: ScenarioRef = refOf(review.proposal)
+      const accepted = await client.acceptScenario(ref, head.revision)
+      await adoptHead(accepted)
+      setReview(null)
+      setNotice(`Proposal ${ref.scenario_id.slice(0, 8)}… rev ${ref.revision} accepted as scenario revision ${accepted.revision}. Recomputing.`)
+      setBusy(null)
+      await submit(evaluateRequest)
+    } catch (err) {
+      await handleFailure(err)
+    }
+  }, [client, review, adoptHead, submit, handleFailure])
+
   const currentness = useCallback((result: Result): Currentness => {
     if (!scenario) return 'superseded'
     return classifyResult({ result, head: refOf(scenario), currentRunId, draftDirty })
   }, [scenario, currentRunId, draftDirty])
 
   const jobRunning = activeJob !== null && !TERMINAL_JOB_STATES.has(activeJob.status)
-  const canEvaluate = connection.status === 'connected' && busy === null &&
-    Boolean(connection.health.available_operations.includes('evaluate_layout')) && Boolean(placement)
+  const connectedOk = connection.status === 'connected' && busy === null &&
+    connection.health.available_operations.includes('evaluate_layout') && Boolean(placement)
 
   return useMemo(() => ({
     connection, session, declaration, site, profile, scenario, layout,
     placementId: placement?.placement_id ?? null,
-    committedPosition, draftPosition, draftDirty, activeJob, runs, currentRunId, busy, notice, error,
-    canEvaluate: canEvaluate && !(jobRunning && !draftDirty),
+    committedPosition, draftPosition, positionDirty, acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors,
+    draftChanges, draftDirty, activeJob, runs, currentRunId, busy, notice, error, review,
+    canEvaluate: connectedOk && requirementErrors.length === 0 && !(jobRunning && !draftDirty),
     currentness,
     setDraftPosition: (p: Vec3) => setDraft(p),
-    revertDraft: () => committedPosition && setDraft(committedPosition),
-    evaluate, cancel,
-    reconnect: () => setAttempt(a => a + 1),
-  }), [connection, session, declaration, site, profile, scenario, layout, placement, committedPosition, draftPosition, draftDirty, activeJob, runs, currentRunId, busy, notice, error, canEvaluate, jobRunning, currentness, evaluate, cancel])
+    setDraftRequirements: (r: Requirements) => setDraftRequirements(r),
+    revertDraft: () => {
+      if (committedPosition) setDraft(committedPosition)
+      if (acceptedRequirements) setDraftRequirements(acceptedRequirements)
+    },
+    evaluate, submit, cancel, loadProposal, acceptProposal,
+    dismissProposal: () => setReview(null),
+    reload: () => setAttempt(a => a + 1),
+  }), [connection, session, declaration, site, profile, scenario, layout, placement, committedPosition, draftPosition, positionDirty,
+    acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors, draftChanges, draftDirty, activeJob, runs, currentRunId,
+    busy, notice, error, review, connectedOk, jobRunning, currentness, evaluate, submit, cancel, loadProposal, acceptProposal])
 }

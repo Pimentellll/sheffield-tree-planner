@@ -3,6 +3,7 @@ import SiteScene from './scene/SiteScene'
 import { checkSiteTransform } from './scene/transform'
 import { useWorkspace } from './planning/useWorkspace'
 import { EvaluationControls, ResultCard, RunHistory, SiteStatus, TreeEditor } from './panels/Panels'
+import { ProposalReviewPanel, RequirementsPanel } from './panels/Requirements'
 
 type Screen = 'overview' | 'studio' | 'compare' | 'report'
 const screens: { id: Screen; number: string; label: string }[] = [
@@ -51,6 +52,8 @@ function App() {
                 <ResultCard ws={ws} />
                 <EvaluationControls ws={ws} />
                 <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
+                <RequirementsPanel ws={ws} />
+                <ProposalReviewPanel ws={ws} />
                 <RunHistory ws={ws} />
                 <SiteStatus ws={ws} transform={transform} />
               </aside>

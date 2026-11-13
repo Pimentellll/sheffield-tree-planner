@@ -15,6 +15,29 @@ const browserPath = process.env.CANOPY_BROWSER || defaultBrowser
 const url = process.env.CANOPY_URL || 'http://127.0.0.1:5173/'
 const workspace = process.env.CANOPY_DEV_WORKSPACE
 const offline = process.env.CANOPY_OFFLINE === '1'
+const api = (process.env.CANOPY_API || 'http://127.0.0.1:8765').replace(/\/$/, '')
+// Out-of-band client: another accepted change, or the planning agent's host, talking to the same backend.
+async function backend(method, path, body, headers = {}) {
+  const response = await fetch(api + '/api/v1' + path, {
+    method, headers: { Origin: new URL(api).origin, ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const json = await response.json()
+  if (!response.ok) throw new Error(`${method} ${path} -> ${response.status} ${JSON.stringify(json)}`)
+  return { json, etag: response.headers.get('etag') }
+}
+async function head() {
+  const session = await (await fetch(new URL('/canopy-dev-session.json', url))).json()
+  let rev = session.scenario_ref.revision
+  const id = session.scenario_ref.scenario_id
+  for (;;) {
+    const r = await fetch(`${api}/api/v1/scenarios/${id}?revision=${rev + 1}`)
+    if (r.status !== 200) break
+    rev += 1
+  }
+  return (await backend('GET', `/scenarios/${id}?revision=${rev}`)).json
+}
+const currentLabel = page => page.locator('.currentness strong').textContent()
 const evidenceDir = join(__dirname, '..', 'artifacts')
 mkdirSync(evidenceDir, { recursive: true })
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -130,6 +153,7 @@ async function online() {
     } else {
       check('failure step skipped (CANOPY_DEV_WORKSPACE not set)', true)
     }
+    await requirementsFlow(page)
     check('no page errors', errors.length === 0, errors.join('; '))
   } finally { await browser.close() }
 
@@ -144,6 +168,82 @@ async function online() {
     await shot(narrow.page, '07-narrow')
     check('no page errors (narrow)', narrow.errors.length === 0, narrow.errors.join('; '))
   } finally { await narrow.browser.close() }
+}
+
+// STP-021: requirement drafts, human acceptance, recompute, refused concurrent edit, proposal review.
+async function requirementsFlow(page) {
+  const budget = page.getByLabel('Upfront budget in pounds')
+  const before = await head()
+  await budget.fill('80')
+  await budget.press('Enter')
+  await page.waitForTimeout(150)
+  check('budget edit shows a DRAFT · NOT ACCEPTED badge', await page.getByTestId('draft-badge').count() === 1)
+  check('draft change set names constraints.budget_pence', /constraints\.budget_pence: 10000 → 8000/.test(await page.getByTestId('draft-changes').innerText()))
+  check('requirement draft marks the shown result stale', /STALE/.test(await currentLabel(page)))
+  check('nothing was written before acceptance', (await head()).revision === before.revision)
+  await page.getByRole('button', { name: 'Discard draft' }).click()
+  await page.waitForTimeout(150)
+  check('discarding the draft restores CURRENT', /CURRENT\b/.test(await currentLabel(page)) && await page.getByTestId('draft-badge').count() === 0)
+
+  await budget.fill('80')
+  await budget.press('Enter')
+  await page.getByLabel('Maximum tree count (blank for no limit)').fill('1')
+  await page.getByLabel('Maximum tree count (blank for no limit)').press('Enter')
+  await evaluateAndWait(page)
+  const accepted = await head()
+  check('accepting creates the next accepted revision with only those constraints changed',
+    accepted.revision === before.revision + 1 && accepted.input.constraints.budget_pence === 8000 && accepted.input.constraints.max_tree_count === 1 &&
+    JSON.stringify(accepted.input.proposed_layout_ref) === JSON.stringify(before.input.proposed_layout_ref),
+    `rev ${accepted.revision}, budget ${accepted.input.constraints.budget_pence}, max ${accepted.input.constraints.max_tree_count}`)
+  check('acceptance triggers a real recomputation that is CURRENT', /CURRENT\b/.test(await currentLabel(page)) &&
+    (await page.locator('.result-section').innerText()).includes(`${accepted.revision} (accepted)`))
+  await shot(page, '08-requirements-accepted')
+
+  // Refused edit: someone else accepts a change first; our acceptance must not be applied.
+  const other = { ...accepted.input, constraints: { ...accepted.input.constraints, budget_pence: 7000 } }
+  await backend('PUT', `/scenarios/${accepted.scenario_id}`, other, { 'If-Match': `"${accepted.revision}"` })
+  await budget.fill('60')
+  await budget.press('Enter')
+  await page.getByRole('button', { name: /Accept changes/ }).click()
+  await page.locator('.error-box[role=alert]', { hasText: 'newer accepted revision' }).waitFor({ timeout: 10000 })
+  const latest = await head()
+  const errorText = await page.locator('.error-box[role=alert]').textContent()
+  check('concurrent acceptance refuses our stale write (REVISION_CONFLICT)', /REVISION_CONFLICT/.test(errorText) && latest.input.constraints.budget_pence === 7000, `head budget ${latest.input.constraints.budget_pence}`)
+  check('after the refusal the newer head is loaded and the old result is SUPERSEDED, not current',
+    /newer accepted revision/.test(errorText) && /SUPERSEDED/.test(await currentLabel(page)))
+  check('the refused draft is kept for re-acceptance', /constraints\.budget_pence: 7000 → 6000/.test(await page.getByTestId('draft-changes').innerText()))
+  await shot(page, '09-refused-edit')
+  await page.getByRole('button', { name: 'Discard draft' }).click()
+
+  // Proposal from the agent's host surface (real dispatcher, scoped by headers), then human acceptance.
+  const base = await head()
+  const edits = { ...base.input, constraints: { ...base.input.constraints, budget_pence: 5000 } }
+  const prepared = (await backend('POST', '/operations', {
+    request_id: `test-proposal-${Date.now()}`, operation: 'prepare_scenario',
+    arguments: { base_scenario_ref: { scenario_id: base.scenario_id, revision: base.revision, scope: 'accepted' }, proposed_edits: edits },
+  }, { 'X-Canopy-Scenario-Id': base.scenario_id, 'X-Canopy-Scenario-Revision': String(base.revision) })).json
+  check('backend prepared a hypothetical proposal (not accepted)', prepared.scope === 'hypothetical' && (await head()).revision === base.revision)
+  await page.getByLabel('Proposal scenario id').fill(prepared.scenario_id)
+  await page.getByLabel('Proposal revision').fill(String(prepared.revision))
+  await page.getByRole('button', { name: 'Load' }).click()
+  await page.getByTestId('proposal-review').waitFor()
+  check('proposal diff shows the proposed budget change', /constraints\.budget_pence: 7000 → 5000/.test(await page.getByTestId('proposal-review').innerText()))
+  await shot(page, '10-proposal-review')
+  const jobBefore = await page.evaluate(() => document.querySelector('.job-status span')?.textContent ?? '')
+  await page.getByRole('button', { name: /Accept proposal/ }).click()
+  await page.waitForFunction(prev => {
+    const job = document.querySelector('.job-status span')?.textContent ?? ''
+    return job !== prev && /Completed|Failed|Cancelled/.test(document.querySelector('.job-status strong')?.textContent ?? '')
+  }, jobBefore, { timeout: 20000 })
+  await page.waitForTimeout(400)
+  const afterAccept = await head()
+  check('human acceptance of the proposal creates the next accepted revision', afterAccept.revision === base.revision + 1 && afterAccept.input.constraints.budget_pence === 5000)
+  check('accepted proposal is recomputed and CURRENT', /CURRENT\b/.test(await currentLabel(page)))
+  // A second acceptance of the same proposal is refused by the backend.
+  let refused = false
+  try { await backend('POST', '/scenarios/accept', { scenario_id: prepared.scenario_id, revision: prepared.revision, scope: 'hypothetical' }, { 'If-Match': `"${afterAccept.revision}"` }) } catch { refused = true }
+  check('the same proposal cannot be accepted twice', refused)
+  await shot(page, '11-proposal-accepted')
 }
 
 async function offlineCheck() {

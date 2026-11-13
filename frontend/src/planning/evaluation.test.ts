@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Job, Layout, Result, Scenario } from '../api/types'
 import {
-  DEADLINE_MARGIN_MS, buildCommit, clampPosition, classifyResult, describeJob, evaluateRequest, formatPence, formatValue,
+  DEADLINE_MARGIN_MS, diffInputs, parsePounds, requirementsOf, sameRequirements, validateRequirements, buildCommit, clampPosition, classifyResult, describeJob, evaluateRequest, formatPence, formatValue,
   nudge, primaryMetric, samePosition, unitLabel,
 } from './evaluation'
 
@@ -69,6 +69,7 @@ const scenario = (deadline: string) => ({
     proposed_layout_ref: { layout_id: 'L', revision: 1 },
     search: { algorithm: 'a', version: 'v', seed: 0, comparison_policy: 'c', reference_policy: 'r', deadline_utc: deadline },
     objective: { kind: 'maximise_shade_under_budget', primary_case_id: 'case', quantity_kind: 'geometric' },
+    constraints: { budget_pence: 10000, budget_basis: 'upfront', max_tree_count: null, excluded_region_ids: [], allowed_profile_ids: ['p'] },
   },
 }) as unknown as Scenario
 
@@ -76,8 +77,8 @@ describe('buildCommit', () => {
   const now = Date.parse('2026-11-13T09:00:00Z')
   it('creates the next layout revision with only the moved placement changed', () => {
     const plan = buildCommit(scenario('2026-11-13T12:00:00Z'), layout, 'tree-1', [20, -1, 0], now)
-    expect(plan.layout.revision).toBe(2)
-    expect(plan.layout.placements[0].position_enu_m).toEqual([20, -1, 0])
+    expect(plan.layout?.revision).toBe(2)
+    expect(plan.layout?.placements[0].position_enu_m).toEqual([20, -1, 0])
     expect(plan.input.proposed_layout_ref).toEqual({ layout_id: 'L', revision: 2 })
     expect(plan.ifMatch).toBe(3)
     expect(plan.deadlineRenewedTo).toBeNull()
@@ -130,5 +131,40 @@ describe('primaryMetric', () => {
     expect(primaryMetric(result, 'case')?.value).toBe(2)
     expect(primaryMetric(result, 'missing')?.value).toBe(1)
     expect(primaryMetric({ metrics: [] } as unknown as Result, 'case')).toBeNull()
+  })
+})
+
+describe('requirements drafts (STP-021)', () => {
+  const now = Date.parse('2026-11-13T09:00:00Z')
+  const s0 = scenario('2026-11-13T12:00:00Z')
+  it('parses pounds to integer pence without floating point', () => {
+    expect(parsePounds('100')).toBe(10000)
+    expect(parsePounds('£1,234.5')).toBe(123450)
+    expect(parsePounds('0.07')).toBe(7)
+    expect(parsePounds('19.999')).toBeNull()
+    expect(parsePounds('-5')).toBeNull()
+    expect(parsePounds('abc')).toBeNull()
+    expect(parsePounds('1e3')).toBeNull()
+  })
+  it('validates count, budget and exclusion ids', () => {
+    expect(validateRequirements({ budgetPence: 100, maxTreeCount: null, excludedRegionIds: [] }, [])).toEqual([])
+    expect(validateRequirements({ budgetPence: -1, maxTreeCount: 2.5, excludedRegionIds: ['x'] }, ['y'])).toHaveLength(3)
+  })
+  it('compares requirements independent of exclusion order', () => {
+    expect(sameRequirements({ budgetPence: 1, maxTreeCount: 2, excludedRegionIds: ['a', 'b'] }, { budgetPence: 1, maxTreeCount: 2, excludedRegionIds: ['b', 'a'] })).toBe(true)
+    expect(sameRequirements({ budgetPence: 1, maxTreeCount: 2, excludedRegionIds: [] }, { budgetPence: 1, maxTreeCount: null, excludedRegionIds: [] })).toBe(false)
+  })
+  it('a requirement-only edit keeps the layout and changes only the named constraints', () => {
+    const r = { ...requirementsOf(s0), budgetPence: 5000, maxTreeCount: 1 }
+    const plan = buildCommit(s0, layout, 'tree-1', [0, -1, 0], now, r)
+    expect(plan.layout).toBeNull()
+    expect(plan.input.proposed_layout_ref).toEqual({ layout_id: 'L', revision: 1 })
+    expect(plan.changes.map(c => c.path).sort()).toEqual(['constraints.budget_pence', 'constraints.max_tree_count'])
+    expect(plan.input.constraints.allowed_profile_ids).toEqual(['p'])
+  })
+  it('diffs nested inputs by path, comparing arrays whole', () => {
+    expect(diffInputs({ a: { b: 1, c: [1, 2] }, d: 'x' }, { a: { b: 2, c: [1, 2] }, d: 'x', e: null })).toEqual([
+      { path: 'a.b', before: 1, after: 2 }, { path: 'e', before: undefined, after: null },
+    ])
   })
 })

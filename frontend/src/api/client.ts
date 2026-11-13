@@ -99,6 +99,11 @@ export class CanopyClient {
     return this.request<Scenario>('PUT', `/scenarios/${encodeURIComponent(scenarioId)}`, input, { 'If-Match': `"${ifMatch}"` })
   }
 
+  /** Human acceptance of a hypothetical draft; If-Match is the accepted base (head) revision. */
+  acceptScenario(hypothetical: ScenarioRef, ifMatchBase: number) {
+    return this.request<Scenario>('POST', '/scenarios/accept', hypothetical, { 'If-Match': `"${ifMatchBase}"` })
+  }
+
   selections(ref: ScenarioRef) {
     return this.request<ScenarioSelections>('GET', `/scenarios/${encodeURIComponent(ref.scenario_id)}/selections?revision=${ref.revision}&scope=${ref.scope}`)
   }

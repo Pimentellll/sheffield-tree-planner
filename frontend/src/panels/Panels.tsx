@@ -31,7 +31,7 @@ export function SiteStatus({ ws, transform }: { ws: Workspace; transform: Transf
         <p className="fine-print">{connection.status === 'connecting' ? 'Connecting to the local backend…' : connection.reason}</p>
       )}
       {connection.status !== 'connected' && connection.status !== 'connecting' && (
-        <button type="button" className="secondary-action" onClick={ws.reconnect}>Retry connection</button>
+        <button type="button" className="secondary-action" onClick={ws.reload}>Retry connection</button>
       )}
     </div>
   )
@@ -66,7 +66,7 @@ function NumberField({ label, value, onCommit, disabled }: { label: string; valu
 }
 
 export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; profile: TreeProfile | null; state: TreeState | null; caseState: string | null }) {
-  const { draftPosition: draft, committedPosition: committed, draftDirty } = ws
+  const { draftPosition: draft, committedPosition: committed, positionDirty: draftDirty } = ws
   const editable = ws.connection.status === 'connected' && Boolean(draft)
   return (
     <div className="detail-section">
@@ -78,7 +78,7 @@ export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; p
       </div>
       <p className="fine-print">Drag the tree in the view, or focus the view and use arrow keys (0.1 m; Shift 1 m). Ground height is fixed at {draft?.[2] ?? 0} m for this synthetic site.</p>
       {committed && draftDirty && (
-        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={ws.revertDraft}>Revert move</button></p>
+        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={ws.revertDraft}>Revert draft</button></p>
       )}
       {profile && state && (
         <>
@@ -97,7 +97,7 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
   const job = ws.activeJob
   const described = job ? describeJob(job) : null
   const running = job ? job.status === 'queued' || job.status === 'running' : false
-  const label = ws.busy === 'committing' ? 'Saving revision…' : ws.busy === 'submitting' ? 'Submitting…' : ws.draftDirty ? 'Save move & evaluate' : 'Evaluate planting'
+  const label = ws.busy === 'committing' ? 'Accepting revision…' : ws.busy === 'submitting' ? 'Submitting…' : ws.draftDirty ? 'Accept changes & evaluate' : 'Evaluate planting'
   return (
     <div className="detail-section">
       <span className="section-kicker">EVALUATION</span>

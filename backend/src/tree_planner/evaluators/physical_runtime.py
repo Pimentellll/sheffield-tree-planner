@@ -57,7 +57,14 @@ def _loaded_state(module):
                 if inspect.isfunction(value):
                     records.append(function(name + "." + method, value))
         elif name.isupper() and type(obj) in (str, int, float, bool, tuple, frozenset):
-            records.append((name, id(obj), content_hash(repr(obj)), "constant"))
+            records.append(
+                (
+                    name,
+                    id(obj),
+                    content_hash(repr(sorted(obj)) if isinstance(obj, frozenset) else repr(obj)),
+                    "constant",
+                )
+            )
     return tuple(records)
 
 

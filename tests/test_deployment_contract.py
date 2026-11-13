@@ -82,5 +82,39 @@ class DeploymentContractTests(unittest.TestCase):
             self.assertIn(expected, ssh)
 
 
+class ApplicationDeploymentTests(unittest.TestCase):
+    """The shipped Spark config must be one the control script and backend accept."""
+
+    def test_application_env_matches_loader_and_ports(self):
+        values = {}
+        for line in (ROOT / "deploy/spark/application.env.example").read_text().splitlines():
+            if line.strip() and not line.lstrip().startswith("#"):
+                key, _, value = line.partition("=")
+                values[key] = value
+        script = (ROOT / "deploy/spark/canopyctl").read_text()
+        allowed = re.search(r"\n\s+(CANOPY_PORT\|[A-Z_|]+)\)", script).group(1).split("|")
+        self.assertEqual(set(values), set(allowed))
+        self.assertNotEqual(values["CANOPY_PORT"], "8000")  # 8000 is the model service
+        self.assertIn('"127.0.0.1:8000:8000"', (ROOT / "deploy/spark/inference.compose.yml").read_text())
+        self.assertEqual(values["LLM_MODEL"], json.loads(
+            (ROOT / "deploy/spark/model-profile.json").read_text())["served_model_name"])
+        try:
+            from tree_planner.agents.runs import AgentSettings
+        except ImportError:  # readiness-only environment without the backend installed
+            self.skipTest("backend package not installed")
+        settings = AgentSettings.from_env("http://127.0.0.1:8765/api/v1", values)
+        self.assertEqual(settings.client_config().chat_template_kwargs, {"enable_thinking": False})
+
+    def test_control_script_never_exposes_or_administers(self):
+        script = (ROOT / "deploy/spark/canopyctl").read_text()
+        self.assertNotIn("0.0.0.0", script)
+        for forbidden in ("docker compose", "docker run", "docker pull", "sudo ", "ssh-keygen",
+                          "authorized_keys", "hf download", "StrictHostKeyChecking=no"):
+            self.assertNotIn(forbidden, script)
+        bundle = (ROOT / "deploy/spark/make_bundle.sh").read_text()
+        self.assertIn("git archive", bundle)
+        self.assertIn("--require-hashes", bundle)
+
+
 if __name__ == "__main__":
     unittest.main()

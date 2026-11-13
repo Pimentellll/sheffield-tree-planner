@@ -90,3 +90,83 @@ def test_cold_standalone_server_calculates_and_shuts_down(tmp_path):
     assert all(json.loads(cleanup.read_text()).values())
     with socket.socket() as probe:
         assert probe.connect_ex(("127.0.0.1", int(base.rsplit(":", 1)[1]))) != 0
+
+
+def test_single_origin_ui_session_and_agent_unconfigured(tmp_path):
+    """Spark mode: one loopback origin serves the built UI, its bootstrap and the API."""
+    import base64
+    import hashlib
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<!doctype html><title>fixture index</title>")
+    status, cleanup = tmp_path / "status.json", tmp_path / "cleanup.json"
+    env = {k: v for k, v in __import__("os").environ.items() if not k.startswith("LLM_")}
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "tree_planner.evaluators.physical_server",
+            "--workspace",
+            str(tmp_path / "runtime"),
+            "--port",
+            "0",
+            "--frontend-dist",
+            str(dist),
+            "--status-file",
+            str(status),
+            "--cleanup-file",
+            str(cleanup),
+            "--control-stdin",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        cwd=Path(__file__).resolve().parents[3],
+    )
+    try:
+        deadline = monotonic() + 45
+        while not status.exists():
+            assert process.poll() is None and monotonic() < deadline
+            sleep(0.05)
+        info = json.loads(status.read_text())
+        assert info["agent_model"] is None
+        with httpx.Client(base_url=info["url"], timeout=10, trust_env=False) as client:
+            while True:
+                try:
+                    if client.get("/api/v1/health").status_code == 200:
+                        break
+                except httpx.ConnectError:
+                    pass
+                assert monotonic() < deadline
+                sleep(0.05)
+            assert "fixture index" in client.get("/").text
+            session = client.get("/canopy-dev-session.json").json()
+            assert session["kind"] == "canopy-dev-session"
+            assert session["scenario_ref"] == info["scenario_ref"]
+            ref = info["scenario_ref"]
+            scenario = client.get(f"/api/v1/scenarios/{ref['scenario_id']}?revision=1").json()
+            inp = scenario["input"]
+            site = client.get(
+                f"/api/v1/sites/{inp['site_id']}",
+                params=dict(
+                    scene_revision=inp["scene_revision"],
+                    semantic_revision=inp["semantic_revision"],
+                ),
+            ).json()
+            asset = next(
+                a for a in site["assets"] if a["asset_id"] == session["declaration_asset_id"]
+            )
+            scene = base64.b64decode(session["declaration_b64"])
+            assert hashlib.sha256(scene).hexdigest() == asset["sha256"]
+            agent = client.get("/api/v1/agent/status").json()
+            assert agent["configured"] is False
+    finally:
+        if process.poll() is None:
+            process.stdin.write('{"action":"shutdown"}\n')
+            process.stdin.flush()
+        stdout, stderr = process.communicate(timeout=30)
+    assert process.returncode == 0, (stdout, stderr)
+    assert all(json.loads(cleanup.read_text()).values())

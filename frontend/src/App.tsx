@@ -5,6 +5,7 @@ import { useWorkspace } from './planning/useWorkspace'
 import { EvaluationControls, ResultCard, RunHistory, SiteStatus, TreeEditor } from './panels/Panels'
 import { ProposalReviewPanel, RequirementsPanel } from './panels/Requirements'
 import { AlternativesPanel } from './panels/Alternatives'
+import { AgentPanel } from './panels/Agent'
 import CompareScreen from './panels/CompareScreen'
 import ReportScreen from './panels/ReportScreen'
 import OverviewScreen from './panels/OverviewScreen'
@@ -82,6 +83,7 @@ function App() {
                 <EvaluationControls ws={ws} />
                 <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
                 <AlternativesPanel ws={ws} selectedLayoutId={selectedLayoutId} onSelectLayout={setSelectedLayoutId} />
+                <AgentPanel ws={ws} />
                 <RequirementsPanel ws={ws} />
                 <ProposalReviewPanel ws={ws} />
                 <RunHistory ws={ws} />

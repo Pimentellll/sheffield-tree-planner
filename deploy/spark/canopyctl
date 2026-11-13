@@ -1,0 +1,336 @@
+#!/usr/bin/env bash
+# CANOPY application control for Linux (target: DGX Spark, ARM64). Run from an extracted
+# bundle made by deploy/spark/make_bundle.sh. Needs bash, python3 (>=3.11), curl and ss.
+#
+#   canopyctl verify      check every bundle file against SHA256SUMS
+#   canopyctl preflight   read-only host inventory + readiness receipt (no changes)
+#   canopyctl install     verify, then offline hash-checked install into ./.venv
+#   canopyctl start       start API + built UI (+ optional agent) on 127.0.0.1:$CANOPY_PORT
+#   canopyctl stop        graceful stop, then confirm the port is closed
+#   canopyctl restart     stop (if running) and start a fresh session
+#   canopyctl status      process, health, agent and listening-socket bindings
+#   canopyctl check       readiness gate: UI, bootstrap, operations, loopback-only, agent
+#   canopyctl smoke       real HTTP -> jobs -> CPU demo in its own temporary server
+#   canopyctl agent-smoke one evaluate-only agent run on the running server (needs a model)
+#   canopyctl logs        tail the current server log
+#
+# It never runs docker, pulls images, downloads models, edits SSH or binds non-loopback.
+# Receipts go to state/receipts/. Exit status is nonzero on any failed check.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$HERE" || exit 1
+STATE="$HERE/state"
+RUN="$STATE/run"
+RECEIPTS="$STATE/receipts"
+ENV_FILE="$STATE/canopy.env"
+VENV="$HERE/.venv"
+PY="$VENV/bin/python"
+mkdir -p "$RUN" "$RECEIPTS"
+ts() { date -u +%Y%m%dT%H%M%SZ; }
+say() { printf '%s\n' "$*"; }
+fail() { printf 'FAIL %s\n' "$*" >&2; FAILED=1; }
+FAILED=0
+
+load_env() {
+  [ -f "$ENV_FILE" ] || cp deploy/spark/application.env.example "$ENV_FILE"
+  CANOPY_PORT=8765; CANOPY_WINTER=1; LLM_BASE_URL=; LLM_MODEL=; LLM_ENABLE_THINKING=; LLM_REASONING_EFFORT=
+  while IFS='=' read -r key value; do
+    case "$key" in
+      CANOPY_PORT|CANOPY_WINTER|LLM_BASE_URL|LLM_MODEL|LLM_ENABLE_THINKING|LLM_REASONING_EFFORT)
+        printf -v "$key" '%s' "$value" ;;
+      ''|\#*) ;;
+      *) say "ignoring unknown key in $ENV_FILE: $key" ;;
+    esac
+  done < <(grep -v '^[[:space:]]*#' "$ENV_FILE" | sed 's/[[:space:]]*$//')
+  [[ "$CANOPY_PORT" =~ ^[0-9]+$ ]] && [ "$CANOPY_PORT" -ge 1024 ] && [ "$CANOPY_PORT" -le 65535 ] \
+    || { fail "CANOPY_PORT must be 1024-65535"; exit 2; }
+  [ "$CANOPY_PORT" != 8000 ] || { fail "CANOPY_PORT 8000 is reserved for the model service"; exit 2; }
+  API="http://127.0.0.1:$CANOPY_PORT"
+}
+
+pid() { [ -f "$RUN/canopy.pid" ] && cat "$RUN/canopy.pid"; }
+alive() { local p; p="$(pid)" && [ -n "$p" ] && kill -0 "$p" 2>/dev/null; }
+listening() { ss -Hltn "sport = :$1" 2>/dev/null | grep -q .; }
+
+cmd_verify() {
+  [ -f SHA256SUMS ] || { fail "SHA256SUMS missing: not an extracted bundle"; return 1; }
+  if sha256sum --quiet -c SHA256SUMS; then say "verify: $(wc -l < SHA256SUMS) files match (commit $(cat COMMIT 2>/dev/null))"
+  else fail "bundle files do not match SHA256SUMS"; return 1; fi
+}
+
+cmd_preflight() {
+  local out arch py pyok; out="$RECEIPTS/preflight-$(ts).json"
+  arch="$(uname -m)"
+  py="$(python3 -c 'import sys;print("%d.%d.%d"%sys.version_info[:3])' 2>/dev/null || echo none)"
+  pyok="$(python3 -c 'import sys;print(sys.version_info>=(3,11))' 2>/dev/null || echo False)"
+  [ "$arch" = aarch64 ] || say "note: architecture is $arch, not aarch64 (DGX Spark). Rehearsal only."
+  [ "$pyok" = True ] || fail "python3 >= 3.11 required (found $py)"
+  python3 -c 'import venv' 2>/dev/null || fail "python3 venv module missing"
+  for t in curl ss sha256sum; do command -v "$t" >/dev/null || fail "missing tool: $t"; done
+  load_env
+  listening "$CANOPY_PORT" && ! alive && fail "port $CANOPY_PORT is already in use by another process"
+  python3 - "$out" "$arch" "$py" "$CANOPY_PORT" <<'EOF'
+import json, os, shutil, subprocess, sys
+out, arch, py, port = sys.argv[1:]
+def run(cmd):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        return {"rc": p.returncode, "out": (p.stdout or p.stderr).strip()[:2000]}
+    except Exception as exc:
+        return {"rc": None, "out": f"unavailable: {type(exc).__name__}"}
+osr = {}
+try:
+    for line in open("/etc/os-release"):
+        k, _, v = line.strip().partition("=")
+        osr[k] = v.strip('"')
+except OSError:
+    pass
+mem = {}
+for line in open("/proc/meminfo"):
+    k, v = line.split(":", 1)
+    if k in ("MemTotal", "MemAvailable"):
+        mem[k] = int(v.split()[0]) * 1024
+du = shutil.disk_usage(".")
+receipt = {
+    "kind": "canopy-preflight/1", "arch": arch, "python3": py,
+    "os": {k: osr.get(k) for k in ("PRETTY_NAME", "VERSION_ID")}, "kernel": os.uname().release,
+    "memory_bytes": mem, "disk_free_bytes": du.free, "cpu_count": os.cpu_count(),
+    "nvidia_smi": run(["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"]),
+    "docker": run(["docker", "version", "--format", "{{.Server.Version}} {{.Server.Arch}}"]),
+    "listening": run(["ss", "-Hltn"]),
+    "bundle_commit": open("COMMIT").read().strip() if os.path.exists("COMMIT") else None,
+    "app_port": int(port), "model_port": 8000,
+    "note": "Read-only inventory. Not evidence of Spark acceptance on its own.",
+}
+json.dump(receipt, open(out, "w"), indent=2)
+print(f"preflight: {arch}, Python {py}, {receipt['os'].get('PRETTY_NAME')}, "
+      f"RAM avail {mem.get('MemAvailable', 0)/2**30:.1f} GiB, disk free {du.free/2**30:.1f} GiB")
+print(f"  GPU: {receipt['nvidia_smi']['out'] or 'n/a'}")
+print(f"  docker: {receipt['docker']['out'] or 'n/a'}")
+print(f"receipt: {out}")
+EOF
+  return $FAILED
+}
+
+cmd_install() {
+  cmd_verify || return 1
+  local plat tag wh
+  plat="$(uname -m)"; tag="$(python3 -c 'import sys;print("cp%d%d"%sys.version_info[:2])')"
+  wh="wheelhouse/linux-$plat-$tag"
+  [ -d "$wh" ] || { fail "no wheelhouse for linux-$plat-$tag (bundle has: $(ls wheelhouse 2>/dev/null | tr '\n' ' '))"; return 1; }
+  [ -x "$PY" ] && { say "existing .venv found; reinstalling into a fresh one"; rm -rf "$VENV"; }
+  python3 -m venv --without-pip "$VENV" || { fail "venv creation failed"; return 1; }
+  local pipwhl; pipwhl="$(ls "$wh"/pip-*.whl | head -1)"
+  "$PY" "$pipwhl/pip" install --quiet --no-index --find-links "$wh" "$pipwhl" || { fail "pip bootstrap failed"; return 1; }
+  "$PY" -m pip install --quiet --no-index --find-links "$wh" --require-hashes -r requirements.txt \
+    || { fail "dependency install failed (offline, hash-checked)"; return 1; }
+  "$PY" -m pip install --quiet --no-index --no-deps wheel/*.whl || { fail "CANOPY wheel install failed"; return 1; }
+  load_env
+  local out; out="$RECEIPTS/install-$(ts).json"
+  "$PY" -I - "$out" <<'EOF' || { fail "installed runtime import check failed"; return 1; }
+import importlib, json, platform, subprocess, sys
+mods = {}
+for name in ("numpy", "pandas", "scipy", "pvlib", "pyproj", "pydantic_core", "fastapi", "uvicorn"):
+    m = importlib.import_module(name)
+    mods[name] = getattr(m, "__version__", "?")
+import tree_planner, tree_planner.evaluators.physical_runtime  # noqa: F401  (native libs load)
+from tree_planner.api.app import application_version
+receipt = {"kind": "canopy-install/1", "python": sys.version.split()[0], "machine": platform.machine(),
+           "canopy_version": application_version(), "modules": mods, "tree_planner": tree_planner.__file__,
+           "pip_freeze": subprocess.check_output([sys.executable, "-m", "pip", "freeze"], text=True).splitlines()}
+json.dump(receipt, open(sys.argv[1], "w"), indent=2)
+print(f"install: CANOPY {receipt['canopy_version']} on Python {receipt['python']} {receipt['machine']}; "
+      + ", ".join(f"{k} {v}" for k, v in mods.items()))
+print(f"receipt: {sys.argv[1]}")
+EOF
+  say "config: $ENV_FILE"
+}
+
+cmd_start() {
+  load_env
+  [ -x "$PY" ] || { fail "not installed: run canopyctl install"; return 1; }
+  if alive; then say "already running (pid $(pid)) on $API"; return 0; fi
+  listening "$CANOPY_PORT" && { fail "port $CANOPY_PORT is in use by another process"; return 1; }
+  local session; session="$STATE/sessions/$(ts)"
+  mkdir -p "$session"
+  local args=(-I -m tree_planner.evaluators.physical_server --workspace "$session/workspace"
+              --port "$CANOPY_PORT" --frontend-dist "$HERE/frontend/dist"
+              --status-file "$session/status.json" --cleanup-file "$session/cleanup.json")
+  [ "$CANOPY_WINTER" = 1 ] && args+=(--winter)
+  [ -n "$LLM_BASE_URL" ] && [ -n "$LLM_MODEL" ] && args+=(--llm-base-url "$LLM_BASE_URL" --llm-model "$LLM_MODEL")
+  [ -n "$LLM_BASE_URL" ] && [ -n "$LLM_MODEL" ] && [ -n "$LLM_ENABLE_THINKING" ] && args+=(--llm-enable-thinking "$LLM_ENABLE_THINKING")
+  [ -n "$LLM_BASE_URL" ] && [ -n "$LLM_MODEL" ] && [ -n "$LLM_REASONING_EFFORT" ] && args+=(--llm-reasoning-effort "$LLM_REASONING_EFFORT")
+  # Strip inherited LLM_* so only state/canopy.env configures the agent.
+  setsid env -u LLM_BASE_URL -u LLM_MODEL -u LLM_ENABLE_THINKING -u LLM_REASONING_EFFORT \
+    "$PY" "${args[@]}" >"$session/server.log" 2>&1 < /dev/null &
+  echo $! > "$RUN/canopy.pid"
+  echo "$session" > "$RUN/session"
+  for _ in $(seq 1 90); do
+    curl -sf "$API/api/v1/health" >/dev/null 2>&1 && break
+    alive || break
+    sleep 1
+  done
+  if ! curl -sf "$API/api/v1/health" >/dev/null 2>&1; then
+    fail "server did not become healthy; last log lines:"; tail -n 20 "$session/server.log" >&2
+    cmd_stop >/dev/null 2>&1; return 1
+  fi
+  say "started pid $(pid): $API (session $session)"
+  say "agent: $( [ -n "$LLM_MODEL" ] && echo "$LLM_MODEL at $LLM_BASE_URL" || echo 'not configured (manual workflow only)')"
+  say "laptop: ssh -F ~/.ssh/sheffield_config -N -L 127.0.0.1:$CANOPY_PORT:127.0.0.1:$CANOPY_PORT sheffield-spark"
+  say "then open http://127.0.0.1:$CANOPY_PORT/ in the laptop browser"
+}
+
+cmd_stop() {
+  load_env
+  if ! alive; then
+    rm -f "$RUN/canopy.pid"
+    listening "$CANOPY_PORT" && fail "port $CANOPY_PORT is held by a process canopyctl did not start"
+    say "not running"; return $FAILED
+  fi
+  local p; p="$(pid)"
+  kill -INT "$p"
+  for _ in $(seq 1 30); do kill -0 "$p" 2>/dev/null || break; sleep 1; done
+  if kill -0 "$p" 2>/dev/null; then say "graceful stop timed out; sending TERM"; kill -TERM "$p"; sleep 3; fi
+  kill -0 "$p" 2>/dev/null && { fail "process $p still running"; return 1; }
+  rm -f "$RUN/canopy.pid"
+  local session; session="$(cat "$RUN/session" 2>/dev/null)"
+  listening "$CANOPY_PORT" && fail "port $CANOPY_PORT still listening after stop"
+  say "stopped; cleanup: $(tr -d ' \n' < "$session/cleanup.json" 2>/dev/null || echo 'no receipt (forced)')"
+  return $FAILED
+}
+
+cmd_status() {
+  load_env
+  if alive; then say "process: running pid $(pid), session $(cat "$RUN/session")"; else say "process: not running"; fi
+  say "health: $(curl -sf "$API/api/v1/health" 2>/dev/null || echo unreachable)"
+  say "agent:  $(curl -sf "$API/api/v1/agent/status" 2>/dev/null | python3 -c 'import json,sys;d=json.load(sys.stdin);print({k:d[k] for k in ("configured","model","reachable","model_listed","active_run_id")})' 2>/dev/null || echo unreachable)"
+  say "sockets (app $CANOPY_PORT, model 8000):"
+  ss -Hltn 2>/dev/null | awk -v a=":$CANOPY_PORT\$" '$4 ~ a || $4 ~ /:8000$/ {print "  " $4}'
+}
+
+cmd_check() {
+  load_env
+  local out; out="$RECEIPTS/check-$(ts).json"
+  python3 - "$API" "$CANOPY_PORT" "$out" "${LLM_MODEL:-}" <<'EOF'
+import base64, hashlib, json, subprocess, sys, urllib.request
+api, port, out, model = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+checks = []
+def check(name, ok, detail=""):
+    checks.append({"name": name, "ok": bool(ok), "detail": str(detail)[:300]})
+    print(("PASS " if ok else "FAIL ") + name + (f" — {detail}" if detail else ""))
+def get(path):
+    with urllib.request.urlopen(api + path, timeout=10) as r:
+        body = r.read()
+        return r.status, body
+try:
+    status, body = get("/api/v1/health")
+    health = json.loads(body)
+    ops = health.get("available_operations", [])
+    check("API healthy", status == 200 and health.get("status") == "ok", f"CANOPY {health.get('version')} worker {health.get('worker_mode')}")
+    check("physical operations registered", {"evaluate_layout", "search_layouts", "compare_locations", "compare_scenarios"} <= set(ops), ",".join(ops))
+    status, body = get("/")
+    check("built UI served on the same origin", status == 200 and b"<div id=\"root\"" in body)
+    status, body = get("/canopy-dev-session.json")
+    session = json.loads(body)
+    ref = session["scenario_ref"]
+    _, sbody = get(f"/api/v1/scenarios/{ref['scenario_id']}?revision={ref['revision']}")
+    inp = json.loads(sbody)["input"]
+    _, site = get(f"/api/v1/sites/{inp['site_id']}?scene_revision={inp['scene_revision']}&semantic_revision={inp['semantic_revision']}")
+    asset = next(a for a in json.loads(site)["assets"] if a["asset_id"] == session["declaration_asset_id"])
+    check("UI bootstrap scene bytes match the SiteBundle SHA-256",
+          hashlib.sha256(base64.b64decode(session["declaration_b64"])).hexdigest() == asset["sha256"])
+    _, agent = get("/api/v1/agent/status")
+    agent = json.loads(agent)
+    if model:
+        check("agent configured with the expected model", agent["configured"] and agent["model"] == model, agent.get("reason"))
+        check("model service reachable and lists the model", agent["reachable"] and agent["model_listed"], f"listed: {agent['listed_models']}")
+    else:
+        check("agent intentionally not configured", agent["configured"] is False)
+except Exception as exc:
+    check("readiness requests completed", False, f"{type(exc).__name__}: {exc}")
+listen = subprocess.run(["ss", "-Hltn"], capture_output=True, text=True).stdout.split("\n")
+binds = [l.split()[3] for l in listen if l.strip() and (l.split()[3].endswith(":" + port) or l.split()[3].endswith(":8000"))]
+exposed = [b for b in binds if not (b.startswith("127.0.0.1:") or b.startswith("[::1]:"))]
+check("app/model ports bound to loopback only", not exposed, ", ".join(binds) or "none")
+json.dump({"kind": "canopy-check/1", "api": api, "checks": checks}, open(out, "w"), indent=2)
+print("receipt:", out)
+sys.exit(0 if all(c["ok"] for c in checks) else 1)
+EOF
+}
+
+cmd_smoke() {
+  [ -x "$PY" ] || { fail "not installed"; return 1; }
+  local out; out="$RECEIPTS/smoke-$(ts)"
+  "$PY" -I -m tree_planner.evaluators.physical_demo --output "$out" >"$out.log" 2>&1
+  local rc=$?
+  python3 - "$out/evidence.json" "$rc" <<'EOF'
+import json, sys
+path, rc = sys.argv[1], int(sys.argv[2])
+try:
+    e = json.load(open(path))
+except Exception as exc:
+    print(f"FAIL smoke: no evidence ({type(exc).__name__}); rc={rc}"); sys.exit(1)
+print(f"smoke: status={e.get('status')} rc={rc}; evidence {path}")
+sys.exit(0 if rc == 0 and e.get("status") == "passed" else 1)
+EOF
+}
+
+cmd_agent_smoke() {
+  load_env
+  local out; out="$RECEIPTS/agent-smoke-$(ts).json"
+  python3 - "$API" "$out" <<'EOF'
+import json, sys, time, urllib.request
+api, out = sys.argv[1], sys.argv[2]
+H = {"Origin": api, "Content-Type": "application/json"}
+def call(method, path, body=None):
+    req = urllib.request.Request(api + path, method=method, headers=H, data=json.dumps(body).encode() if body else None)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"{}")
+_, session = call("GET", "/canopy-dev-session.json")
+sid = session["scenario_ref"]["scenario_id"]
+rev = session["scenario_ref"]["revision"]
+while call("GET", f"/api/v1/scenarios/{sid}?revision={rev + 1}")[0] == 200:
+    rev += 1
+code, run = call("POST", "/api/v1/agent/runs", {"scenario_ref": {"scenario_id": sid, "revision": rev, "scope": "accepted"},
+                 "goal": "Evaluate the current proposal and explain the computed additional shade.", "operations": ["evaluate_layout"]})
+if code != 202:
+    print(f"FAIL agent run not started: HTTP {code} {run}"); json.dump({"start": run}, open(out, "w")); sys.exit(1)
+t0 = time.monotonic()
+while run["status"] == "running" and time.monotonic() - t0 < 900:
+    time.sleep(2)
+    run = call("GET", f"/api/v1/agent/runs/{run['run_id']}")[1]
+results = {rid: call("GET", f"/api/v1/results/{rid}")[1] for rid in run.get("computed_run_ids", [])}
+json.dump({"kind": "canopy-agent-smoke/1", "run": run, "results": results}, open(out, "w"), indent=2)
+ok = run["status"] == "completed" and run["evidence_verified"] is True and all(
+    r.get("provenance", {}).get("execution_mode") == "live" for r in results.values())
+print(f"{'PASS' if ok else 'FAIL'} agent {run['model']}: {run['status']} in {run.get('elapsed_s')} s, "
+      f"{run['model_completions']} turns, tools {[c['operation'] for c in run['tool_calls']]}, "
+      f"cited {run['cited_run_ids']}, reason {run.get('reason')}")
+print("receipt:", out)
+sys.exit(0 if ok else 1)
+EOF
+}
+
+cmd_logs() { local s; s="$(cat "$RUN/session" 2>/dev/null)" && tail -n "${1:-50}" "$s/server.log"; }
+
+case "${1:-}" in
+  verify) cmd_verify ;;
+  preflight) cmd_preflight ;;
+  install) cmd_install ;;
+  start) cmd_start ;;
+  stop) cmd_stop ;;
+  restart) cmd_stop; FAILED=0; cmd_start ;;
+  status) cmd_status ;;
+  check) cmd_check ;;
+  smoke) cmd_smoke ;;
+  agent-smoke) cmd_agent_smoke ;;
+  logs) shift; cmd_logs "$@" ;;
+  *) sed -n 2,19p "$0"; exit 2 ;;
+esac
+rc=$?
+[ "$FAILED" = 1 ] && exit 1
+exit $rc

@@ -1,4 +1,7 @@
 import type {
+  AgentRun,
+  AgentRunRequest,
+  AgentStatus,
   ContractError,
   Health,
   Job,
@@ -112,6 +115,12 @@ export class CanopyClient {
   job(jobId: string) { return this.request<Job>('GET', `/jobs/${encodeURIComponent(jobId)}`) }
   cancelJob(jobId: string) { return this.request<Job>('POST', `/jobs/${encodeURIComponent(jobId)}/cancel`) }
   result(runId: string) { return this.request<Result>('GET', `/results/${encodeURIComponent(runId)}`) }
+
+  /** The planning agent runs on the server; the browser never calls the model. */
+  agentStatus() { return this.request<AgentStatus>('GET', '/agent/status') }
+  startAgentRun(request: AgentRunRequest) { return this.request<AgentRun>('POST', '/agent/runs', request) }
+  agentRun(runId: string) { return this.request<AgentRun>('GET', `/agent/runs/${encodeURIComponent(runId)}`) }
+  stopAgentRun(runId: string) { return this.request<AgentRun>('POST', `/agent/runs/${encodeURIComponent(runId)}/stop`) }
 
   /**
    * There is no "latest revision" endpoint. Starting from a known revision, step forward

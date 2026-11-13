@@ -67,7 +67,9 @@ services:
       - --max-num-seqs
       - "1"
       - --max-model-len
-      - "8192"
+      # Pinned candidate 8192. Measured agent observations (evaluate 13 KB, search 25 KB,
+      # compare 27 KB of JSON) can exceed it; see docs/SPARK_DEPLOYMENT.md before raising.
+      - "${CANOPY_MAX_MODEL_LEN:-8192}"
       - --gpu-memory-utilization
       - "0.65"
     healthcheck:

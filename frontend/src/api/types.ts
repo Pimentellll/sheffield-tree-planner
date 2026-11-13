@@ -1,5 +1,9 @@
 // Wire types come only from the backend-generated file. Do not redefine them here.
 export type {
+  AgentRun,
+  AgentRunRequest,
+  AgentStatus,
+  AgentToolCall,
   ContractError,
   Delivery,
   EvaluatedLayout,

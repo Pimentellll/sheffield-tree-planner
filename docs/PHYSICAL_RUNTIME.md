@@ -7,7 +7,7 @@ From this checkout, using its Python 3.11 environment:
 ```powershell
 uv sync --frozen --extra dev --python .venv/Scripts/python.exe
 .venv/Scripts/python.exe -m tree_planner.evaluators.physical_demo --output .local/proof-001
-.venv/Scripts/python.exe -m tree_planner.evaluators.physical_server --workspace .local/session-001 --winter --port 8000
+.venv/Scripts/python.exe -m tree_planner.evaluators.physical_server --workspace .local/session-001 --winter --port 8765
 ```
 
 Use fresh paths. The demo performs real loopback TCP HTTP → durable jobs → CPU computation for evaluation, search, relocation and both scenario-comparison modes. It captures actual inputs, jobs, Results, metric IDs, hashes, errors, timings and owned-port cleanup in `evidence.json`. The server prints the exact scenario reference and UI URL. Stop the interactive server with Ctrl+C. It never contacts a model or remote numerical service.

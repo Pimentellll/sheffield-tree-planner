@@ -10,18 +10,23 @@ from threading import Thread
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
+from tree_planner.agents.runs import add_cli_arguments, install
+
 from .physical_runtime import create_physical_runtime
+from .physical_session import build_session
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", type=Path, required=True)
-    parser.add_argument("--port", type=int, default=8000)
+    # 8765, never 8000: on Spark 8000 is the local model service (deploy/spark).
+    parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--winter", action="store_true")
     parser.add_argument("--frontend-dist", type=Path)
     parser.add_argument("--status-file", type=Path)
     parser.add_argument("--cleanup-file", type=Path)
     parser.add_argument("--control-stdin", action="store_true")
+    add_cli_arguments(parser)
     args = parser.parse_args()
     if not 0 <= args.port <= 65535:
         parser.error("port must be between 0 and 65535")
@@ -30,16 +35,30 @@ def main():
         front = args.frontend_dist.resolve(strict=True)
         if not (front / "index.html").is_file() or args.workspace.resolve().is_relative_to(front):
             parser.error("Built frontend required; private workspace must be outside it")
+        # Same bootstrap the Vite dev server provides, computed once from the
+        # rights-checked registered scene asset; registered before the static mount.
+        session = build_session(runtime)
+
+        @runtime.app.get("/canopy-dev-session.json", include_in_schema=False)
+        def ui_session():
+            return session
+
         runtime.app.mount("/", StaticFiles(directory=front, html=True, follow_symlink=False))
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if sys.platform != "win32":
+        # As uvicorn does for its own sockets: allow restart over TIME_WAIT connections
+        # (agent self-calls create them). It never permits a second live listener.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("127.0.0.1", args.port))
     base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+    agent = install(runtime.app, base + "/api/v1", args)
     server = uvicorn.Server(uvicorn.Config(runtime.app, log_level="warning", access_log=False))
     status = dict(
         url=base,
         scenario_ref=runtime.scenario_ref.model_dump(mode="json"),
         ui_url=f"{base}/?scenario={runtime.scenario_ref.scenario_id}&revision=1",
         scope="Authored synthetic numerical case; no real-site/model/human acceptance",
+        agent_model=None if agent is None else agent.model,
     )
     if args.status_file:
         args.status_file.parent.mkdir(parents=True, exist_ok=True)

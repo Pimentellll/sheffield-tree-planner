@@ -68,8 +68,16 @@ class ClientConfig:
     max_input_tokens: int | None = None
     reasoning_effort: str | None = None
     temperature: float | None = None
+    # e.g. {"enable_thinking": False} for the pinned vLLM/Nemotron profile; sent verbatim.
+    chat_template_kwargs: dict | None = None
 
     def __post_init__(self):
+        if self.chat_template_kwargs is not None and (
+            type(self.chat_template_kwargs) is not dict
+            or not all(type(k) is str for k in self.chat_template_kwargs)
+            or not all(type(v) in (bool, int, str) for v in self.chat_template_kwargs.values())
+        ):
+            raise ValueError("chat template options must be a flat string-keyed mapping")
         u = urlsplit(self.base_url)
         try:
             loopback = u.hostname == "localhost" or (
@@ -149,6 +157,8 @@ class LocalClient:
             payload["reasoning_effort"] = cfg.reasoning_effort
         if cfg.temperature is not None:
             payload["temperature"] = cfg.temperature
+        if cfg.chat_template_kwargs is not None:
+            payload["chat_template_kwargs"] = dict(cfg.chat_template_kwargs)
         timeout = min(cfg.timeout_s, timeout_s) if timeout_s is not None else cfg.timeout_s
         if timeout <= 0:
             raise ProtocolError("deadline exceeded")

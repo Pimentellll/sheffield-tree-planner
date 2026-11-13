@@ -33,6 +33,7 @@ from tree_planner.contracts import (
     TreeProfile,
     compute_readiness,
 )
+from tree_planner.agents.runs import AgentRun, AgentRunManager, AgentRunRequest, AgentStatus
 from tree_planner.contracts.base import Array, ID
 from tree_planner.jobs import JobStoreError, JobWorker
 from tree_planner.site.repository import DomainError
@@ -179,6 +180,15 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app):
+        async with _worker_lifespan(app):
+            try:
+                yield
+            finally:
+                # Agent runs poll this API's jobs; stop them before the worker exits.
+                await asyncio.to_thread(app.state.agent_runs.shutdown)
+
+    @asynccontextmanager
+    async def _worker_lifespan(app):
         if start_worker and service.handlers:
             service.lease.acquire()
             try:
@@ -218,6 +228,8 @@ def create_app(
     app.state.scenarios = service.scenarios
     app.state.jobs = service.jobs
     app.state.agent = agent
+    # Opt-in local-model planning runs; launchers replace this with a configured manager.
+    app.state.agent_runs = AgentRunManager(service, None)
     app.state.run_one = service.run_one
     app.state.worker = None
     app.state.worker_mode = "manual"
@@ -438,5 +450,23 @@ def create_app(
         if result is None:
             raise DomainError("UNKNOWN_REVISION", "Run not found")
         return result
+
+    # Agentic planning: the browser asks this API; it never reaches the model directly.
+    # A run can only investigate the current human-accepted task and cannot accept.
+    @app.get("/api/v1/agent/status", response_model=AgentStatus)
+    def agent_status():
+        return app.state.agent_runs.status()
+
+    @app.post("/api/v1/agent/runs", status_code=202, response_model=AgentRun)
+    def start_agent_run(body: AgentRunRequest):
+        return app.state.agent_runs.start(body)
+
+    @app.get("/api/v1/agent/runs/{run_id}", response_model=AgentRun)
+    def get_agent_run(run_id: str):
+        return app.state.agent_runs.get(run_id)
+
+    @app.post("/api/v1/agent/runs/{run_id}/stop", response_model=AgentRun)
+    def stop_agent_run(run_id: str):
+        return app.state.agent_runs.stop(run_id)
 
     return app

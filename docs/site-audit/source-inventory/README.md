@@ -29,8 +29,8 @@ These were decided by the #69 owner's coordinating session under the owner's gen
 Facts that shape the importer:
 
 - **CRS:** `f=json` returns native British National Grid metres (EPSG:27700). The catalogue's `f=geojson` link returns server-reprojected WGS84 lon/lat. The importer uses `f=json` with `outSR=27700` so source geometry and CRS are preserved, and its output is deliberately not GeoJSON.
-- **Missing values:** a schema probe of three records showed one without a `featurelocation` key. Missing values are kept as explicit `unknown`, never filled.
-- **Address-like text:** `featurelocation` holds frontage text such as "Outside 7-9" (house-number positions). It refers to street frontages, not people, but the review sample (`review-sample.json`) drops it. `--keep-location-text` writes a separate `local-only-sample-with-location-text.json` that keeps it, for local inspection only (decision 3a).
+- **Missing values:** a manual schema inspection, not an importer run, viewed three records through the service's public query page. One had no `featurelocation` key. No record from it was saved, retained or committed. Missing values are kept as explicit `unknown`, never filled.
+- **Address-like text:** `featurelocation` holds free-text frontage notes that give house-number positions. Real values are deliberately not quoted here (decision 3a). The text refers to street frontages, not people, but the review sample (`review-sample.json`) drops it. `--keep-location-text` writes a separate `local-only-sample-with-location-text.json` that keeps it, for local inspection only (decision 3a).
 - **Extent:** the layer's stored extent is not plausible for Sheffield. Coverage must come from the query results, not the layer extent.
 
 ## Rights (unresolved licence conflict; asset-level decision still needed)
@@ -80,7 +80,7 @@ python scripts/prepare_tree_inventory.py replay \
 - **Committable command:** the manifest's `command` is rebuilt from the parsed arguments. Paths become the fixed placeholders `<raw-dir>` and `<output-dir>`, because even a directory's final name could be a person's name. Option abbreviations are refused.
 - **CRS:** queries ask for `f=json` with `outSR=27700`, never GeoJSON (which the server reprojects to WGS84). Every declared code must be an integer, and the declared codes must agree:
   - **Pages:** `latestWkid` and `wkid` must agree with each other.
-  - **Layer metadata:** every code declared at the top level or under `sourceSpatialReference` must be 27700. `extent.spatialReference` describes only a stored bounding box (implausible for this layer), so it is recorded in the manifest and never decides.
+  - **Layer metadata:** every code declared at the top level or under `sourceSpatialReference` must be 27700. A declaration there that is not an object is refused as unreadable. `extent.spatialReference` describes only a stored bounding box (implausible for this layer), so it never refuses the build. If it declares anything other than 27700, or is the only declaration, `native_crs_check` reads `unverified: ...` and names it, never `matches` or `not declared`.
 
   Contradictory metadata, such as 27700 with 3857, is refused rather than resolved by taking whichever code comes first. A layer that declares no code at all is recorded as `native CRS unverified`, not refused.
 - **Request identity on replay:** before the fixed source is stamped on the outputs, the receipt must describe exactly the requests `fetch` would have made to the fixed layer:
@@ -109,7 +109,12 @@ python scripts/prepare_tree_inventory.py replay \
   - the approval reference (a role or a reference, never a name);
   - the recorded decisions.
 
-  Path arguments become fixed placeholders, and only allowlisted, validated receipt values are copied. **Publisher text is also copied and is not validated:** `layer_schema` (name, field names, types, aliases and lengths; `editingInfo`; `serviceItemId`) and `rights_detail.layer_copyright_text`. Review it before any commit.
+  Path arguments become fixed placeholders, and only allowlisted, validated receipt values are copied. **Publisher text is also copied and is not validated:**
+  - `layer_schema`: name, `geometryType`, `hasZ`, `objectIdField`, `maxRecordCount`; `spatialReference`, `sourceSpatialReference` and `extent_spatialReference`; field names, types, aliases and lengths; `editingInfo`; `serviceItemId`;
+  - `source.source_layer_name`;
+  - `rights_detail.layer_copyright_text`.
+
+  Review it before any commit.
 - `review-sample.json`: a small sample **for review, not redistribution**. Its schema is tagged `#sample`, and each record lists any `withheld_for_sample` fields. Only `sitename` and `featuretypename` are kept; any other field is withheld.
 - `local-only-sample-with-location-text.json` (only with `--keep-location-text`, written instead of `review-sample.json`): it also keeps `featurelocation` and is stamped `local_only`. Under decision 3a it is never committed.
 

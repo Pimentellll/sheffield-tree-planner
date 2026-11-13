@@ -686,6 +686,11 @@ def test_replay_refuses_runs_fetch_could_not_have_completed(tmp_path):
              feature(5, 430040.0, 380040.0)]
     refused("page-over-size", [page(first, more=True), page(third)], "for a request of 2",
             paging=True)
+    # A page that is a service error body (fetch stops on any error body).
+    error_page = {"error": {"code": 500, "message": "synthetic"}}
+    refused("error-page-single", [error_page], "a page is a service error body", paging=False)
+    refused("error-page-second", [page(first, more=True), error_page],
+            "a page is a service error body", paging=True)
 
 
 def test_a_page_without_a_features_list_is_refused_cleanly(tmp_path):
@@ -716,7 +721,18 @@ def test_native_crs_uses_data_declarations_and_only_records_the_extent(tmp_path)
     assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "ok" / "o")]) == 0
     manifest = json.loads((tmp_path / "ok" / "o" / "manifest.json").read_text())
     assert manifest["layer_schema"]["extent_spatialReference"] == {"wkid": 3857}
-    assert manifest["layer_schema"]["native_crs_check"].startswith("matches")
+    # Not refused, but never "matches" while the extent declares something else.
+    check = manifest["layer_schema"]["native_crs_check"]
+    assert check.startswith("unverified: extent.spatialReference declares"), check
+    # An extent that is the only declaration is named; it is never "not declared".
+    raw = tmp_path / "extent-only" / "raw"
+    raw.parent.mkdir()
+    no_top = {k: v for k, v in LAYER.items() if k != "spatialReference"}
+    _write_raw(raw, SYNTHETIC_PAGES, layer={**no_top, "extent": extent})
+    out = tmp_path / "extent-only" / "o"
+    assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(out)]) == 0
+    check = json.loads((out / "manifest.json").read_text())["layer_schema"]["native_crs_check"]
+    assert check.startswith("unverified: only extent.spatialReference declares a CRS"), check
     # A storage CRS (sourceSpatialReference) that disagrees is refused.
     raw = tmp_path / "src" / "raw"
     raw.parent.mkdir()
@@ -729,6 +745,42 @@ def test_native_crs_uses_data_declarations_and_only_records_the_extent(tmp_path)
     _write_raw(raw, SYNTHETIC_PAGES,
                layer={**LAYER, "spatialReference": {"wkid": None, "latestWkid": 27700}})
     assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "latest" / "o")]) == 0
+
+
+@pytest.mark.parametrize("place", ["spatialReference", "sourceSpatialReference"])
+@pytest.mark.parametrize("value", ["27700", [27700], 27700])
+def test_a_layer_crs_declaration_that_is_not_an_object_is_refused(tmp_path, place, value):
+    script = _script()
+    raw = tmp_path / "raw"
+    _write_raw(raw, SYNTHETIC_PAGES, layer={**LAYER, place: value})
+    with pytest.raises(SystemExit, match=f"layer {place} is not an object"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "o")])
+    assert not (tmp_path / "o").exists()
+
+
+@pytest.mark.parametrize("max_records", [-5, 0.5])
+def test_fetch_refuses_a_page_size_below_one_before_any_query(tmp_path, monkeypatch, max_records):
+    """A page size below 1 would give a request --max-features could not cap."""
+    script = _script()
+    layer = {**LAYER, "maxRecordCount": max_records,
+             "advancedQueryCapabilities": {"supportsPagination": True}}
+    requested = []
+
+    def opener(request):
+        requested.append(request.full_url)
+        return _FakeResponse(layer if "/query" not in request.full_url else {"count": 3},
+                             request.full_url)
+
+    monkeypatch.setattr(script, "_open", opener)
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    with pytest.raises(SystemExit, match="page size of"):
+        script.main(
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approval-ref",
+             "role:operator", "--raw-dir", str(raw), "--output-dir", str(out)]
+        )
+    assert requested == [script.LAYER_METADATA_URL]  # no count or page request was made
+    assert json.loads((raw / "acquisition.json").read_text())["status"] == "failed"
+    assert not out.exists()
 
 
 def test_fetch_refuses_a_page_larger_than_requested(tmp_path, monkeypatch):

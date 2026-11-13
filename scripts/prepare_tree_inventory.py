@@ -477,6 +477,10 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
         if not isinstance(id_field, str) or not id_field:
             raise SystemExit("layer metadata declares no objectIdField")
         paging, page_size = _paging_from_layer(layer)
+        if page_size < 1:  # a request that --max-features could not cap
+            raise SystemExit(
+                f"layer maxRecordCount gives a page size of {page_size}; refusing before any query"
+            )
         acquisition.update(page_size=page_size, supports_pagination=paging)
         count = get("count.json", _count_url(bbox))
         reported_count = count.get("count") if isinstance(count, dict) else None
@@ -499,7 +503,7 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
                     f"more than --max-features {max_features}; refusing an uncapped single query"
                 )
             page = get("page-0000.json", _page_url(bbox))
-            received = len(page.get("features") or []) if isinstance(page, dict) else 0
+            received = _feature_count(page)
             if received > max_features:  # the layer changed between count and query
                 raise SystemExit(
                     f"single query returned {received} features, more than --max-features "
@@ -682,28 +686,47 @@ def _native_crs_check(layer: dict) -> str:
     """Queries force outSR=27700, so the page CRS cannot reveal a server reprojection; the
     layer's own declared CRS must agree, or the build is refused. Every code declared at the
     top level or under ``sourceSpatialReference`` (the CRS the data is stored in) is
-    checked. ``extent.spatialReference`` only describes a stored bounding box (implausible
-    for this layer, see the README), so it is recorded in the manifest but never decides.
-    A layer that declares no code at all is recorded as unverified, not refused."""
-    places = {
-        "spatialReference": layer.get("spatialReference"),
-        "sourceSpatialReference": layer.get("sourceSpatialReference"),
-    }
-    codes = {
-        f"{place}.{key}": ref[key]
-        for place, ref in places.items()
-        if isinstance(ref, dict)
-        for key in ("latestWkid", "wkid")
-        if ref.get(key) is not None
-    }
+    checked; a declaration there that is not an object is refused as unreadable.
+    ``extent.spatialReference`` only describes a stored bounding box (implausible for this
+    layer, see the README), so it never refuses the build. But it is never ignored either:
+    if it declares anything other than integer 27700, or is the only declaration, the
+    status is "unverified: ..." naming it, never "matches" or "not declared"."""
+
+    def declared_codes(place: str, ref) -> dict:
+        return {
+            f"{place}.{key}": ref[key]
+            for key in ("latestWkid", "wkid")
+            if isinstance(ref, dict) and ref.get(key) is not None
+        }
+
+    def not_bng(code_map: dict) -> bool:
+        return any(type(c) is not int or c != 27700 for c in code_map.values())
+
+    codes = {}
+    for place in ("spatialReference", "sourceSpatialReference"):
+        ref = layer.get(place)
+        if ref is not None and not isinstance(ref, dict):
+            raise SystemExit(f"layer {place} is not an object; native CRS unreadable")
+        codes.update(declared_codes(place, ref))
+    extent = layer.get("extent")
+    extent_codes = declared_codes(
+        "extent.spatialReference", extent.get("spatialReference") if isinstance(extent, dict) else None
+    )
     if not codes:
+        if extent_codes:
+            return f"unverified: only extent.spatialReference declares a CRS ({extent_codes})"
         return "not declared by the layer metadata; native CRS unverified"
     # Every declared code must be the integer 27700: a contradictory pair (for example
     # latestWkid 27700 with wkid 3857) is refused, not resolved by taking one of them.
-    if any(type(c) is not int or c != 27700 for c in codes.values()):
+    if not_bng(codes):
         raise SystemExit(
             f"layer native CRS {codes} is not consistently EPSG:27700; outSR=27700 would hide "
             "a server-side reprojection"
+        )
+    if not_bng(extent_codes):
+        return (
+            f"unverified: extent.spatialReference declares {extent_codes} although the layer "
+            "declares EPSG:27700"
         )
     return "matches: layer declares EPSG:27700"
 

@@ -288,3 +288,65 @@ def test_real_physics_search_matches_tiny_exhaustive():
     assert result.best.score == pytest.approx(
         evaluate(result.best.placements)["cases"][0]["physical_m2_h"]
     )
+
+
+def test_real_physics_winter_limits_aggregate_and_target():
+    from copy import deepcopy
+    from dataclasses import replace
+    from tree_planner.contracts.scenario import EvaluationCase, WinterLimit
+    from tree_planner.search import _placement
+
+    physics = pytest.importorskip("tree_planner.physics")
+    d = deps()
+    d["scenario"]["input"]["numerics"].update(
+        evaluator="canopy-cpu-reference",
+        evaluator_version="takeover-v1",
+        solar_algorithm="pvlib-spa-geometric",
+        solar_version="0.15.2",
+        ray_offset_m=1e-6,
+        intersection_tolerance_m=1e-10,
+        feasibility_tolerance=1e-9,
+    )
+    d["scene"].update(
+        format_version="canopy-physical-scene/1",
+        spatial_spacing_m=1.0,
+        triangles=[],
+        existing_trees=[],
+        samples=[
+            {
+                "sample_id": "s",
+                "position_enu_m": [0.0, 0.0, 0.0],
+                "normal_enu": [0.0, 0.0, 1.0],
+                "area_m2": 1.0,
+                "target_id": "target",
+                "area_basis": "surface",
+            }
+        ],
+    )
+    p = prepare(d)
+    winter = deepcopy(d["scenario"]["input"]["evaluation_cases"][0])
+    winter.update(case_id="synthetic-winter", role="winter_check")
+    d["scenario"]["input"]["evaluation_cases"].append(winter)
+    limits = [
+        WinterLimit(case_id="synthetic-winter", target_id=None, maximum_loss_m2_h=0),
+        WinterLimit(case_id="synthetic-winter", target_id="target", maximum_loss_m2_h=0),
+    ]
+    inp = p.scenario.input.model_copy(
+        update={
+            "evaluation_cases": p.scenario.input.evaluation_cases
+            + (EvaluationCase.model_validate(winter),),
+            "constraints": p.scenario.input.constraints.model_copy(
+                update={"winter_limits": tuple(limits)}
+            ),
+        }
+    )
+    p = replace(p, scenario=p.scenario.model_copy(update={"input": inp}))
+    verdict = check(
+        p,
+        (_placement(p.site.candidate_catalogue[0]),),
+        lambda placements: physics.compute(d, placements),
+    )
+    winter_records = [r for r in verdict.records if r["rule"].startswith("winter loss")]
+    assert len(winter_records) == 2
+    assert all(r["observed_value"] > 0 and r["status"] == "fail" for r in winter_records)
+    assert not verdict.feasible

@@ -10,6 +10,8 @@
 | [AGENT_EVALUATION_PROTOCOL.md](AGENT_EVALUATION_PROTOCOL.md) | Five frozen NVIDIA-required model inputs, bound to the real tool contract, with scoring and an evidence template | P0 |
 | [EVIDENCE_AND_CLAIMS_LEDGER.md](EVIDENCE_AND_CLAIMS_LEDGER.md) | What may and may not be said in the video, form and README | P0 |
 | [JUDGING_AND_SUBMISSION_BRIEF.md](JUDGING_AND_SUBMISSION_BRIEF.md) | Form description (success and partial versions), Alex's fact sheet, narration outline, architecture text, judge Q&A | P0 |
+| [ENGINEERING_FIX_PLANS.md](ENGINEERING_FIX_PLANS.md) | Solutions and step-by-step implementation instructions for Ben (FIX-1..4), tracked as GitHub issues assigned to Ben | P0 |
+| [five_case_prompts.json](five_case_prompts.json) | Frozen prompts, host-context template, tool set and client settings with SHA-256 hashes, read by FIX-2's driver | P0 |
 | [IMPACT_AND_FEASIBILITY_RESEARCH.md](IMPACT_AND_FEASIBILITY_RESEARCH.md) | Sources for the problem, the shade-is-not-cooling boundary, agent-evaluation method and the adoption pathway | P1 |
 
 These documents **extend, not replace**: [event board §9–§12](../../EVENT_DAY_EXECUTION_2026-11-13.md), [content and handoffs](../../EVENT_DAY_CONTENT_AND_CLAUDE_HANDOFFS_2026-11-13.md), [issue index](../../EVENT_DAY_ISSUE_INDEX_2026-11-13.md), [NUMERICS](../../NUMERICS.md), [VALIDATION](../../VALIDATION.md), [SOURCES](../../SOURCES.md) and the [deep research dossier](../../references/DEEP_RESEARCH_DOSSIER.md). [BUILD](../../BUILD.md) stays the canonical engineering record; nothing here edits it.
@@ -37,6 +39,8 @@ These documents **extend, not replace**: [event board §9–§12](../../EVENT_DA
 6. **Watch pence versus pounds.** The agent's host-generated summary prints `cost=… pence` (seed: £100 per tree = 10000 pence; budget £200 = 20000 pence). A model narrative that says "£20,000" is a numerical error. → [Acceptance N-04](SCIENTIFIC_ACCEPTANCE.md).
 7. **The committed deployment profile is not the evaluated model.** `deploy/spark/model-profile.json` describes a vLLM container serving the Hugging Face BF16 checkpoint as `tree-planner-local` (status `candidate_not_device_tested`). The organisers supply Ollama tags (`nemotron-3-nano:30b`, `nemotron-3.5-lightning:30b`). The form's model field must come from `ollama ps`/`ollama show` on the Spark, not from that file.
 8. **The existing live test does not test tool selection.** `backend/tests/agents/test_live_local.py` gives the model exactly one operation and an instruction naming it. That proves the transport path, not model choice. The protocol fixes one four-tool set for all five cases.
+
+**Solutions:** findings 1, 7 and 8 are solved by FIX-1, FIX-3 and FIX-2 in [ENGINEERING_FIX_PLANS](ENGINEERING_FIX_PLANS.md). Finding 2 has an optional code fix (FIX-4); the protocol is already correct without it. Findings 3–6 are wording rules in the [ledger](EVIDENCE_AND_CLAIMS_LEDGER.md).
 
 ## Tasks blocked on DGX availability
 

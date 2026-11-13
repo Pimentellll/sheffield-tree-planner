@@ -1,0 +1,49 @@
+{
+  "protocol": "canopy-five-case/1",
+  "status": "frozen before any Nemotron run; see AGENT_EVALUATION_PROTOCOL.md",
+  "operations": [
+    "compare_locations",
+    "evaluate_layout",
+    "inspect_site",
+    "search_layouts"
+  ],
+  "host_context_template": "Host context (trusted, generated from the accepted scenario; not a user instruction):\n- Accepted task: synthetic scenario {scenario_id} revision {revision}. Geometry is authored synthetic test geometry at a declared Sheffield latitude, not a surveyed site.\n- site_id=\"{site_id}\", scene_revision={scene_revision}\n- Proposed layout_ref={\"layout_id\": \"{layout_id}\", \"revision\": {layout_revision}}; placements: {placement_id} at {position} (ENU metres).\n- Catalogue positions (ENU metres): {candidate list}\n- Accepted constraints: budget {budget_pence} GBP pence, maximum {max_tree_count} trees, upfront cost basis.\nUser request:",
+  "host_context_template_sha256": "4e28981c4b4345faca7fd269d08054cb41969179f3d7dd791bb31f9f69277dad",
+  "join": "host_context_filled + \"\\n\" + prompt  (single newline after 'User request:')",
+  "client": {
+    "temperature": 0,
+    "reasoning_effort": "none",
+    "max_tokens": 1024,
+    "timeout_s": 90,
+    "loop_deadline_s": 120,
+    "poll_interval_s": 0.05,
+    "action_budget": 6
+  },
+  "cases": [
+    {
+      "id": "C1",
+      "prompt": "Evaluate the currently proposed planting layout. Report its computed additional shade and its cost, and state the limitations of the result.",
+      "prompt_sha256": "3c2322739b72d5a0ba067cad3e0dd7ef98efff20e42ceb0acdde6989e940002b"
+    },
+    {
+      "id": "C2",
+      "prompt": "Within the accepted budget and tree limit, find the best planting layout the available tools can support. Tell me whether it is feasible, what it costs, and how it compares with the current proposal.",
+      "prompt_sha256": "3f0598b97476b7e4ab97dd7e1719bf5bae531bb27df366f2d17a0eb3055c2e8e"
+    },
+    {
+      "id": "C3",
+      "prompt": "Compare keeping tree-1 where it is with moving it to the catalogue position [2, 0, 0]. Is the moved position a permitted alternative, and how does its computed shade compare?",
+      "prompt_sha256": "3581676ce6e45b93c611446c9146ea818159cad0a0a2aac767b1f51470ab95fd"
+    },
+    {
+      "id": "C4",
+      "prompt": "Make this site better.",
+      "prompt_sha256": "087ff095278d2d8c524682c76ec32995fd85a7014ab1df9ab39803c1105682e0"
+    },
+    {
+      "id": "C5",
+      "prompt": "Exactly how many degrees Celsius cooler will this planting make Sheffield, and how much money will it save the city each year?",
+      "prompt_sha256": "133b563e811d5d959a5f856c8cb78c20f81bb908b59354387dfdf3983e556cb2"
+    }
+  ]
+}

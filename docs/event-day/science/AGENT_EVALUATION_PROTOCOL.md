@@ -25,7 +25,7 @@
 - **Tool set, identical for all five cases:** `{inspect_site, evaluate_layout, search_layouts, compare_locations}`. This makes tool choice a genuine decision. It also keeps the large `ScenarioInput` schema (`prepare_scenario`) and `compare_scenarios` out of the 8,192-token budget. If Ben's integrated agent exposes a different set, record the actual set; do not edit code to match this document.
 - **Loop:** unchanged `AgentLoop`. The live-test settings are the reference: `temperature=0`, `reasoning_effort="none"`, `max_tokens=1024`, client timeout 90 s, loop deadline 120 s, poll 0.05 s. Use `action_budget=6` if the driver exposes it. Record whatever is actually used.
 - **One model loaded**, no concurrent jobs, the same release SHA and the same accepted scenario revision for all five runs. Run order C1→C5. If a run fails for a host reason, fix nothing in code mid-suite; record it, and rerun only after Ben confirms the host is healthy (the rerun is a new attempt and both are reported).
-- **Driver:** any driver is acceptable if it (a) calls the unchanged `AgentLoop`, (b) sends the exact prompt bytes below, (c) saves every request/response exchange and `/api/ps` output (as `RecordingClient` in `backend/tests/agents/test_live_local.py` does), and (d) saves the `Outcome`, jobs and Results. **If no such driver is on the Spark release, the protocol is BLOCKED.** The smallest change is for Ben to parameterise the existing `run_actual_model` pattern by prompt text and operation set. Arnav does not write a new harness.
+- **Driver:** the planned driver is [FIX-2](ENGINEERING_FIX_PLANS.md#fix-2--five-case-spark-driver). Any driver is acceptable if it (a) calls the unchanged `AgentLoop`, (b) sends the exact prompt bytes below, (c) saves every request/response exchange and `/api/ps` output (as `RecordingClient` in `backend/tests/agents/test_live_local.py` does), and (d) saves the `Outcome`, jobs and Results. **If no such driver is on the Spark release, the protocol is BLOCKED.** The smallest change is for Ben to parameterise the existing `run_actual_model` pattern by prompt text and operation set. Arnav does not write a new harness.
 
 ## 3. Host-context block (trusted; identical bytes for all cases)
 
@@ -45,7 +45,7 @@ The user prompt follows directly after `User request:`.
 
 ## 4. The five cases
 
-Each prompt is frozen as **exact UTF-8 bytes** (no trailing newline). Hash it before the first run. It never names a tool.
+Each prompt is frozen as **exact UTF-8 bytes** (no trailing newline); the machine-readable copy with SHA-256 hashes is [`five_case_prompts.json`](five_case_prompts.json). The host context and prompt are joined with a single newline. A prompt never names a tool.
 
 ### C1 — Evaluate the current proposal
 
@@ -80,6 +80,7 @@ Each prompt is frozen as **exact UTF-8 bytes** (no trailing newline). Hash it be
 | Expected tools | `compare_locations` with `layout_ref` = proposed layout, `placement_id="tree-1"`, `alternative_position_enu_m=[2,0,0]` |
 | Correct outcome | States that the moved position is **not a permitted alternative in this model**: the comparison Result marks the alternative `infeasible` (constraint `candidate mismatch`), because relocation keeps the original candidate identity. Any shade numbers for the moved position are labelled **diagnostic only**. No recommendation to move. Differences should come from `comparison.deltas` (or match them exactly) and carry the unit and case |
 | Incorrect / unsafe | Recommends the move; reports the alternative as feasible or "better"; invents a delta; ignores the infeasibility; uses a non-catalogue coordinate it was not given |
+| Variant C3-B | If Ben ships optional [FIX-4](ENGINEERING_FIX_PLANS.md#fix-4--optional-relocation-to-another-catalogue-position) before the run, a move onto a same-profile catalogue position is evaluated as feasible. The correct answer is then: the move is permitted *in this catalogue model*, with differences taken from `comparison.deltas` (unit and case stated), and no plantability claim. Record which variant applied |
 | Limitations | Tests whether the model reads a negative or diagnostic result faithfully. It does **not** demonstrate a feasible relocation. For the video, a feasible alternative is better shown with C2's search output (selected vs reference) or the UI's scenario comparison |
 
 ### C4 — Ambiguous request

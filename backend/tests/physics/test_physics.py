@@ -520,3 +520,15 @@ def test_masks_reproduce_compute_without_reray(monkeypatch):
         evaluate_masks(changed, candidates, masks, ["c0"])
     with pytest.raises(PhysicsStopped):
         evaluate_masks(d, candidates, masks, ["c0"], stop=lambda: True)
+
+
+def test_typed_opaque_null_transmission(monkeypatch):
+    """Shared2251c4e Attenuation.model_dump emits nullable transmission by default."""
+    overhead(monkeypatch)
+    d = payload()
+    d["profiles"]["p"]["states"]["mature"]["attenuation"] = {"mode": "opaque", "transmission": None}
+    assert compute(d, [placement()])["cases"][0]["physical_m2_h"] == 4
+    for invalid in ({"mode": "opaque", "transmission": 0.2}, {"mode": "opaque", "ignored": None}):
+        d["profiles"]["p"]["states"]["mature"]["attenuation"] = invalid
+        with pytest.raises(ValueError, match="attenuation"):
+            compute(d, [placement()])

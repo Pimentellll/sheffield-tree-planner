@@ -177,7 +177,7 @@ def _validate(dependencies, placements, stop, diagnostic=False):
         compatible = deepcopy(p)
         for name, state in p["states"].items():
             att = state["attenuation"]
-            if att == {"mode": "opaque"}:
+            if att in ({"mode": "opaque"}, {"mode": "opaque", "transmission": None}):
                 pass
             elif (
                 set(att) == {"mode", "transmission"}

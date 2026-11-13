@@ -148,7 +148,8 @@
 @media print{.rail,.agent-bar,.map-key,.studio-left{display:none!important}}
 /* focus: visible on the light palette (ink), lime kept on dark surfaces */
 button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-.studio .scene-wrap:focus-visible{outline:3px solid var(--ink);outline-offset:-3px}
+/* every scene is light (Studio and Compare): dark ring */
+.scene-wrap:focus-visible{outline:3px solid var(--ink);outline-offset:-3px}
 .rail :focus-visible,.glass-dark :focus-visible,.context-bar :focus-visible,.scene-toolbar :focus-visible,.dark-action:focus-visible{outline-color:var(--lime)}
 .number-field:focus-within{outline-color:var(--ink)}
 .provenance-strip b{font-weight:600;letter-spacing:.05em}
@@ -162,3 +163,5 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,su
   .main-content.screen-studio .studio{flex:1 1 auto;height:auto;min-height:0}
   .studio-left{top:var(--gutter)}
 }
+/* 1101-1320 px: the scene's duplicate synthetic pill can sit behind the open editor; the header pill and site notice still state it */
+@media (min-width:1101px) and (max-width:1320px){.studio .scene-topline .pill{display:none}}

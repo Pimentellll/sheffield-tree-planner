@@ -129,7 +129,7 @@ Per case collect: fixed prompt hash and filled host-context hash; accepted scena
 | Demo → Submission | visible URL, receipt, source security? | Arnav + Ben, #59/#60 | human signoff |
 
 ### Recursion outcome
-**Round 1 (components):** missing web agent-run seam, context budget and five-case driver. **Round 2 (failure paths):** worker crash, idempotency, stop/cancel and stale propagation. **Round 3 (evidence and public output):** refusal/ambiguity classification, source trust, recording privacy, model/run provenance and video truth. **Round 4 (cross-owner reconciliation):** known FIX-1..4 and PRs #66/#67 cover overlapping work; no new incompatible system is warranted. A fifth desk pass found no additional *untracked P0 interface category*, but the list is not a proof of system correctness. Re-run on the integrated release and keep any failed/blocked row open.
+**Round 1 (components):** missing web agent-run seam, context budget and five-case driver. **Round 2 (failure paths):** worker crash, idempotency, stop/cancel and stale propagation. **Round 3 (evidence and public output):** refusal/ambiguity classification, source trust, recording privacy, model/run provenance and video truth. **Round 4 (cross-owner reconciliation):** known FIX-1..4 and PRs #66/#67 cover overlapping work; no new incompatible system is warranted. A fifth desk pass then identified native Ollama transport normalisation (R25, §9) as an additional P0 boundary and assigned it inside Ben's existing #54/#73. No further P0 category was identified in the documented source-interface pass; this is not proof of system correctness. Re-run on the integrated release and keep any failed/blocked row open.
 
 ## 8. Event-day ownership update (~13:07 UTC)
 

@@ -134,7 +134,7 @@ Before Arnav begins FE-A1, Ben supplies in one message:
 - Terminal outcomes and distinction among completed physical evaluation, missing result, abstention, invalid final, timeout and cancelled.
 - Security-safe tracing fields and whether the UI may display model identity, per-turn usage and tool args.
 - Verified currentness lookup and provenance/selection query after refresh.
-- Authoritative model tag `nemotron-3.5-lightning:30b` or other **actually tested** tag, `num_ctx`, 8,192 cap evidence, one quiet GPU window.
+- The model tag **actually tested** on the DGX (the organiser lists `nemotron-3.5-lightning:30b`, but no evaluated run exists yet), `num_ctx`, 8,192 cap evidence, one quiet GPU window.
 - A minimal on-Spark complete example (one agent → one registered evaluate tool → one stored Result), not raw SSH secrets.
 
 Once the contract is merged, Arnav can implement the hook, panel, tests and evidence capture in a scoped PR; Ben retains ownership of API, domain operations and numerical source. Alex's UI/video responsibility is not silently reassigned — coordinate #56/#58 explicitly before editing shared panels.

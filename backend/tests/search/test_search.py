@@ -244,3 +244,47 @@ def test_invalid_candidate_and_pence_types_are_rejected():
     d["site"]["candidate_catalogue"][0]["plantability_status"] = "unknown"
     with pytest.raises(ValueError):
         prepare(d)
+
+
+def test_real_physics_search_matches_tiny_exhaustive():
+    physics = pytest.importorskip("tree_planner.physics")
+    d = deps()
+    n = d["scenario"]["input"]["numerics"]
+    n.update(
+        evaluator="canopy-cpu-reference",
+        evaluator_version="takeover-v1",
+        solar_algorithm="pvlib-spa-geometric",
+        solar_version="0.15.2",
+        ray_offset_m=1e-6,
+        intersection_tolerance_m=1e-10,
+        feasibility_tolerance=1e-9,
+    )
+    d["scene"].update(
+        format_version="canopy-physical-scene/1",
+        spatial_spacing_m=1.0,
+        triangles=[],
+        existing_trees=[],
+        samples=[
+            {
+                "sample_id": f"s{i}",
+                "position_enu_m": [float(i), 0, 0],
+                "normal_enu": [0, 0, 1],
+                "area_m2": 1.0,
+                "target_id": "target",
+                "area_basis": "surface",
+            }
+            for i in range(10)
+        ],
+    )
+    p = prepare(d)
+
+    def evaluate(placements):
+        return physics.compute(d, placements)
+
+    result = search(p, evaluate)
+    exact = search(p, evaluate, exact_limit=3)
+    assert result.best.score <= exact.best.score
+    assert check(p, result.best.placements, evaluate).feasible
+    assert result.best.score == pytest.approx(
+        evaluate(result.best.placements)["cases"][0]["physical_m2_h"]
+    )

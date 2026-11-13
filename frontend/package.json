@@ -7,7 +7,9 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test:browser": "node tests/visual-check.cjs"
+    "test": "vitest run",
+    "test:browser": "node tests/browser-check.cjs",
+    "serve:reference": "python scripts/serve_reference.py"
   },
   "dependencies": {
     "react": "19.2.0",
@@ -21,6 +23,7 @@
     "@vitejs/plugin-react": "5.1.0",
     "playwright-core": "1.65.0",
     "typescript": "5.9.3",
-    "vite": "7.2.2"
+    "vite": "7.2.2",
+    "vitest": "4.0.8"
   }
 }

@@ -78,6 +78,9 @@ const shot = (page, name) => page.screenshot({ path: join(evidenceDir, `${name}.
     // Search.
     await waitJob(page, page.getByRole('button', { name: 'Find planting options' }))
     const s = await latest('search_layouts')
+    // "Completed" appears before the workspace has fetched the Result and its scenario snapshot; wait for the
+    // stored layouts to be rendered (slow software WebGL in CI can take longer than waitJob's 500 ms).
+    await page.waitForFunction(n => document.querySelectorAll('.layout-table tbody tr').length === n, s?.layouts.length ?? 0, { timeout: 15000 }).catch(() => {})
     const panel = await page.getByTestId('alternatives').innerText()
     check('search outcome shown for the stored result', s !== null && (await page.getByTestId('search-outcome').innerText()).length > 10, s?.analytical_outcome)
     const rows = page.locator('.layout-table tbody tr')

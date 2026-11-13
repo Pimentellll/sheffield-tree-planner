@@ -6,8 +6,12 @@ It never touches accepted scenarios, runtime services or model state.
   fetch   bounded acquisition (EPSG:27700 envelope) -> raw bytes + SHA-256 receipts in a fresh
           --raw-dir outside every git working tree, then the inventory/manifest in a separate
           fresh --output-dir (also outside every git working tree). Requires
-          --acquisition-approved-by: it records who authorised this download only. It is not a
-          rights decision, so every rights *_status stays unknown until a person decides.
+          --acquisition-approval-ref: a listed role (role:<role>) or a reference to where the approval
+          of this download is recorded (#<issue>[#issuecomment-<id>] or its GitHub URL), never
+          a person's name, because the manifest is committable and the repository is public.
+          It is not a rights decision, so every rights *_status stays unknown until a person
+          decides. If the layer does not support paging, the service count must be an integer
+          no larger than --max-features, or nothing is downloaded.
   replay  rebuild the inventory/manifest from an existing --raw-dir after re-checking every
           raw file hash (same-source replay must give the same inventory_sha256)
 
@@ -15,7 +19,7 @@ Example (run only in the approved environment):
 
   python scripts/prepare_tree_inventory.py fetch \
       --bbox-27700 433700,387100,434500,387700 --max-features 500 \
-      --acquisition-approved-by "<who/where approved>" \
+      --acquisition-approval-ref "#69#issuecomment-<id>" \
       --raw-dir /path/outside/repo/raw-street-trees-001 --output-dir /path/out-001
   python scripts/prepare_tree_inventory.py replay \
       --raw-dir /path/outside/repo/raw-street-trees-001 --output-dir /path/out-002
@@ -117,6 +121,57 @@ APPROVAL_SCOPE = (
     "authorises this download only; it is not a rights decision, so every rights *_status "
     "stays unknown until a person decides"
 )
+# A role from a fixed list, or a reference to where the approval is recorded; never a
+# person's name, because the manifest is committable and the repository is public. Roles
+# are an allowlist so that a name cannot pass as a slug.
+APPROVAL_ROLES = ("coordinator", "data-owner", "integrator", "operator", "site-lead", "team-lead")
+APPROVAL_REF = re.compile(
+    r"(role:(" + "|".join(APPROVAL_ROLES) + r")"
+    r"|#\d{1,7}(#issuecomment-\d{1,12})?"
+    r"|https://github\.com/Pimentellll/sheffield-tree-planner/(issues|pull)/\d{1,7}"
+    r"(#issuecomment-\d{1,12})?)"
+)
+DECISION_1A_BBOX = [433700.0, 387100.0, 434500.0, 387700.0]
+# Only these receipt keys reach the committable manifest; anything else (for example an old
+# free-text approval field) stays in the local receipt.
+MANIFEST_ACQUISITION_KEYS = (
+    "layer_url",
+    "bbox_27700",
+    "max_features",
+    "acquisition_approval_ref",
+    "acquisition_approval_scope",
+    "started_at_utc",
+    "finished_at_utc",
+    "page_size",
+    "supports_pagination",
+    "status",
+)
+MANIFEST_FILE_KEYS = ("file", "url", "final_url", "retrieved_at_utc", "http_status", "bytes", "sha256")
+# The three #69 decisions, recorded as taken by the #69 owner's coordinating session
+# under the owner's delegation (issue #69, 13 Nov 2026).
+RECORDED_DECISIONS = {
+    "decided_by": "the #69 owner's coordinating session, under the owner's delegation "
+    "(issue #69, 2026-11-13)",
+    "sample_envelope": "1a: Weston Park with surrounding streets, approximately "
+    "433700,387100,434500,387700 in EPSG:27700, with the service count recorded first; "
+    "park-interior coverage is unverified because the layer likely holds highway trees only",
+    "rights": "2a: all four purposes stay unknown; the OGL v3.0 vs INSPIRE End User Licence "
+    "conflict rules out recording any as permitted. Nothing may be displayed, shared or "
+    "exported until a person records the endpoint's actual terms",
+    "featurelocation": "3a: dropped from anything committed (including the redistributable "
+    "sample); kept in local outputs only",
+}
+
+
+def parse_approval_ref(text: str) -> str:
+    value = text.strip()
+    if not APPROVAL_REF.fullmatch(value):
+        raise argparse.ArgumentTypeError(
+            f"must be a role (role:{{{','.join(APPROVAL_ROLES)}}}) or a reference to where the "
+            "approval is recorded (#<issue>, #<issue>#issuecomment-<id>, or that GitHub URL), "
+            "never a person's name"
+        )
+    return value
 
 
 def _now() -> str:
@@ -215,7 +270,7 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
         "layer_url": LAYER_URL,
         "bbox_27700": list(bbox),
         "max_features": max_features,
-        "acquisition_approved_by": approval,
+        "acquisition_approval_ref": approval,
         "acquisition_approval_scope": APPROVAL_SCOPE,
         "started_at_utc": _now(),
         "files": [],
@@ -265,11 +320,29 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
             "spatialRel": "esriSpatialRelIntersects",
             "where": "1=1",
         }
-        get("count.json", _query_url({**spatial, "returnCountOnly": "true", "f": "json"}))
+        count = get("count.json", _query_url({**spatial, "returnCountOnly": "true", "f": "json"}))
         common = {**spatial, "outFields": "*", "returnGeometry": "true", "outSR": "27700", "f": "json"}
         if not paging:
-            # One query; the service's exceededTransferLimit reports any truncation.
-            get("page-0000.json", _query_url(common))
+            # A single query cannot be capped, so --max-features is enforced from the count
+            # first; the service's exceededTransferLimit still reports any truncation.
+            reported = count.get("count") if isinstance(count, dict) else None
+            if type(reported) is not int:
+                raise SystemExit(
+                    "layer does not support paging and the service count is not an integer; "
+                    "refusing an uncapped single query"
+                )
+            if reported > max_features:
+                raise SystemExit(
+                    f"layer does not support paging and the service reports {reported} features, "
+                    f"more than --max-features {max_features}; refusing an uncapped single query"
+                )
+            page = get("page-0000.json", _query_url(common))
+            received = len(page.get("features") or []) if isinstance(page, dict) else 0
+            if received > max_features:  # the layer changed between count and query
+                raise SystemExit(
+                    f"single query returned {received} features, more than --max-features "
+                    f"{max_features}; refusing the acquisition"
+                )
         else:
             pages, offset = 0, 0
             while offset < max_features:
@@ -350,12 +423,13 @@ def _count(count_value) -> tuple[int | None, str]:
 def _recorded_command(args: argparse.Namespace) -> list[str]:
     """Rebuilt from the parsed arguments, never copied from argv, so no operator-local path
     (in any spelling, such as ``--output-dir=PATH``) reaches the committable manifest. Paths
-    are reduced to their final name; the approval text is kept in the acquisition record."""
+    are reduced to their final name. The approval reference is validated (a role or a
+    reference, never a name), so it is recorded as given."""
     out = [args.mode]
     if args.mode == "fetch":
         out += ["--bbox-27700", ",".join(repr(v) for v in args.bbox_27700)]
         out += ["--max-features", str(args.max_features)]
-        out += ["--acquisition-approved-by", "<see acquisition.acquisition_approved_by>"]
+        out += ["--acquisition-approval-ref", args.acquisition_approval_ref]
     out += ["--raw-dir", f"<{args.raw_dir.name}>", "--output-dir", f"<{args.output_dir.name}>"]
     out += ["--sample-size", str(args.sample_size)]
     if args.keep_location_text:
@@ -382,6 +456,12 @@ def _native_crs_check(layer: dict) -> str:
 
 def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_location: bool, mode, command):
     acquisition, receipt_sha256, layer, count_value, pages = load_raw(raw_dir)
+    approval_ref = acquisition.get("acquisition_approval_ref")
+    if not isinstance(approval_ref, str) or not APPROVAL_REF.fullmatch(approval_ref):
+        raise SystemExit(
+            "acquisition receipt has no valid acquisition_approval_ref (a role or a reference, "
+            "never a person's name); refusing to write a committable manifest"
+        )
     native_crs = _native_crs_check(layer)
     fields = layer.get("fields") or []
     id_field = layer.get("objectIdField")
@@ -413,7 +493,30 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
         sample = redistributable_sample(built["inventory"], limit=sample_size, drop_attributes=drop)
     except InventoryError as exc:
         raise SystemExit(f"inventory refused: {exc}") from exc
+    if keep_location:
+        # Decision 3a: location text stays in local outputs only.
+        sample["sample"]["local_only"] = (
+            "includes featurelocation text (--keep-location-text); decision 3a: never commit "
+            "this file"
+        )
     inventory, receipt = built["inventory"], built["receipt"]
+    envelope_is_1a = acquisition.get("bbox_27700") == DECISION_1A_BBOX
+    limitations = [
+        "Recorded locations only: no crowns, heights, health, survival or planting "
+        "permission are implied.",
+        "Species values are the source's 'featuretypename' text as recorded; not verified.",
+        "Coordinates stay in the source CRS; no ENU/WGS84 conversion has been verified here.",
+        "Bounded envelope sample; not a citywide or complete inventory unless counts say so.",
+        "Reviewers report the layer likely covers council highway (street) trees only, not "
+        "park, private or other trees; not verified here.",
+        "Licence unresolved (OGL v3.0 vs INSPIRE End User Licence); every rights status is "
+        "unknown.",
+    ]
+    if envelope_is_1a:
+        limitations.append(
+            "Park-interior coverage of the Weston Park envelope (decision 1a) is unverified; "
+            "absence of a record is not absence of a tree."
+        )
     manifest = {
         "schema": "canopy-source-tree-inventory-manifest/1",
         "mode": mode,
@@ -422,14 +525,17 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
         "source": SOURCE,
         "rights": RIGHTS,
         "rights_detail": {**RIGHTS_DETAIL, "layer_copyright_text": layer.get("copyrightText")},
-        "acquisition_approval": {
-            "approved_by": acquisition.get("acquisition_approved_by"),
-            "scope": APPROVAL_SCOPE,
+        "acquisition_approval": {"reference": approval_ref, "scope": APPROVAL_SCOPE},
+        "recorded_decisions": {
+            **RECORDED_DECISIONS,
+            "sample_envelope_applies_to_this_acquisition": envelope_is_1a,
         },
         "acquisition": {
-            **{k: v for k, v in acquisition.items() if k != "files"},
+            **{k: acquisition[k] for k in MANIFEST_ACQUISITION_KEYS if k in acquisition},
             "receipt_sha256": receipt_sha256,
-            "files": acquisition.get("files"),
+            "files": [
+                {k: f[k] for k in MANIFEST_FILE_KEYS if k in f} for f in acquisition.get("files", [])
+            ],
             "service_count_status": count_status,
         },
         "layer_schema": {
@@ -453,17 +559,7 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
         },
         "counts": receipt["counts"],
         "inventory_sha256": receipt["inventory_sha256"],
-        "limitations": [
-            "Recorded locations only: no crowns, heights, health, survival or planting "
-            "permission are implied.",
-            "Species values are the source's 'featuretypename' text as recorded; not verified.",
-            "Coordinates stay in the source CRS; no ENU/WGS84 conversion has been verified here.",
-            "Bounded envelope sample; not a citywide or complete inventory unless counts say so.",
-            "Reviewers report the layer likely covers council highway (street) trees only, not "
-            "park, private or other trees; not verified here.",
-            "Licence unresolved (OGL v3.0 vs INSPIRE End User Licence); every rights status is "
-            "unknown.",
-        ],
+        "limitations": limitations,
     }
     # Everything was computed; only now create the (fresh) output directory.
     output_dir = _fresh_dir(output_dir, "--output-dir")
@@ -489,9 +585,12 @@ def main(argv=None) -> int:
     fetch_p.add_argument("--bbox-27700", type=parse_bbox, required=True)
     fetch_p.add_argument("--max-features", type=int, default=500)
     fetch_p.add_argument(
-        "--acquisition-approved-by",
+        "--acquisition-approval-ref",
+        type=parse_approval_ref,
         required=True,
-        help="who authorised this download, and where that is recorded (not a rights decision)",
+        help="role:<one of " + ", ".join(APPROVAL_ROLES) + ">, or #<issue>[#issuecomment-<id>] "
+        "/ its GitHub URL, recording who authorised this download; never a person's name "
+        "(not a rights decision)",
     )
     replay_p = sub.add_parser(
         "replay", help="rebuild outputs from a saved raw directory", allow_abbrev=False
@@ -511,11 +610,9 @@ def main(argv=None) -> int:
     if args.mode == "fetch":
         if not 1 <= args.max_features <= MAX_FEATURES_LIMIT:
             parser.error(f"--max-features must be between 1 and {MAX_FEATURES_LIMIT}")
-        if not args.acquisition_approved_by.strip():
-            parser.error("--acquisition-approved-by must name the approval")
         _outside_repository(args.raw_dir, "--raw-dir")
         raw_dir = _fresh_dir(args.raw_dir, "--raw-dir")
-        fetch(args.bbox_27700, args.max_features, raw_dir, args.acquisition_approved_by.strip())
+        fetch(args.bbox_27700, args.max_features, raw_dir, args.acquisition_approval_ref)
     else:
         raw_dir = args.raw_dir.resolve()
     manifest, output_dir = build_outputs(

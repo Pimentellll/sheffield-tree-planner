@@ -230,6 +230,32 @@ def test_empty_result_is_reported_as_empty_not_matching():
     assert counts["completeness_relative_to_service"].startswith("empty")
 
 
+def test_completeness_never_says_empty_or_matches_when_records_were_unusable():
+    """L4: records that arrive without usable IDs, or that are all rejected, are reported as
+    such, never as an empty result or a match."""
+    no_ids = [page([{"attributes": {"sitename": "NO ID"}, "geometry": {"x": 1.0, "y": 2.0}}] * 2)]
+    counts = build(no_ids, service_count=2)["receipt"]["counts"]
+    text = counts["completeness_relative_to_service"]
+    assert counts["features_received"] == 2 and counts["features_kept"] == 0
+    assert text.startswith("no usable records: all 2 retrieved") and "empty" not in text
+    bad_points = [page([feature(1, None, 1.0), feature(2, "x", 1.0)])]
+    counts = build(bad_points, service_count=2)["receipt"]["counts"]
+    assert counts["distinct_source_ids_seen"] == 2  # would have matched the service count
+    assert counts["completeness_relative_to_service"].startswith("no usable records")
+    kept = build(service_count=3)["receipt"]["counts"]["completeness_relative_to_service"]
+    assert kept == (
+        "matches the service-reported count for this query "
+        "(3 kept, 0 rejected, 0 conflicting source IDs)"
+    )
+    # A conflicting ID is named in the tally, so kept + rejected never silently falls short.
+    conflict = [
+        page([feature(1, 430000.0, 380000.0), feature(2, 430010.0, 380010.0, sitename="A"),
+              feature(2, 430010.0, 380010.0, sitename="B"), feature(3, 430020.0, 380020.0)])
+    ]
+    text = build(conflict, service_count=3)["receipt"]["counts"]["completeness_relative_to_service"]
+    assert text.endswith("(2 kept, 0 rejected, 1 conflicting source IDs)"), text
+
+
 def test_completeness_counts_each_source_id_once():
     # One ID kept from one page and rejected (bad point) on another is still one source ID.
     pages = [page([feature(5, 430000.0, 380000.0)]), page([feature(5, None, 380000.0)])]
@@ -288,20 +314,13 @@ def test_redistributable_sample_records_what_it_removed():
 # --------------------------------------------------------------------------- operator script
 
 
-@pytest.fixture(autouse=True)
-def no_network(monkeypatch):
-    """No test may contact the council endpoint. Attempts are recorded and fail the test
-    afterwards, because fetch() would otherwise turn the stub's error into a SystemExit."""
-    attempts = []
+# Real network access is blocked for every test in this directory by the autouse
+# ``no_network`` fixture in backend/tests/site/conftest.py.
 
-    def refuse(*args, **kwargs):
-        attempts.append(args)
-        raise OSError("network disabled in tests")
 
-    monkeypatch.setattr(urllib.request, "urlopen", refuse)
-    monkeypatch.setattr(urllib.request.OpenerDirector, "open", refuse)
-    yield
-    assert not attempts, f"a test attempted a real network request: {attempts!r}"
+def test_the_site_network_guard_is_active():
+    assert urllib.request.urlopen.__name__ == "refuse"
+    assert urllib.request.OpenerDirector.open.__name__ == "refuse"
 
 
 def _strings(value):
@@ -356,7 +375,7 @@ def _write_raw(raw_dir: Path, pages, count=None, status="complete", extra_files=
     acquisition = {
         "status": status,
         "max_features": 500,
-        "acquisition_approved_by": "synthetic test fixture",
+        "acquisition_approval_ref": "role:operator",
         "files": files,
     }
     (raw_dir / "acquisition.json").write_text(json.dumps(acquisition))
@@ -390,9 +409,20 @@ def test_replay_cli_builds_manifest_and_is_reproducible(tmp_path):
     assert "INSPIRE End User Licence" in statements[1]["statement"]
     assert manifest["rights_detail"]["conflict"] == "unresolved"
     # The download approval is recorded apart from rights and says it is not a rights decision.
-    assert manifest["acquisition_approval"]["approved_by"] == "synthetic test fixture"
+    assert manifest["acquisition_approval"]["reference"] == "role:operator"
     assert "not a rights decision" in manifest["acquisition_approval"]["scope"]
-    assert not any("approved_by" in key for key in rights)
+    assert not any("approv" in key for key in rights)
+    # The three #69 decisions travel with every manifest (envelope 1a, rights 2a, 3a).
+    decisions = manifest["recorded_decisions"]
+    assert decisions["sample_envelope"].startswith("1a:")
+    assert decisions["rights"].startswith("2a:") and decisions["featurelocation"].startswith("3a:")
+    assert "delegation" in decisions["decided_by"]
+    # This synthetic receipt has no bbox, so decision 1a's envelope is not claimed for it.
+    assert decisions["sample_envelope_applies_to_this_acquisition"] is False
+    assert not any("Park-interior coverage" in limit for limit in manifest["limitations"])
+    assert "local_only" not in json.loads(
+        (tmp_path / "a" / "redistributable-sample.json").read_text()
+    )["sample"]
     # Operator-local paths never reach the committable manifest (checked on parsed strings,
     # so Windows backslash escaping cannot hide a leak).
     assert not any(str(tmp_path) in s for s in _strings(manifest))
@@ -563,7 +593,7 @@ def test_fetch_requires_approval_and_keeps_raw_and_outputs_outside_the_repo(tmp_
     inside = script.REPO / "raw-should-not-be-here"
     with pytest.raises(SystemExit, match="outside every git working tree"):
         script.main(
-            ["fetch", "--bbox-27700", box, "--acquisition-approved-by", "synthetic test",
+            ["fetch", "--bbox-27700", box, "--acquisition-approval-ref", "role:operator",
              "--raw-dir", str(inside), "--output-dir", str(tmp_path / "o")]
         )
     assert not inside.exists() and not (tmp_path / "r").exists()
@@ -593,7 +623,7 @@ def test_raw_and_output_directories_must_be_disjoint_before_any_download(tmp_pat
     ):
         with pytest.raises(SystemExit, match="non-nested"):
             script.main(
-                ["fetch", "--bbox-27700", box, "--acquisition-approved-by", "synthetic test",
+                ["fetch", "--bbox-27700", box, "--acquisition-approval-ref", "role:operator",
                  "--raw-dir", str(raw), "--output-dir", str(out)]
             )
         assert not raw.exists()
@@ -627,14 +657,17 @@ class _FakeResponse:
         return self._url
 
 
-def _fake_publisher(final_url=None):
+def _fake_publisher(final_url=None, count=None, requests=None):
     """Serve the SYNTHETIC layer, count and one page by request URL."""
     single_page = page(SYNTHETIC_PAGES[0]["features"] + SYNTHETIC_PAGES[1]["features"])
+    count = {"count": 3} if count is None else count
 
     def opener(request):
         url = request.full_url
+        if requests is not None:
+            requests.append(url)
         if "returnCountOnly" in url:
-            value = {"count": 3}
+            value = count
         elif "/query" in url:
             value = single_page
         else:
@@ -649,8 +682,8 @@ def test_fetch_records_each_final_url_and_builds_offline(tmp_path, monkeypatch):
     monkeypatch.setattr(script, "_open", _fake_publisher())
     raw, out = tmp_path / "raw", tmp_path / "out"
     assert script.main(
-        ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approved-by",
-         "synthetic test", "--raw-dir", str(raw), "--output-dir", str(out)]
+        ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approval-ref",
+         "#69", "--raw-dir", str(raw), "--output-dir", str(out)]
     ) == 0
     acquisition = json.loads((raw / "acquisition.json").read_text())
     assert acquisition["status"] == "complete"
@@ -659,7 +692,26 @@ def test_fetch_records_each_final_url_and_builds_offline(tmp_path, monkeypatch):
     assert all(script.check_url(f["url"]) for f in acquisition["files"])
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["counts"]["features_kept"] == 3
-    assert manifest["acquisition_approval"]["approved_by"] == "synthetic test"
+    assert manifest["acquisition_approval"]["reference"] == "#69"
+    assert manifest["command"][manifest["command"].index("--acquisition-approval-ref") + 1] == "#69"
+    # The decision-1a envelope was fetched, so the decision and its coverage caveat apply.
+    assert manifest["recorded_decisions"]["sample_envelope_applies_to_this_acquisition"] is True
+    assert any("Park-interior coverage" in limit for limit in manifest["limitations"])
+
+
+def test_non_paging_single_query_is_refused_if_it_exceeds_the_cap(tmp_path, monkeypatch):
+    """L2: the layer can change between the count and the single query; the page is checked."""
+    script = _script()
+    monkeypatch.setattr(script, "_open", _fake_publisher(count={"count": 2}))
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    with pytest.raises(SystemExit, match="single query returned 4 features"):
+        script.main(
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--max-features", "2",
+             "--acquisition-approval-ref", "role:operator",
+             "--raw-dir", str(raw), "--output-dir", str(out)]
+        )
+    assert json.loads((raw / "acquisition.json").read_text())["status"] == "failed"
+    assert not out.exists()
 
 
 def test_fetch_refuses_a_response_from_another_url_and_keeps_the_receipt(tmp_path, monkeypatch):
@@ -668,10 +720,95 @@ def test_fetch_refuses_a_response_from_another_url_and_keeps_the_receipt(tmp_pat
     raw, out = tmp_path / "raw", tmp_path / "out"
     with pytest.raises(SystemExit, match="outside the fixed publisher layer"):
         script.main(
-            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approved-by",
-             "synthetic test", "--raw-dir", str(raw), "--output-dir", str(out)]
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approval-ref",
+             "role:operator", "--raw-dir", str(raw), "--output-dir", str(out)]
         )
     acquisition = json.loads((raw / "acquisition.json").read_text())
     assert acquisition["status"] == "failed"
     assert acquisition["files"][0]["final_url"] == "http://example.invalid/moved"
     assert not out.exists()
+
+
+@pytest.mark.parametrize(
+    "count,match",
+    [({"count": 3}, "more than --max-features 2"), ({"count": "3"}, "not an integer")],
+)
+def test_non_paging_layer_honours_max_features_before_any_page(tmp_path, monkeypatch, count, match):
+    """L2: a layer without paging gets one uncapped query, so the cap is enforced from the
+    service count first, and nothing is downloaded when it cannot be honoured."""
+    script = _script()
+    requests = []
+    monkeypatch.setattr(script, "_open", _fake_publisher(count=count, requests=requests))
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    with pytest.raises(SystemExit, match=match):
+        script.main(
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--max-features", "2",
+             "--acquisition-approval-ref", "role:operator",
+             "--raw-dir", str(raw), "--output-dir", str(out)]
+        )
+    acquisition = json.loads((raw / "acquisition.json").read_text())
+    assert acquisition["status"] == "failed"
+    assert [f["file"] for f in acquisition["files"]] == ["layer.json", "count.json"]
+    assert not (raw / "page-0000.json").exists() and not out.exists()
+    assert not any("returnCountOnly" not in u and "/query" in u for u in requests)
+
+
+def test_approval_takes_a_role_or_reference_never_a_name(tmp_path):
+    """N1: the approval lands in a committable manifest in a public repository."""
+    script = _script()
+    import argparse
+
+    for good in (
+        "role:data-owner",
+        "#69",
+        "#69#issuecomment-6856478760",
+        "https://github.com/Pimentellll/sheffield-tree-planner/issues/69#issuecomment-1",
+        "https://github.com/Pimentellll/sheffield-tree-planner/pull/77",
+    ):
+        assert script.parse_approval_ref(good) == good
+    for bad in ("Synthetic Person", "synthetic", "role:", "role:Has Spaces", "#69 by someone",
+                "https://example.com/#69", "", "role:synthetic-person", "#69\nx"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            script.parse_approval_ref(bad)
+    with pytest.raises(SystemExit):  # argparse rejects it before anything is created
+        script.main(
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approval-ref",
+             "Synthetic Person", "--raw-dir", str(tmp_path / "r"), "--output-dir", str(tmp_path / "o")]
+        )
+    assert not (tmp_path / "r").exists()
+    # A receipt carrying free text (or the old field) is refused on replay, before any output.
+    raw = tmp_path / "raw"
+    acquisition = _write_raw(raw, SYNTHETIC_PAGES)
+    acquisition.pop("acquisition_approval_ref")
+    acquisition["acquisition_approved_by"] = "Synthetic Person"
+    (raw / "acquisition.json").write_text(json.dumps(acquisition))
+    with pytest.raises(SystemExit, match="acquisition_approval_ref"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()
+    # A non-canonical reference (trailing newline) is refused on replay too.
+    acquisition["acquisition_approval_ref"] = "#69\n"
+    (raw / "acquisition.json").write_text(json.dumps(acquisition))
+    with pytest.raises(SystemExit, match="acquisition_approval_ref"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "out")])
+    # A valid reference beside an old free-text field replays, but only allowlisted receipt
+    # keys reach the committable manifest.
+    acquisition["acquisition_approval_ref"] = "#69"
+    acquisition["files"][0]["note"] = "Synthetic Person"
+    (raw / "acquisition.json").write_text(json.dumps(acquisition))
+    assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "ok")]) == 0
+    manifest = json.loads((tmp_path / "ok" / "manifest.json").read_text())
+    assert not any("Synthetic Person" in s for s in _strings(manifest))
+    assert "acquisition_approved_by" not in manifest["acquisition"]
+
+
+def test_location_text_sample_is_marked_local_only(tmp_path):
+    """Decision 3a: featurelocation stays in local outputs only."""
+    script = _script()
+    raw = tmp_path / "raw"
+    _write_raw(raw, SYNTHETIC_PAGES)
+    script.main(
+        ["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "k"), "--keep-location-text"]
+    )
+    sample = json.loads((tmp_path / "k" / "redistributable-sample.json").read_text())
+    assert "decision 3a" in sample["sample"]["local_only"]
+    assert sample["features"][0]["attributes"]["featurelocation"] == "Outside 1"

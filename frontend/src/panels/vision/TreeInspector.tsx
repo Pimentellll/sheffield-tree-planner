@@ -1,6 +1,6 @@
 import { useId } from 'react'
-import type { Layout, Scenario, SiteBundle, TreeProfile, Vec3 } from '../../api/types'
-import { MARGINAL_EXPLANATION, inspectTree, type InspectorRow, type TreeEvidence } from '../../planning/treeInspector'
+import type { Layout, Scenario, SiteBundle, TreeProfile } from '../../api/types'
+import { MARGINAL_EXPLANATION, inspectTree, type DraftPlacement, type InspectorRow, type TreeEvidence } from '../../planning/treeInspector'
 import './TreeInspector.css'
 
 /**
@@ -14,10 +14,10 @@ export interface TreeInspectorProps {
   readonly site: SiteBundle | null
   readonly profiles: readonly TreeProfile[]
   readonly scenario: Scenario | null
-  /** From layoutEvidence(ws.runs, layout, ws.currentness, ws.currentRunIds.evaluation). */
+  /** From layoutEvidence(ws.runs, layout, ws.scenario, ws.currentness, ws.currentRunIds.evaluation). */
   readonly evidence: TreeEvidence | null
-  /** Unaccepted position; pass null unless `layout` is the editable proposed layout. */
-  readonly draftPosition: Vec3 | null
+  /** Unaccepted position bound to its placement; it only shows on that placement. */
+  readonly draft: DraftPlacement | null
   readonly onClose?: () => void
 }
 
@@ -37,9 +37,9 @@ function Rows({ rows }: { rows: readonly InspectorRow[] }) {
   )
 }
 
-export function TreeInspector({ placementId, layout, site, profiles, scenario, evidence, draftPosition, onClose }: TreeInspectorProps) {
+export function TreeInspector({ placementId, layout, site, profiles, scenario, evidence, draft, onClose }: TreeInspectorProps) {
   const headingId = useId()
-  const view = inspectTree({ placementId, layout, catalogue: site?.candidate_catalogue ?? [], profiles, scenario, evidence, draftPosition })
+  const view = inspectTree({ placementId, layout, catalogue: site?.candidate_catalogue ?? [], profiles, scenario, evidence, draft })
 
   const kicker = (
     <div className="ti-kicker-row">
@@ -54,7 +54,7 @@ export function TreeInspector({ placementId, layout, site, profiles, scenario, e
 
   if (view.kind !== 'tree') {
     return (
-      <section className="detail-section ti-root" aria-labelledby={headingId} data-testid="tree-inspector">
+      <section className="ti-root" aria-labelledby={headingId} data-testid="tree-inspector">
         {kicker}
         <h2 id={headingId} className="ti-title">{view.title}</h2>
         <p className={`ti-caption${view.kind === 'missing' ? ' ti-tone-warn' : ''}`} role={view.kind === 'missing' ? 'status' : undefined}>{view.detail}</p>
@@ -63,7 +63,7 @@ export function TreeInspector({ placementId, layout, site, profiles, scenario, e
   }
 
   return (
-    <section className="detail-section ti-root" aria-labelledby={headingId} data-testid="tree-inspector">
+    <section className="ti-root" aria-labelledby={headingId} data-testid="tree-inspector">
       {kicker}
       <div className="ti-title-row">
         <span className="ti-marker" aria-hidden="true" />

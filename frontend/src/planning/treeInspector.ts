@@ -1,14 +1,15 @@
-import type { Layout, Result, Scenario, SiteBundle, TreeProfile, TreeState, Vec3 } from '../api/types'
-import { CURRENTNESS_LABEL, formatPence, samePosition, type Currentness } from './evaluation'
+import type { Job, Layout, Result, Scenario, ScenarioRef, SiteBundle, TreeProfile, TreeState, Vec3 } from '../api/types'
+import { CURRENTNESS_LABEL, EXECUTION_MODE_LABEL, formatPence, formatValue, samePosition, type Currentness } from './evaluation'
 
 /**
  * View model for the B08 selected-tree inspector. Every value comes from a contract field:
  * the layout placement, the site's candidate catalogue, the loaded tree profile, the accepted
- * scenario and, when one exists, a stored Result that evaluated exactly this layout revision.
+ * scenario and, when one exists, a stored evaluate_layout Result that evaluated exactly this
+ * layout revision under exactly the inspected scenario revision.
  *
  * What the backend cannot supply is said plainly rather than estimated:
- *  - No operation measures one tree's shade (no remove-one or per-placement metric exists), so
- *    that row is always "Not calculated" and never derived from a layout total.
+ *  - No remove-one operation exists, so one tree's own shade is always "Not calculated" and never
+ *    derived from a layout total (compare_locations gives a relocation delta, which is different).
  *  - Constraint records carry a layout_id but no placement id, so they are labelled layout-level.
  *  - No shadow footprint figures are produced here.
  */
@@ -18,13 +19,15 @@ type Placement = Layout['placements'][number]
 type EvaluatedLayout = Result['layouts'][number]
 type ConstraintRecord = Result['constraints'][number]
 type ConstraintUnit = NonNullable<ConstraintRecord['unit']>
+type ExecutionMode = Result['provenance']['execution_mode']
+type ScenarioKey = Pick<ScenarioRef, 'scenario_id' | 'scope'> & { readonly revision: number }
 
 export const NOT_RECORDED = 'Not recorded'
 export const NOT_LOADED = 'Not loaded'
 export const MARGINAL_LABEL = 'Shade from this tree alone'
-export const MARGINAL_NOT_CALCULATED = 'Not calculated — no per-tree operation exists'
+export const MARGINAL_NOT_CALCULATED = 'Not calculated — no remove-one operation exists'
 export const MARGINAL_EXPLANATION =
-  'Runs report shade for the whole layout. No remove-one or per-placement figure is computed, so none is shown.'
+  'Runs report shade for the whole layout. Nothing measures the layout without this tree, and moving it (compare locations) gives a relocation delta, not its own shade, so no figure is shown.'
 export const CONSTRAINTS_LAYOUT_LEVEL =
   'Layout-level: the backend records constraints for the whole layout, not for this tree.'
 
@@ -58,11 +61,19 @@ export interface ConstraintRow {
   readonly detail: string | null
 }
 
-/** A stored Result that evaluated exactly the inspected layout revision, with its currentness. */
+/** A stored evaluate_layout Result that evaluated exactly the inspected layout and scenario revisions. */
 export interface TreeEvidence {
   readonly result: Result
   readonly evaluated: EvaluatedLayout
   readonly currentness: Currentness
+  /** How the requesting job's result was delivered (CONTRACTS: display the delivery's mode), or null if unknown. */
+  readonly deliveryMode: ExecutionMode | null
+}
+
+/** An unaccepted position, bound to the placement it belongs to so it cannot show on another tree. */
+export interface DraftPlacement {
+  readonly placementId: string
+  readonly position: Vec3
 }
 
 export interface TreeInspectorInput {
@@ -73,8 +84,7 @@ export interface TreeInspectorInput {
   readonly profiles: readonly TreeProfile[]
   readonly scenario: Pick<Scenario, 'scenario_id' | 'revision' | 'scope' | 'input'> | null
   readonly evidence: TreeEvidence | null
-  /** Unaccepted position of this placement; pass null unless the layout is the editable proposed layout. */
-  readonly draftPosition: Vec3 | null
+  readonly draft: DraftPlacement | null
 }
 
 export type InspectorView =
@@ -98,7 +108,7 @@ export type InspectorView =
 
 const row = (label: string, value: string, tone: Tone = 'plain', mono = false, tag: string | null = null): InspectorRow => ({ label, value, tone, mono, tag })
 
-/** Up to millimetres, without float noise or a negative zero. */
+/** Up to millimetres, without float noise or a negative zero. For positions and dimensions only. */
 export const metres = (x: number) => String(Number(x.toFixed(3)) + 0)
 
 const short = (value: string, n = 10) => (value.length > n + 1 ? `${value.slice(0, n)}…` : value)
@@ -128,8 +138,9 @@ const UNIT: Record<Exclude<ConstraintUnit, 'GBP_pence'>, string> = {
   m: 'm', m2: 'm²', h: 'h', m2_h: 'm²·h', weighted_m2_h: 'weighted m²·h', kWh: 'kWh', kWh_per_m2: 'kWh/m²',
 }
 
+/** Exact value as recorded (formatValue keeps small values that 3-decimal rounding would show as 0). */
 const quantity = (value: number, unit: ConstraintRecord['unit']) =>
-  unit === 'GBP_pence' ? formatPence(value) : unit === null ? metres(value) : `${metres(value)} ${UNIT[unit]}`
+  unit === 'GBP_pence' ? formatPence(value) : unit === null ? formatValue(value) : `${formatValue(value)} ${UNIT[unit]}`
 
 export function describeConstraint(record: ConstraintRecord): ConstraintRow {
   const parts: string[] = []
@@ -149,32 +160,43 @@ export function describeAttenuation(attenuation: TreeState['attenuation']): stri
 const sameLayout = (a: Pick<Layout, 'layout_id' | 'revision'>, b: Pick<Layout, 'layout_id' | 'revision'>) =>
   a.layout_id === b.layout_id && a.revision === b.revision
 
+const sameScenario = (a: ScenarioKey, b: ScenarioKey) =>
+  a.scenario_id === b.scenario_id && a.revision === b.revision && a.scope === b.scope
+
 /**
- * The stored Result that evaluated exactly this layout revision. The backend-selected run wins when it
- * contains the layout, because arrival order can put a late older job first; otherwise the newest
- * matching run (runs are newest first). Returns null when no stored result evaluates this revision.
+ * The stored evaluate_layout Result that evaluated exactly this layout revision under exactly this
+ * scenario revision. Other operations are ignored: a fixed-layout compare_scenarios run evaluates the
+ * same layout under two scenarios, and its currentness is relative to the comparison slot, not this
+ * tree. The backend-selected run wins when it qualifies, because arrival order can put a late older job
+ * first; otherwise the newest qualifying run (runs are newest first). Null when none qualifies.
  */
 export function layoutEvidence(
-  runs: ReadonlyArray<{ readonly result: Result | null }>,
+  runs: ReadonlyArray<{ readonly job: Pick<Job, 'delivery'>; readonly result: Result | null }>,
   layout: Pick<Layout, 'layout_id' | 'revision'> | null,
+  scenario: ScenarioKey | null,
   currentness: (result: Result) => Currentness,
   selectedRunId: string | null = null,
 ): TreeEvidence | null {
-  if (!layout) return null
-  const evaluatedIn = (result: Result | null): EvaluatedLayout | null =>
-    result?.layouts.find(e => sameLayout(e.layout, layout)) ?? null
+  if (!layout || !scenario) return null
+  const evaluatedIn = (result: Result | null): EvaluatedLayout | null => {
+    if (!result || result.operation !== 'evaluate_layout') return null
+    return result.layouts.find(e => sameLayout(e.layout, layout) && sameScenario(e.scenario_ref, scenario)) ?? null
+  }
   const ordered = selectedRunId
     ? [...runs.filter(r => r.result?.run_id === selectedRunId), ...runs.filter(r => r.result?.run_id !== selectedRunId)]
     : runs
   for (const run of ordered) {
     const evaluated = evaluatedIn(run.result)
-    if (run.result && evaluated) return { result: run.result, evaluated, currentness: currentness(run.result) }
+    if (run.result && evaluated) {
+      return { result: run.result, evaluated, currentness: currentness(run.result), deliveryMode: run.job.delivery?.execution_mode ?? null }
+    }
   }
   return null
 }
 
 function candidateFor(catalogue: readonly Candidate[], placement: Placement): Candidate | null {
   if (placement.candidate_id !== null) return catalogue.find(c => c.candidate_id === placement.candidate_id) ?? null
+  // Defensive only: placements on main always carry a candidate_id, so this fallback is unreachable today.
   return catalogue.find(c => c.location_id === placement.location_id && c.profile_id === placement.profile_id) ?? null
 }
 
@@ -198,7 +220,7 @@ function stateRows(profile: TreeProfile, scenario: TreeInspectorInput['scenario'
 }
 
 export function inspectTree(input: TreeInspectorInput): InspectorView {
-  const { placementId, layout, catalogue, profiles, scenario, evidence, draftPosition } = input
+  const { placementId, layout, catalogue, profiles, scenario, evidence, draft } = input
   if (!placementId || !layout) {
     return { kind: 'empty', title: 'No tree selected', detail: 'Select a proposed tree to see its position, profile and stored evaluation.' }
   }
@@ -235,8 +257,8 @@ export function inspectTree(input: TreeInspectorInput): InspectorView {
   ]
 
   const position: InspectorRow[] = [row('Position (ENU)', formatEnu(placement.position_enu_m), 'plain', true)]
-  if (draftPosition && !samePosition(draftPosition, placement.position_enu_m as Vec3)) {
-    position.push(row('Draft position', `${formatEnu(draftPosition)} · not accepted`, 'warn', true, 'DRAFT'))
+  if (draft && draft.placementId === placement.placement_id && !samePosition(draft.position, placement.position_enu_m as Vec3)) {
+    position.push(row('Draft position', `${formatEnu(draft.position)} · not accepted`, 'warn', true, 'DRAFT'))
   }
 
   const profile = profiles.find(p => p.profile_id === placement.profile_id) ?? null
@@ -252,22 +274,28 @@ export function inspectTree(input: TreeInspectorInput): InspectorView {
     : [row('Profile', `${placement.profile_id} · details ${NOT_LOADED.toLowerCase()}`, 'muted', true)]
 
   let evaluation: InspectorRow[] = []
-  let evaluationNote = 'No stored result evaluates this layout revision yet. Feasibility and constraints appear after an evaluation of this exact layout.'
+  let evaluationNote = scenario
+    ? `No stored evaluation of this layout revision under scenario revision ${scenario.revision} yet. Feasibility and constraints appear after one.`
+    : 'No scenario is loaded, so no stored evaluation can be matched to this layout.'
   let constraints: ConstraintRow[] = []
   let constraintNote = CONSTRAINTS_LAYOUT_LEVEL
   if (evidence) {
-    const { result, evaluated, currentness } = evidence
+    const { result, evaluated, currentness, deliveryMode } = evidence
     const feasibility = FEASIBILITY[evaluated.feasibility]
     evaluation = [
       row('Result', `${CURRENTNESS_LABEL[currentness].label} · run ${short(result.run_id)}`, currentness === 'current' ? 'ok' : 'warn', true),
-      row('Operation', result.operation, 'plain', true),
+      deliveryMode
+        ? row('Delivered as', EXECUTION_MODE_LABEL[deliveryMode], deliveryMode === 'live' ? 'plain' : 'warn')
+        : row('Delivered as', NOT_RECORDED, 'muted'),
       row('Layout feasibility', feasibility.label, feasibility.tone),
       ...(evaluated.reasons.length ? [row('Reasons', evaluated.reasons.join('; '), feasibility.tone === 'ok' ? 'plain' : 'warn')] : []),
-      row('Layout cost', `${formatPence(evaluated.cost_pence)} · whole layout`, 'plain', true),
+      row('Layout cost', `${formatPence(evaluated.cost_pence)} · whole layout`, 'warn', true, 'ASSUMPTION'),
       row('Trees in layout', String(evaluated.tree_count), 'plain', true),
     ]
     evaluationNote = CURRENTNESS_LABEL[currentness].detail
-    constraints = result.constraints.filter(c => c.layout_id === evaluated.layout.layout_id).map(describeConstraint)
+    constraints = result.constraints
+      .filter(c => c.layout_id === evaluated.layout.layout_id && sameScenario(c.scenario_ref, evaluated.scenario_ref))
+      .map(describeConstraint)
     if (constraints.length === 0) constraintNote = 'The stored result records no constraints for this layout.'
   }
 

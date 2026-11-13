@@ -1,10 +1,13 @@
 /* B08 selected-tree inspector. Uses only the :root tokens in styles.css; every class is prefixed ti-. */
-.ti-root{display:flex;flex-direction:column;gap:10px;color:var(--ink);font-family:var(--font-ui);font-size:12px}
+/* Own spacing: the root deliberately does not use the global .detail-section, whose descendant rules restyle h2/p. */
+.ti-root{display:flex;flex-direction:column;gap:10px;padding:16px;color:var(--ink);font-family:var(--font-ui);font-size:12px}
+*+.ti-root{border-top:1px solid var(--rule)}
 .ti-kicker-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ti-kicker{font:600 10.5px/1.2 var(--font-ui);letter-spacing:.1em;text-transform:uppercase;color:var(--muted-on-light)}
 .ti-close{width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--card-border);border-radius:7px;background:transparent;color:var(--muted-on-light);cursor:pointer}
 .ti-close:hover{background:var(--muted-bg)}
-.ti-close:focus-visible,.ti-section>summary:focus-visible{outline:3px solid var(--lime);outline-offset:2px}
+/* Ink ring: lime on the light card is only about 1.35:1. */
+.ti-close:focus-visible,.ti-section>summary:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
 
 .ti-title-row{display:flex;align-items:center;gap:10px}
 .ti-marker{flex:none;width:30px;height:30px;border-radius:50%;background:var(--card);border:1.5px solid var(--forest);display:grid;place-items:center}
@@ -54,7 +57,8 @@
 .ti-constraint{display:grid;grid-template-columns:1fr auto;column-gap:8px;row-gap:2px;padding:6px 0;border-top:1px solid var(--rule)}
 .ti-constraint-rule{overflow-wrap:anywhere}
 .ti-constraint .ti-caption{grid-column:1/-1}
-.ti-status{font:600 10px/1 var(--font-mono);letter-spacing:.05em;padding:4px 6px;border-radius:4px;text-transform:uppercase}
+.ti-status{font:600 10px/1 var(--font-mono);letter-spacing:.05em;padding:3px 6px;border-radius:4px;text-transform:uppercase;border:1px solid transparent}
 .ti-status-pass{background:var(--ok-bg);color:var(--ok-fg)}
-.ti-status-fail{background:var(--warn-bg);color:var(--exclusion)}
+/* Darkest warm text for small type; the exclusion border keeps the fail cue distinct from warnings. */
+.ti-status-fail{background:var(--warn-bg);color:var(--warn-text);border-color:var(--exclusion)}
 .ti-status-unknown{background:var(--muted-bg);color:var(--muted-on-light)}

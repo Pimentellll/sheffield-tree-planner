@@ -423,6 +423,6 @@ Spacing, budget, count, region and winter checks still apply through `check()`. 
 ---
 
 ## Not assigned (by design)
-- **Agent-run endpoint and agent UI** are already Ben's #54 and Alex's #56 work; no duplicate issue is opened. *Update (13 Nov decision): the agent-evidence UI (#74) is Arnav's; Alex keeps the rest of the UI (#56/#58), including placing the panel in his shell (runtime audit R02 on main).*
+- **Agent-run endpoint and agent UI**: the endpoint is Ben's (#54/#73) and the agent-evidence UI is Arnav's (#74), per the 13 Nov decision; no duplicate issue is opened. *Update (13 Nov decision): the agent-evidence UI (#74) is Arnav's; Alex keeps the rest of the UI (#56/#58), including placing the panel in his shell (runtime audit R02 on main).*
 - **Multi-hour time bins** in the seed would make shade figures more meaningful, but would change every number, cache identity and test expectation on event day. Deferred; the narration uses "one midday sun position, counted for one hour" instead (acceptance N-02; ledger S-05).
 - **Narration wording** (measured→computed, weighted vs area, pence vs £) is content work for Arnav and Alex; see the [ledger](EVIDENCE_AND_CLAIMS_LEDGER.md).

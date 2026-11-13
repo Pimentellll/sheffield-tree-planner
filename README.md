@@ -1,5 +1,7 @@
 # CANOPY Sheffield · tree-planning workbench
 
+**Event-day coordination:** [Team execution board, owners, Spark proof gates and presentation handoff](docs/EVENT_DAY_EXECUTION_2026-11-13.md). The 15:00 target / 16:00 latest engineering freeze is the team’s plan; the organiser’s actual cutoff takes precedence. [BUILD](docs/BUILD.md) remains the canonical engineering evidence record.
+
 Compare where trees could provide additional shade, what a proposed layout costs, and which modelled constraints it satisfies.
 
 ## Why this exists

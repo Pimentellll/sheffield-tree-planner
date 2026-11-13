@@ -1,5 +1,7 @@
 # Build plan, task state and decisions
 
+**Active 13 November event-day overlay:** [Team execution board — Ben/Arnav/Alex owners, dependencies, Spark proof gates, 15:00–16:00 engineering freeze and presentation handoff](EVENT_DAY_EXECUTION_2026-11-13.md). The board describes current priorities and proposed checkpoints, not historical completion of B01–B12. Record acceptance evidence here using the existing task IDs after real verification.
+
 **This is the only task-status/decision home until a shared tracker is explicitly adopted.**  
 **Status:** integrated synthetic CPU evaluator/search and planning studio implemented; exact-head build/browser verification and GitHub reconciliation are being finalised. Canonical repository: **Pimentellll/sheffield-tree-planner**, public; authenticated Ben account has push/maintain permission. Real-site data/rights/parity, target-model/device execution, autonomous planning evidence, independent AI-value scoring, named human reviews and organiser eligibility remain distinct open gates. Advance-work disclosure remains required; this is not a competition-submission claim.
 

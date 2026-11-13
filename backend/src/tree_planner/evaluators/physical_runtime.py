@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 from importlib.metadata import version
+from importlib import import_module
 import inspect
 import json
 from pathlib import Path
@@ -72,6 +73,12 @@ class PhysicalHandler:
     """Trusted configuration; requests cannot provide a path, callback or executable."""
 
     def __init__(self):
+        # Windows native scientific-library initialisation must finish on the
+        # startup thread, before the background worker advertises readiness.
+        # Independent cold/warm main-server repros exposed a stuck NumPy DLL
+        # import when the first solar call performed this in the worker thread.
+        for dependency in ("numpy", "pandas", "pvlib"):
+            import_module(dependency)
         from tree_planner.physics.evaluator import compute
         from tree_planner.search import check, prepare, search
 

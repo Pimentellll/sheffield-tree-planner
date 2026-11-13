@@ -75,7 +75,9 @@ class PhysicalFixedWorkflow:
             "requested_model": None,
             "native_session_ids": [],
             "model_attestation": "not_applicable; no model call in fixed workflow",
-            "fault_injection": "synthetic registered-scene integrity mismatch" if self.source_integrity_fault else None,
+            "fault_injection": "synthetic registered-scene integrity mismatch"
+            if self.source_integrity_fault
+            else None,
         }
 
     def _operations(self, request: str):
@@ -118,20 +120,28 @@ class PhysicalFixedWorkflow:
                 self.runtime.app.state.run_one()
                 final = dispatcher.poll(job.job_id)
                 if final.status != "completed":
-                    errors.append({"operation": operation, "status": final.status,
-                                   "error_code": final.error.code if final.error else None})
+                    errors.append(
+                        {
+                            "operation": operation,
+                            "status": final.status,
+                            "error_code": final.error.code if final.error else None,
+                        }
+                    )
             except Exception as exc:
                 # This is an observed fixed-workflow failure, not a fabricated result.
                 errors.append({"operation": operation, "error_type": type(exc).__name__})
         current_ids = {
-            event["run_id"] for event in dispatcher.events
+            event["run_id"]
+            for event in dispatcher.events
             if event.get("current") is True and event.get("run_id")
         }
         lines = []
         for run_id, result in dispatcher.results.items():
             if run_id not in current_ids:
                 continue
-            lines.append(f"Current backend result {run_id}: {result.operation}; {result.analytical_outcome}.")
+            lines.append(
+                f"Current backend result {run_id}: {result.operation}; {result.analytical_outcome}."
+            )
             lines.extend(
                 f"Metric {metric.metric_id}={metric.value:g} {metric.unit} (case={metric.case_id}, layout={metric.layout_id})."
                 for metric in result.metrics
@@ -144,9 +154,7 @@ class PhysicalFixedWorkflow:
         for event in dispatcher.events:
             if event.get("status") in {"error", "failed", "cancelled"}:
                 reason = event.get("error_code") or event.get("error_type") or event.get("status")
-                lines.append(
-                    f"No validated result for {event['operation']}; observed {reason}."
-                )
+                lines.append(f"No validated result for {event['operation']}; observed {reason}.")
         return {
             "status": "completed" if not errors else "partial",
             "tool_errors": [],
@@ -161,14 +169,18 @@ class PhysicalFixedWorkflow:
 
 def physical_factory(task, mode_workspace, mode):
     if mode == "manual":
-        return BlockedArm("manual UI interaction/action capture adapter is unavailable",
-                          {"human_run": False})
+        return BlockedArm(
+            "manual UI interaction/action capture adapter is unavailable", {"human_run": False}
+        )
     if mode == "adaptive":
         return BlockedArm(
             "authorized loopback provider check at http://127.0.0.1:8001/v1 timed out; no model call attempted",
-            {"requested_inference_route": "http://127.0.0.1:8001/v1",
-             "requested_model": None, "native_session_ids": [],
-             "model_attestation": "unavailable; endpoint did not respond; model name not observed"},
+            {
+                "requested_inference_route": "http://127.0.0.1:8001/v1",
+                "requested_model": None,
+                "native_session_ids": [],
+                "model_attestation": "unavailable; endpoint did not respond; model name not observed",
+            },
         )
     if mode != "fixed":
         return BlockedArm(f"unsupported workflow mode: {mode}", {})

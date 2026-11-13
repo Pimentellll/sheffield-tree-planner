@@ -26,7 +26,9 @@ def _digest(path: Path) -> str:
 
 
 def _dump(path: Path, value: Any) -> None:
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8"
+    )
 
 
 class RecordingDispatcher:
@@ -49,14 +51,26 @@ class RecordingDispatcher:
                 self.jobs[job_id] = value
             if run_id:
                 self.results[run_id] = self.inner.result(run_id)
-            self.events.append({"operation": name, "status": getattr(value, "status", "returned"),
-                                "job_id": job_id, "run_id": run_id,
-                                "elapsed_ms": (time.perf_counter_ns() - started) / 1_000_000})
+            self.events.append(
+                {
+                    "operation": name,
+                    "status": getattr(value, "status", "returned"),
+                    "job_id": job_id,
+                    "run_id": run_id,
+                    "elapsed_ms": (time.perf_counter_ns() - started) / 1_000_000,
+                }
+            )
             return value
         except Exception as exc:
-            self.events.append({"operation": name, "status": "error", "error_type": type(exc).__name__,
-                                "error_code": getattr(exc, "code", None),
-                                "elapsed_ms": (time.perf_counter_ns() - started) / 1_000_000})
+            self.events.append(
+                {
+                    "operation": name,
+                    "status": "error",
+                    "error_type": type(exc).__name__,
+                    "error_code": getattr(exc, "code", None),
+                    "elapsed_ms": (time.perf_counter_ns() - started) / 1_000_000,
+                }
+            )
             raise
 
     def poll(self, job_id):
@@ -69,14 +83,23 @@ class RecordingDispatcher:
             try:
                 from tree_planner.contracts import ScenarioRef, validate_delivery_currentness
 
-                ref = ScenarioRef(scenario_id=job.scenario_id, revision=job.scenario_revision, scope=job.scope)
+                ref = ScenarioRef(
+                    scenario_id=job.scenario_id, revision=job.scenario_revision, scope=job.scope
+                )
                 validate_delivery_currentness(job, result, self.inner.selection(ref, job.view_slot))
                 current = True
             except (ImportError, ValueError, AttributeError):
                 current = False
-        self.events.append({"operation": job.operation, "status": job.status, "job_id": job.job_id,
-                            "run_id": job.run_id, "current": current,
-                            "error_code": job.error.code if job.error else None})
+        self.events.append(
+            {
+                "operation": job.operation,
+                "status": job.status,
+                "job_id": job.job_id,
+                "run_id": job.run_id,
+                "current": current,
+                "error_code": job.error.code if job.error else None,
+            }
+        )
         return job
 
     def result(self, run_id):
@@ -148,8 +171,7 @@ def score_run(
         integrity.append("invalid final_response")
         final_response = ""
     response_covers_results = required_succeeded and all(
-        current_results_by_op[op] in response_ids
-        and current_results_by_op[op] in final_response
+        current_results_by_op[op] in response_ids and current_results_by_op[op] in final_response
         for op in required_ops
     )
     response_acknowledges_failure = accepted_single_failure and (
@@ -158,7 +180,8 @@ def score_run(
             (event.get("error_code") or event.get("error_type") or event.get("status", ""))
             in final_response
             for event in events
-            if event.get("operation") in required_ops and event.get("status") in {"error", "failed", "cancelled"}
+            if event.get("operation") in required_ops
+            and event.get("status") in {"error", "failed", "cancelled"}
         )
     )
     completion = not integrity and (response_covers_results or response_acknowledges_failure)
@@ -179,9 +202,12 @@ def score_run(
         )
     operation_completion = {
         operation: (
-            "current_result" if operation in current_results_by_op
-            else "observed_failure_acknowledged" if response_acknowledges_failure and operation in failed_ops
-            else "observed_failure_unacknowledged" if accepted_single_failure and operation in failed_ops
+            "current_result"
+            if operation in current_results_by_op
+            else "observed_failure_acknowledged"
+            if response_acknowledges_failure and operation in failed_ops
+            else "observed_failure_unacknowledged"
+            if accepted_single_failure and operation in failed_ops
             else "missing_or_not_current"
         )
         for operation in sorted(required_ops)
@@ -193,15 +219,23 @@ def score_run(
         status: sum(check.get("status") == status for check in checks)
         for status in ("pass", "fail", "unknown")
     }
-    accuracy = {"passed": passed, "checked": len(checks), "all_passed": bool(checks) and passed == len(checks)}
+    accuracy = {
+        "passed": passed,
+        "checked": len(checks),
+        "all_passed": bool(checks) and passed == len(checks),
+    }
     accuracy["counts_by_status"] = status_counts
     claims = observation.get("numeric_claim_audits", [])
     audit_complete = observation.get("claim_audit_complete") is True
-    unsupported = sum(claim.get("supported") is False for claim in claims) if audit_complete else None
+    unsupported = (
+        sum(claim.get("supported") is False for claim in claims) if audit_complete else None
+    )
     actions = observation.get("user_actions", [])
     useful_ids = set(observation.get("useful_analysis_run_ids", []))
     useful = useful_ids.intersection(actual_run_ids).intersection(current_run_ids)
-    integrity.extend(f"unobserved useful analysis run id: {i}" for i in sorted(useful_ids - actual_run_ids))
+    integrity.extend(
+        f"unobserved useful analysis run id: {i}" for i in sorted(useful_ids - actual_run_ids)
+    )
     elapsed = observation.get("elapsed_ms")
     if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed < 0:
         integrity.append("invalid elapsed_ms")
@@ -215,9 +249,8 @@ def score_run(
         "human_actions": len(actions),
         "human_corrections": sum(action.get("kind") == "correction" for action in actions),
         "useful_analyses": len(useful),
-        "tool_errors": len(errors) + sum(
-            e.get("status") in {"error", "failed", "cancelled"} for e in events
-        ),
+        "tool_errors": len(errors)
+        + sum(e.get("status") in {"error", "failed", "cancelled"} for e in events),
         "latency_ms": elapsed,
         "integrity_errors": integrity,
     }
@@ -262,22 +295,40 @@ def run_suite(task_file: Path, output: Path, adapter_spec: str) -> dict:
             blocked_reason = getattr(env, "blocked_reason", None)
             if blocked_reason:
                 metadata = env.metadata(mode) if callable(getattr(env, "metadata", None)) else {}
-                _dump(mode_dir / "blocked.json", {
-                    "mode": mode, "status": "blocked", "reason": blocked_reason,
-                    "metadata": metadata,
-                })
-                rows.append({"task_id": task["id"], "mode": mode, "status": "blocked",
-                             "reason": blocked_reason})
+                _dump(
+                    mode_dir / "blocked.json",
+                    {
+                        "mode": mode,
+                        "status": "blocked",
+                        "reason": blocked_reason,
+                        "metadata": metadata,
+                    },
+                )
+                rows.append(
+                    {
+                        "task_id": task["id"],
+                        "mode": mode,
+                        "status": "blocked",
+                        "reason": blocked_reason,
+                    }
+                )
                 continue
             identity = env.comparison_identity()
-            required_identity_fields = {"input_fingerprint", "data_sha256", "tools_sha256", "backend_config_sha256"}
+            required_identity_fields = {
+                "input_fingerprint",
+                "data_sha256",
+                "tools_sha256",
+                "backend_config_sha256",
+            }
             if not isinstance(identity, dict) or not required_identity_fields <= identity.keys():
                 raise ValueError("adapter must provide complete comparison identity hashes")
             identities[mode] = {k: identity[k] for k in sorted(required_identity_fields)}
             if any(not isinstance(v, str) or not v for v in identities[mode].values()):
                 raise ValueError("comparison identity hashes must be nonempty strings")
             if len(set(json.dumps(v, sort_keys=True) for v in identities.values())) > 1:
-                raise ValueError("task input, data, tool schemas or backend config differ across modes")
+                raise ValueError(
+                    "task input, data, tool schemas or backend config differ across modes"
+                )
             dispatcher = RecordingDispatcher(env.dispatcher)
             started = time.perf_counter_ns()
             try:
@@ -285,17 +336,24 @@ def run_suite(task_file: Path, output: Path, adapter_spec: str) -> dict:
                 if not isinstance(observation, dict):
                     raise TypeError("adapter observation must be a dict")
             except Exception as exc:
-                observation = {"status": "failed", "adapter_error_type": type(exc).__name__,
-                               "operation_events": dispatcher.events, "tool_errors": [type(exc).__name__],
-                               "constraint_checks": [], "numeric_claim_audits": [], "user_actions": [],
-                               "useful_analysis_run_ids": [],
-                               "elapsed_ms": (time.perf_counter_ns() - started) / 1_000_000}
+                observation = {
+                    "status": "failed",
+                    "adapter_error_type": type(exc).__name__,
+                    "operation_events": dispatcher.events,
+                    "tool_errors": [type(exc).__name__],
+                    "constraint_checks": [],
+                    "numeric_claim_audits": [],
+                    "user_actions": [],
+                    "useful_analysis_run_ids": [],
+                    "elapsed_ms": (time.perf_counter_ns() - started) / 1_000_000,
+                }
             # Never let adapter supplied events replace calls actually observed here.
             observation["operation_events"] = dispatcher.events
             # Constraints come directly from immutable backend Results, not an adapter score.
             observation["constraint_checks"] = [
                 {"status": c.status, "rule": c.rule, "result_id": r.run_id}
-                for r in dispatcher.results.values() for c in r.constraints
+                for r in dispatcher.results.values()
+                for c in r.constraints
             ]
             observation.setdefault("tool_errors", [])
             observation.setdefault("constraint_checks", [])
@@ -303,32 +361,53 @@ def run_suite(task_file: Path, output: Path, adapter_spec: str) -> dict:
             observation.setdefault("user_actions", [])
             observation.setdefault("useful_analysis_run_ids", [])
             observation["elapsed_ms"] = (time.perf_counter_ns() - started) / 1_000_000
-            current_ids = {e["run_id"] for e in dispatcher.events
-                           if e.get("current") is True and e.get("run_id")}
+            current_ids = {
+                e["run_id"]
+                for e in dispatcher.events
+                if e.get("current") is True and e.get("run_id")
+            }
             observation["backend_outcomes"] = {
-                run_id: result.analytical_outcome
-                for run_id, result in dispatcher.results.items()
+                run_id: result.analytical_outcome for run_id, result in dispatcher.results.items()
             }
             observation["backend_constraint_diagnostics"] = {
                 run_id: bool(result.constraints)
                 and bool(result.layouts)
                 and all(c.status in {"pass", "fail", "unknown"} for c in result.constraints)
-                and all(layout.feasibility in {"feasible", "infeasible"} for layout in result.layouts)
+                and all(
+                    layout.feasibility in {"feasible", "infeasible"} for layout in result.layouts
+                )
                 for run_id, result in dispatcher.results.items()
             }
-            scored = score_run(task, observation, actual_job_ids=set(dispatcher.jobs),
-                               actual_run_ids=set(dispatcher.results), current_run_ids=current_ids)
+            scored = score_run(
+                task,
+                observation,
+                actual_job_ids=set(dispatcher.jobs),
+                actual_run_ids=set(dispatcher.results),
+                current_run_ids=current_ids,
+            )
             metadata = env.metadata(mode) if callable(getattr(env, "metadata", None)) else {}
-            _dump(mode_dir / "run.json", {"mode": mode, "comparison_identity": identities[mode], "metadata": metadata,
-                                                "observation": observation, "score": scored,
-                                                "jobs": {k: _json_model(v) for k, v in dispatcher.jobs.items()},
-                                                "results": {k: _json_model(v) for k, v in dispatcher.results.items()}})
+            _dump(
+                mode_dir / "run.json",
+                {
+                    "mode": mode,
+                    "comparison_identity": identities[mode],
+                    "metadata": metadata,
+                    "observation": observation,
+                    "score": scored,
+                    "jobs": {k: _json_model(v) for k, v in dispatcher.jobs.items()},
+                    "results": {k: _json_model(v) for k, v in dispatcher.results.items()},
+                },
+            )
             rows.append({"task_id": task["id"], "mode": mode, "score": scored})
-    report = {"schema": "canopy-b11-run-v1", "created_at_utc": datetime.now(timezone.utc).isoformat(),
-              "task_manifest_sha256": _digest(task_file), "adapter": adapter_spec,
-              "comparison_identities": comparison_identities,
-              "run_kind": "scripted_workflow_comparison; manual mode is human only when adapter declares and logs actual human actions",
-              "rows": rows}
+    report = {
+        "schema": "canopy-b11-run-v1",
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "task_manifest_sha256": _digest(task_file),
+        "adapter": adapter_spec,
+        "comparison_identities": comparison_identities,
+        "run_kind": "scripted_workflow_comparison; manual mode is human only when adapter declares and logs actual human actions",
+        "rows": rows,
+    }
     _dump(output / "report.json", report)
     return report
 

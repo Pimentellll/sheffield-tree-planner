@@ -139,6 +139,9 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
           {job?.cancel_requested ? 'Cancel requested' : 'Cancel job'}
         </button>
       )}
+      {ws.editPending && (
+        <p className="fine-print text-warning" data-testid="edit-pending-note">A typed requirement value in the scenario editor is invalid or not applied yet; nothing can be accepted until it is.</p>
+      )}
       {ws.draftDirty && ws.requirementErrors.length > 0 && (
         <p className="fine-print text-warning" data-testid="draft-errors">Cannot accept the draft yet: {ws.requirementErrors.join(' ')}</p>
       )}

@@ -148,12 +148,16 @@ export function sameRequirements(a: Requirements, b: Requirements): boolean {
 
 export const MAX_BUDGET_PENCE = 100_000_000_00 // £100m: a sanity bound for the editor, not a policy
 
-/** Parse "1234", "1234.5" or "£1,234.50" to integer pence without floating point. Null when invalid. */
+/**
+ * Parse "1234", "1234.5", "75,000" or "£1,234.50" to integer pence without floating point. Null when
+ * invalid. Thousands separators are accepted only in their proper places ("7,5,0,0,0" is rejected,
+ * not read as 75000).
+ */
 export function parsePounds(text: string): number | null {
-  const cleaned = text.trim().replace(/^£/, '').replace(/,/g, '')
-  const match = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(cleaned)
+  const cleaned = text.trim().replace(/^£/, '')
+  const match = /^(\d{1,12}|\d{1,3}(?:,\d{3})+)(?:\.(\d{1,2}))?$/.exec(cleaned)
   if (!match) return null
-  const pence = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'))
+  const pence = Number(match[1].replace(/,/g, '')) * 100 + Number((match[2] ?? '').padEnd(2, '0'))
   return Number.isSafeInteger(pence) && pence <= MAX_BUDGET_PENCE ? pence : null
 }
 

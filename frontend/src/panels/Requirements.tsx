@@ -19,6 +19,16 @@ export function RequirementsPanel({ ws, onClose }: { ws: Workspace; onClose?: ()
   useEffect(() => { if (draft) { setBudgetText(poundsText(draft.budgetPence)); setBudgetError(null) } }, [draft?.budgetPence]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (draft) { setCountText(draft.maxTreeCount === null ? '' : String(draft.maxTreeCount)); setCountError(null) } }, [draft?.maxTreeCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Typed text that is invalid or not yet applied to the draft blocks acceptance everywhere (via the workspace),
+  // so a click can never accept an older draft than the value on screen.
+  const livePence = parsePounds(budgetText)
+  const countTrim = countText.trim()
+  const budgetPending = draft ? livePence !== draft.budgetPence : false
+  const countPending = draft ? (countTrim === '' ? draft.maxTreeCount !== null : !/^\d{1,5}$/.test(countTrim) || Number(countTrim) !== draft.maxTreeCount) : false
+  const pending = Boolean(budgetError || countError || budgetPending || countPending)
+  useEffect(() => { ws.setEditPending(pending) }, [pending]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => ws.setEditPending(false), []) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!draft || !accepted || !ws.scenario) return null
   const constraints = ws.scenario.input.constraints
   const exclusions = ws.site?.exclusions ?? []
@@ -45,6 +55,7 @@ export function RequirementsPanel({ ws, onClose }: { ws: Workspace; onClose?: ()
   const n = ws.draftChanges.length
   const budgetChanged = draft.budgetPence !== accepted.budgetPence
   const countChanged = draft.maxTreeCount !== accepted.maxTreeCount
+  const exclusionsChanged = [...draft.excludedRegionIds].sort().join('|') !== [...accepted.excludedRegionIds].sort().join('|')
   const primary = ws.scenario.input.evaluation_cases.find(c => c.case_id === ws.scenario!.input.objective.primary_case_id) ?? null
   const nextRevision = ws.scenario.revision + 1
   const Lock = () => <svg className="lock" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
@@ -64,24 +75,27 @@ export function RequirementsPanel({ ws, onClose }: { ws: Workspace; onClose?: ()
         {onClose && <button type="button" id={FOCUS_TARGET.editorToggle} className="ed-close" aria-label="Close scenario editor" onClick={onClose}>×</button>}
       </div>
       <p className="caption mono ed-base">base: {ws.scenario.scenario_id.slice(0, 10)} rev {ws.scenario.revision} (accepted){ws.draftDirty ? ' · the draft has no analysis yet' : ''}</p>
+      {ws.positionDirty && <p className="caption" data-testid="ghost-note">The proposed tree has moved: the faded tree in the view marks the last evaluated position.</p>}
 
       <div className={`ed-field${budgetChanged ? ' ed-changed' : ''}`}>
         <label className="ed-row" htmlFor="ed-budget"><span>Upfront budget (GBP)</span>{budgetChanged && <s className="mono">{formatPence(accepted.budgetPence)}</s>}</label>
         <div className="ed-input-row">
           <input id="ed-budget" aria-label="Upfront budget in pounds" inputMode="decimal" value={budgetText} disabled={!editable}
             onChange={e => setBudgetText(e.target.value)} onBlur={commitBudget} onKeyDown={e => { if (e.key === 'Enter') commitBudget() }} />
-          <span className="caption mono">= {draft.budgetPence.toLocaleString('en-GB')} pence</span>
+          {/* Echoes the TYPED text live (never the last applied value), so no stale figure sits beside a new one. */}
+          <span className={`caption mono${livePence === null ? ' text-warning' : ''}`} data-testid="pence-echo">{livePence === null ? 'not a valid amount' : `= ${livePence.toLocaleString('en-GB')} pence`}</span>
         </div>
         <p className="caption">Basis: {constraints.budget_basis} only. Lifecycle cost is not a supported basis.</p>
       </div>
       <div className={`ed-field${countChanged ? ' ed-changed' : ''}`}>
         <label className="ed-row" htmlFor="ed-count"><span>Maximum trees</span>{countChanged && <s className="mono">{accepted.maxTreeCount === null ? 'no limit' : accepted.maxTreeCount}</s>}</label>
-        <input id="ed-count" aria-label="Maximum tree count (blank for no limit)" inputMode="numeric" placeholder="no limit" value={countText} disabled={!editable}
+        <input id="ed-count" aria-label="Maximum trees (blank for no limit)" inputMode="numeric" placeholder="no limit" value={countText} disabled={!editable}
           onChange={e => setCountText(e.target.value)} onBlur={commitCount} onKeyDown={e => { if (e.key === 'Enter') commitCount() }} />
       </div>
       {(budgetError || countError) && <p className="fine-print text-warning" role="alert">{budgetError ?? countError}</p>}
-      <div className="ed-field">
-        <span className="ed-row"><span>Exclusion regions</span></span>
+      {pending && !budgetError && !countError && <p className="fine-print" data-testid="edit-pending">Press Enter to apply the typed value; nothing can be accepted until it is applied.</p>}
+      <div className={`ed-field${exclusionsChanged ? ' ed-changed' : ''}`}>
+        <span className="ed-row"><span>Exclusion regions</span>{exclusionsChanged && <s className="mono">{accepted.excludedRegionIds.join(', ') || 'none'}</s>}</span>
         {exclusions.length === 0
           ? <p className="caption">This SiteBundle defines no exclusion regions, so none can be selected.</p>
           : exclusions.map(e => (

@@ -60,10 +60,10 @@ const panel = page => page.locator('.detail-panel')
 const metric = page => page.getByTestId('metric-value')
 const shot = (page, name) => page.screenshot({ path: join(evidenceDir, `${name}.png`), fullPage: true })
 
-async function evaluateAndWait(page) {
+async function evaluateAndWait(page, button = page.getByRole('button', { name: /evaluate/i }).first()) {
   const jobText = () => page.evaluate(() => document.querySelector('.job-status span')?.textContent ?? '')
   const before = await jobText()
-  await page.getByRole('button', { name: /evaluate/i }).first().click()
+  await button.click()
   await page.waitForFunction(prev => {
     const status = document.querySelector('.job-status strong')?.textContent ?? ''
     const job = document.querySelector('.job-status span')?.textContent ?? ''
@@ -225,15 +225,33 @@ async function requirementsFlow(page) {
   check('draft change set names constraints.budget_pence', /constraints\.budget_pence: 10000 → 8000/.test(await page.getByTestId('draft-changes').innerText()))
   check('requirement draft marks the shown result stale', /STALE/.test(await currentLabel(page)))
   check('nothing was written before acceptance', (await head()).revision === before.revision)
+  // A typed value that is invalid or not yet applied blocks every Accept, so an older draft is never accepted.
+  const editorAccept = page.getByRole('button', { name: /^Accept as rev \d+ & evaluate$/ })
+  const panelAccept = page.getByRole('button', { name: /Accept changes/ })
+  await budget.fill('75,0x0')
+  await page.waitForTimeout(150)
+  check('an invalid typed budget reads "not a valid amount" live and blocks both Accept buttons',
+    /not a valid amount/.test(await page.getByTestId('pence-echo').innerText()) && await editorAccept.isDisabled() && await panelAccept.isDisabled())
+  await budget.fill('90')
+  await page.waitForTimeout(150)
+  check('the pence echo follows the typed text before it is applied, and Accept stays blocked',
+    /= 9,000 pence/.test(await page.getByTestId('pence-echo').innerText()) && await editorAccept.isDisabled() && await panelAccept.isDisabled())
+  await budget.press('Enter')
+  await page.waitForTimeout(150)
+  check('applying the typed value updates the change set and re-enables Accept',
+    /constraints\.budget_pence: 10000 → 9000/.test(await page.getByTestId('draft-changes').innerText()) && await editorAccept.isEnabled() && await panelAccept.isEnabled())
   await page.getByRole('button', { name: 'Discard draft' }).click()
   await page.waitForTimeout(150)
   check('discarding the draft restores CURRENT', /CURRENT\b/.test(await currentLabel(page)) && await page.getByTestId('draft-badge').count() === 0)
 
   await budget.fill('80')
   await budget.press('Enter')
-  await page.getByLabel('Maximum tree count (blank for no limit)').fill('1')
-  await page.getByLabel('Maximum tree count (blank for no limit)').press('Enter')
-  await evaluateAndWait(page)
+  await page.getByLabel('Maximum trees (blank for no limit)').fill('1')
+  await page.getByLabel('Maximum trees (blank for no limit)').press('Enter')
+  // Accept through the C01 editor's own button, which must name the revision it will create.
+  check('the editor offers "Accept as rev N & evaluate" for the next revision',
+    await editorAccept.count() === 1 && (await editorAccept.innerText()).trim() === `Accept as rev ${before.revision + 1} & evaluate`, await editorAccept.innerText().catch(() => 'missing'))
+  await evaluateAndWait(page, editorAccept)
   const accepted = await head()
   check('accepting creates the next accepted revision with only those constraints changed',
     accepted.revision === before.revision + 1 && accepted.input.constraints.budget_pence === 8000 && accepted.input.constraints.max_tree_count === 1 &&

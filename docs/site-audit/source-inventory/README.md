@@ -1,16 +1,16 @@
 # Sheffield recorded street-tree inventory: source, rights and output schema
 
-**Status (13 Nov 2026):** importer, operator script and tests are drafted for [#69](https://github.com/Pimentellll/sheffield-tree-planner/issues/69) (GEO3D-01 / I1). **No real sample has been acquired yet.** The unit tests have run only in this repository's GitHub-hosted CI, on synthetic fixtures with urllib network calls blocked. Results for each revision are recorded on #69, and the #69 follow-up's tests count only once its CI has passed. Nothing has run on the DGX, and no laptop run was made. This folder will hold the reviewed redistributable sample and its manifest once that run happens. A council record is **not** a verified current crown, species, health state, surveyed position or planting permission. Nothing here completes the real-site gate [#30](https://github.com/Pimentellll/sheffield-tree-planner/issues/30).
+**Status (13 Nov 2026):** importer, operator script and tests are drafted for [#69](https://github.com/Pimentellll/sheffield-tree-planner/issues/69) (GEO3D-01 / I1). **No real sample has been acquired yet.** The unit tests have run only in this repository's GitHub-hosted CI, on synthetic fixtures with urllib network calls blocked. Results for each revision are recorded on #69, and the #69 follow-up's tests count only once its CI has passed. Nothing has run on the DGX, and no laptop run was made. This folder may hold a reviewed sample and its manifest only after a real run and only once the rights allow it (see "Committing a sample" below). Today they do not, because every rights status is `unknown`. A council record is **not** a verified current crown, species, health state, surveyed position or planting permission. Nothing here completes the real-site gate [#30](https://github.com/Pimentellll/sheffield-tree-planner/issues/30).
 
 ## Decisions recorded for #69 (13 Nov 2026)
 
-These were taken by the #69 owner's coordinating session, under the owner's delegation. They are also written into every manifest as `recorded_decisions`. The flag `sample_envelope_applies_to_this_acquisition` is true only when the fetched `bbox_27700` is exactly the 1a envelope, and only then is the Weston Park coverage caveat added to `limitations`. They change nothing that can run today: acquisition still waits for an approved DGX window.
+These were decided by the #69 owner's coordinating session under the owner's general delegation; **the owner's own confirmation is pending**. They are also written into every manifest as `recorded_decisions`. The flag `sample_envelope_applies_to_this_acquisition` is true only when the fetched `bbox_27700` is exactly the 1a envelope, and only then is the Weston Park coverage caveat added to `limitations`. They change nothing that can run today: acquisition still waits for an approved DGX window.
 
 | Decision | Choice |
 | --- | --- |
 | Sample envelope | **1a:** Weston Park with surrounding streets, approximately `433700,387100,434500,387700` in EPSG:27700. The service count is recorded first. Park-interior coverage is unverified, because the layer likely holds highway trees only. |
 | Rights | **2a:** all four purposes stay `unknown`. The OGL v3.0 vs INSPIRE End User Licence conflict rules out recording any as permitted. Nothing may be displayed, shared or exported until a person records the endpoint's actual terms. |
-| `featurelocation` | **3a:** dropped from anything committed, including the redistributable sample, and kept in local outputs only. A sample built with `--keep-location-text` is stamped `local_only` and must not be committed. |
+| `featurelocation` | **3a:** dropped from anything committed, including the review sample, and kept in local outputs only. A sample built with `--keep-location-text` is written as `local-only-sample-with-location-text.json`, is stamped `local_only`, and must not be committed. |
 
 ## Source (metadata inspected 13 Nov 2026; nothing bulk-downloaded)
 
@@ -30,7 +30,7 @@ Facts that shape the importer:
 
 - **CRS:** `f=json` returns native British National Grid metres (EPSG:27700). The catalogue's `f=geojson` link returns server-reprojected WGS84 lon/lat. The importer uses `f=json` with `outSR=27700` so source geometry and CRS are preserved, and its output is deliberately not GeoJSON.
 - **Missing values:** a schema probe of three records showed one without a `featurelocation` key. Missing values are kept as explicit `unknown`, never filled.
-- **Address-like text:** `featurelocation` holds frontage text such as "Outside 7-9" (house-number positions). It refers to street frontages, not people, but the redistributable sample drops it by default (`--keep-location-text` to override after review).
+- **Address-like text:** `featurelocation` holds frontage text such as "Outside 7-9" (house-number positions). It refers to street frontages, not people, but the review sample (`review-sample.json`) drops it. `--keep-location-text` writes a separate `local-only-sample-with-location-text.json` that keeps it, for local inspection only (decision 3a).
 - **Extent:** the layer's stored extent is not plausible for Sheffield. Coverage must come from the query results, not the layer extent.
 
 ## Rights (unresolved licence conflict; asset-level decision still needed)
@@ -73,13 +73,18 @@ python scripts/prepare_tree_inventory.py replay \
 **Envelope:** decision 1a above. It is a query filter only; no coordinate conversion is claimed. The desk audit's Weston Park / Manor Fields boxes are WGS84 and were not converted here, and the script rejects boxes that look like lon/lat.
 
 **Script safeguards:**
-- **Network:** HTTPS to the one fixed layer only. Redirects are refused, not followed, and each response's final URL is recorded and checked. Every site test runs with urllib network calls (`urlopen`, `OpenerDirector.open`) blocked and recorded as failures (`backend/tests/site/conftest.py`). Other clients, such as raw sockets or httpx, are not covered.
+- **Network:** HTTPS to the one fixed layer only. Redirects are refused, not followed, and each response's final URL is recorded and checked. Every site test runs with urllib calls (`urlopen`, `OpenerDirector.open`) blocked, and with socket connects to anything but loopback or a Unix socket blocked. Attempts are recorded as failures (`backend/tests/site/conftest.py`). Host names are not resolved by the guard, so a connect by host name other than `localhost` is refused. DNS lookups before a refused connect, and UDP sends, are not intercepted.
+- **Service count:** a negative count is refused before any feature is fetched. On replay it is never used as a count: the status is `negative_count`, and completeness reads `unknown: service count negative_count`.
 - **Feature cap:** with paging, pages stop at `--max-features`. A layer without paging allows only one uncapped query. In that case the service count must be an integer no larger than `--max-features`, or nothing is downloaded. The single page is also checked afterwards, so a layer that changed in between fails the acquisition.
 - **Locations:** raw and output directories must be outside every git checkout or worktree, and must not be equal or nested. This is checked before any download.
-- **Committable command:** the manifest's `command` is rebuilt from the parsed arguments, with paths reduced to their final name. Option abbreviations are refused.
+- **Committable command:** the manifest's `command` is rebuilt from the parsed arguments. Paths become the fixed placeholders `<raw-dir>` and `<output-dir>`, because even a directory's final name could be a person's name. Option abbreviations are refused.
 - **CRS:** queries ask for `f=json` with `outSR=27700`, never GeoJSON (which the server reprojects to WGS84). The layer's own declared CRS must also be EPSG:27700, or the build is refused.
 - **On failure:** the script always leaves `acquisition.json` (status, error, every request URL, final URL, retrieval time, HTTP status and SHA-256).
-- **On replay:** it refuses an incomplete acquisition, any file the receipt does not exactly account for, and non-contiguous pages.
+- **On replay:** it refuses:
+  - an incomplete acquisition;
+  - any file the receipt does not exactly account for;
+  - non-contiguous pages;
+  - any allowlisted receipt value without its expected form. That covers URLs on the fixed layer, whose query keys and values must be exactly those `fetch` sends; UTC timestamps; a finite BNG bbox; integer limits; and SHA-256 hex. Such values would reach the manifest.
 - **Count provenance:** a failed count request is reported as such, not as "not requested". "Empty" means nothing was received. Records that arrive but are all rejected or conflicting are reported as "no usable records". "Matches" and "mismatch" also state how many records were kept and rejected, and how many source IDs conflicted.
 
 **Outputs** (all written outside the repository):
@@ -92,10 +97,11 @@ python scripts/prepare_tree_inventory.py replay \
   - the approval reference (a role or a reference, never a name);
   - the recorded decisions.
 
-  Path arguments are redacted, so after review the manifest is safe to commit.
-- `redistributable-sample.json`: its schema is tagged `#sample`, and each record lists any `withheld_for_sample` fields. Only `sitename` and `featuretypename` are kept; any other field is withheld. With `--keep-location-text`, the sample also keeps `featurelocation` and is stamped `local_only`; under decision 3a it is never committed.
+  Path arguments become fixed placeholders, and only allowlisted, validated receipt values are copied. **Publisher text is also copied and is not validated:** `layer_schema` (name, field names, types, aliases and lengths; `editingInfo`; `serviceItemId`) and `rights_detail.layer_copyright_text`. Review it before any commit.
+- `review-sample.json`: a small sample **for review, not redistribution**. Its schema is tagged `#sample`, and each record lists any `withheld_for_sample` fields. Only `sitename` and `featuretypename` are kept; any other field is withheld.
+- `local-only-sample-with-location-text.json` (only with `--keep-location-text`, written instead of `review-sample.json`): it also keeps `featurelocation` and is stamped `local_only`. Under decision 3a it is never committed.
 
-After review, copy only `manifest.json` and the small sample here. Raw downloads and the full inventory stay out of git.
+**Committing a sample.** Copy `manifest.json` and `review-sample.json` into this folder only after review, **and only once `public_display_status` and `export_status` are both recorded as `permitted`**, because the repository is public. Under decision 2a every status is `unknown`, so nothing from a real run is committed today. Raw downloads, the full inventory and any local-only sample always stay out of git.
 
 ## Output schema (`canopy-source-tree-inventory/1`) — handoff for the viewer (Alex)
 

@@ -32,6 +32,15 @@ describe('CanopyClient', () => {
     expect(failure.code).toBe('REVISION_CONFLICT')
   })
 
+  it('explains a proxy 5xx with no contract body as the backend not answering, never a bare status', async () => {
+    const { fetcher } = fakeFetch(() => ({ status: 500, body: null }))
+    const failure = await new CanopyClient('/api/v1', fetcher).health().catch(e => e)
+    expect(failure).toBeInstanceOf(ApiError)
+    expect(failure.status).toBe(500)
+    expect(failure.message).toMatch(/local backend did not answer \(HTTP 500\)/)
+    expect(failure.message).toMatch(/Nothing was computed/)
+  })
+
   it('reports an unreachable backend as NETWORK rather than a result', async () => {
     const client = new CanopyClient('/api/v1', async () => { throw new TypeError('Failed to fetch') })
     const failure = await client.health().catch(e => e)

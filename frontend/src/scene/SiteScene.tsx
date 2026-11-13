@@ -25,7 +25,23 @@ export interface SiteSceneProps {
   readonly siteLabel: string
   /** Placements of evaluated alternative layouts from a stored search result (positions only). */
   readonly overlays?: readonly { readonly id: string; readonly positions: readonly Vec3[]; readonly highlighted: boolean }[]
+  /** Camera distance multiplier for "Reset view" and the first framing (view only; 1 = default). */
+  readonly framing?: number
 }
+
+/**
+ * Scene palette (Vision v2 light map). WebGL materials cannot read CSS variables, so these mirror
+ * the tokens in styles.css: --scene-bg, --target, --candidate, --lime, --ink and the map key glyphs.
+ */
+const C = {
+  background: '#e6e9e0', ground: '#d3dec6', gridFine: '#9fb39a', gridCoarse: '#7d957a',
+  skyLight: '#ffffff', groundLight: '#b6c6ab', sunLight: '#fff4d7',
+  crown: '#a5d86a', trunk: '#7a5b3e', ghostCrown: '#7d8f79', ghostTrunk: '#9c8f80', selectedRing: '#13221d',
+  target: '#2f7f96', targetEdge: '#256a7e', receiverPoint: '#13221d', sun: '#c58a1c', sunDisc: '#e8b84a',
+  obstacle: '#9aa39b', triangles: '#b9bfb6', region: '#4e7a2e',
+  candidate: '#24423a', candidateSelected: '#13221d', candidateSelectedDot: '#b7e879',
+  option: '#3c6fa8', optionMuted: '#5d7a8c',
+} as const
 
 const HOME = new THREE.Vector3(6.5, 6, 8.5)
 const toV = (p: readonly number[]) => new THREE.Vector3(...enuToViewer(p))
@@ -38,20 +54,20 @@ function buildTree(state: TreeState, ghost: boolean) {
   const [rx, ry, rz] = state.crown_radii_m
   const crown = new THREE.Mesh(
     new THREE.SphereGeometry(1, 28, 18),
-    new THREE.MeshStandardMaterial({ color: ghost ? '#c9d8c3' : '#7fb33f', roughness: 0.8, transparent: ghost, opacity: ghost ? 0.28 : 1, depthWrite: !ghost }),
+    new THREE.MeshStandardMaterial({ color: ghost ? C.ghostCrown : C.crown, roughness: 0.8, transparent: ghost, opacity: ghost ? 0.28 : 1, depthWrite: !ghost }),
   )
   crown.scale.set(rx, rz, ry) // ENU radii (east, north, up) -> Three (x, y, z) = (east, up, north)
   crown.position.y = state.crown_center_height_m
   const trunk = new THREE.Mesh(
     new THREE.CylinderGeometry(state.trunk_radius_m, state.trunk_radius_m, state.trunk_height_m, 16),
-    new THREE.MeshStandardMaterial({ color: ghost ? '#d9cfc0' : '#8a6d4f', roughness: 1, transparent: ghost, opacity: ghost ? 0.28 : 1, depthWrite: !ghost }),
+    new THREE.MeshStandardMaterial({ color: ghost ? C.ghostTrunk : C.trunk, roughness: 1, transparent: ghost, opacity: ghost ? 0.28 : 1, depthWrite: !ghost }),
   )
   trunk.position.y = state.trunk_height_m / 2
   group.add(crown, trunk)
   if (!ghost) {
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(Math.max(rx, ry) * 1.15, Math.max(rx, ry) * 1.3, 40),
-      new THREE.MeshBasicMaterial({ color: '#b7e879', side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: C.selectedRing, side: THREE.DoubleSide }),
     )
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.012
@@ -70,12 +86,14 @@ function disposeObject(object: THREE.Object3D) {
   })
 }
 
-export default function SiteScene({ scene, candidates = [], onStep, treeState, committed, draft, editable, onDraftChange, siteLabel, overlays = [] }: SiteSceneProps) {
+export default function SiteScene({ scene, candidates = [], onStep, treeState, committed, draft, editable, onDraftChange, siteLabel, overlays = [], framing = 1 }: SiteSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null)
   const northRef = useRef<HTMLSpanElement>(null)
   const world = useRef<{
     scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; renderer: THREE.WebGLRenderer
     staticGroup: THREE.Group; overlayGroup: THREE.Group; draftTree: THREE.Group | null; ghostTree: THREE.Group | null
+    /** Request one render on the next frame (the scene renders on demand, not every frame). */
+    invalidate: () => void
   } | null>(null)
   const latest = useRef({ draft, editable, onDraftChange })
   latest.current = { draft, editable, onDraftChange }
@@ -93,14 +111,15 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       setState('error')
       return
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    // Full-bleed canvas: cap the pixel ratio so high-DPI and GPU-less (software WebGL) machines stay responsive.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     renderer.outputColorSpace = THREE.SRGBColorSpace
-    renderer.setClearColor('#142820')
+    renderer.setClearColor(C.background)
     mount.appendChild(renderer.domElement)
     renderer.domElement.setAttribute('aria-hidden', 'true')
 
     const scene = new THREE.Scene()
-    scene.fog = new THREE.Fog('#142820', 30, 70)
+    scene.fog = new THREE.Fog(C.background, 30, 70)
     const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 200)
     camera.position.copy(HOME)
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -116,27 +135,32 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       if (northRef.current) northRef.current.style.transform = `rotate(${angle}deg)`
     }
     controls.addEventListener('change', updateNorth)
+    // Render on demand: only after a camera change, a resize or a scene edit. An idle full-bleed
+    // canvas otherwise re-renders every frame and starves the main thread without a GPU.
+    let dirty = true
+    const invalidate = () => { dirty = true }
+    controls.addEventListener('change', invalidate)
 
-    scene.add(new THREE.HemisphereLight('#d2e8e5', '#58755f', 2.2))
-    const light = new THREE.DirectionalLight('#fff4d7', 1.6)
+    scene.add(new THREE.HemisphereLight(C.skyLight, C.groundLight, 2.0))
+    const light = new THREE.DirectionalLight(C.sunLight, 1.6)
     light.position.set(-8, 14, 6)
     scene.add(light)
 
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: '#2f4f3e', roughness: 1 }))
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: C.ground, roughness: 1 }))
     ground.rotation.x = -Math.PI / 2
     scene.add(ground)
-    const fine = new THREE.GridHelper(40, 40, '#5d7d68', '#5d7d68')
+    const fine = new THREE.GridHelper(40, 40, C.gridFine, C.gridFine)
     fine.position.y = 0.004
     ;(fine.material as THREE.Material).transparent = true
     ;(fine.material as THREE.Material).opacity = 0.35
-    const coarse = new THREE.GridHelper(40, 4, '#a8c4a6', '#a8c4a6')
+    const coarse = new THREE.GridHelper(40, 4, C.gridCoarse, C.gridCoarse)
     coarse.position.y = 0.006
     scene.add(fine, coarse)
     const staticGroup = new THREE.Group()
     const overlayGroup = new THREE.Group()
     scene.add(staticGroup, overlayGroup)
 
-    world.current = { scene, camera, controls, renderer, staticGroup, overlayGroup, draftTree: null, ghostTree: null }
+    world.current = { scene, camera, controls, renderer, staticGroup, overlayGroup, draftTree: null, ghostTree: null, invalidate }
 
     // Pointer editing: drag the proposed tree across the ground plane (u = 0).
     const raycaster = new THREE.Raycaster()
@@ -188,13 +212,16 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       updateNorth()
+      invalidate()
     })
     observer.observe(mount)
 
     let frame = 0
     const animate = () => {
       frame = requestAnimationFrame(animate)
-      controls.update()
+      controls.update() // dispatches 'change' (and so invalidates) while the camera is moving or damping
+      if (!dirty) return
+      dirty = false
       renderer.render(scene, camera)
     }
     animate()
@@ -208,6 +235,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       renderer.domElement.removeEventListener('pointerup', onUp)
       renderer.domElement.removeEventListener('pointercancel', onUp)
       controls.removeEventListener('change', updateNorth)
+      controls.removeEventListener('change', invalidate)
       controls.dispose()
       disposeObject(scene)
       world.current = null
@@ -228,14 +256,14 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       const radius = Math.sqrt(declaration.receiver_area_m2 / Math.PI)
       const receiver = new THREE.Mesh(
         new THREE.CircleGeometry(radius, 48),
-        new THREE.MeshBasicMaterial({ color: '#62afc2', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: C.target, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
       )
       receiver.rotation.x = -Math.PI / 2
       receiver.position.copy(toV(declaration.receiver_point)).add(new THREE.Vector3(0, 0.01, 0))
-      const edge = new THREE.Mesh(new THREE.RingGeometry(radius * 0.97, radius, 48), new THREE.MeshBasicMaterial({ color: '#a6dce7', side: THREE.DoubleSide }))
+      const edge = new THREE.Mesh(new THREE.RingGeometry(radius * 0.97, radius, 48), new THREE.MeshBasicMaterial({ color: C.targetEdge, side: THREE.DoubleSide }))
       edge.rotation.x = -Math.PI / 2
       edge.position.copy(receiver.position).add(new THREE.Vector3(0, 0.002, 0))
-      const point = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshBasicMaterial({ color: '#e6f6fa' }))
+      const point = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshBasicMaterial({ color: C.receiverPoint }))
       point.position.copy(toV(declaration.receiver_point))
       w.staticGroup.add(receiver, edge, point)
       if (declaration.above_horizon) {
@@ -243,15 +271,15 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
         const end = start.clone().add(toV(declaration.sun_direction).normalize().multiplyScalar(7))
         const ray = new THREE.Line(
           new THREE.BufferGeometry().setFromPoints([start, end]),
-          new THREE.LineDashedMaterial({ color: '#f1d27a', dashSize: 0.25, gapSize: 0.15 }),
+          new THREE.LineDashedMaterial({ color: C.sun, dashSize: 0.25, gapSize: 0.15 }),
         )
         ray.computeLineDistances()
-        const sun = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), new THREE.MeshBasicMaterial({ color: '#f1d27a' }))
+        const sun = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), new THREE.MeshBasicMaterial({ color: C.sunDisc }))
         sun.position.copy(end)
         w.staticGroup.add(ray, sun)
       }
       declaration.obstacle_ellipsoids.forEach(([centre, radii]) => {
-        const obstacle = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ color: '#7d8a7f', roughness: 1 }))
+        const obstacle = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ color: C.obstacle, roughness: 1 }))
         obstacle.scale.set(radii[0], radii[2], radii[1])
         obstacle.position.copy(toV(centre))
         w.staticGroup.add(obstacle)
@@ -259,7 +287,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
     } else if (scene?.kind === 'physical') {
       const p = scene.scene
       // Receiver samples: one tile per sample, sized to its represented area, on its own normal plane (flat here).
-      const tileMaterial = new THREE.MeshBasicMaterial({ color: '#62afc2', transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false })
+      const tileMaterial = new THREE.MeshBasicMaterial({ color: C.target, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false })
       const tiles = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), tileMaterial, p.samples.length)
       const m = new THREE.Matrix4()
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
@@ -274,11 +302,11 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
         const g = new THREE.BufferGeometry()
         g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
         g.computeVertexNormals()
-        w.staticGroup.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#8b968c', roughness: 1, side: THREE.DoubleSide })))
+        w.staticGroup.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: C.triangles, roughness: 1, side: THREE.DoubleSide })))
       }
       Object.values(p.regions).forEach(polygon => {
         const pts = polygon.map(([e, n]) => toV([e, n, p.flat_ground_z_m]).add(new THREE.Vector3(0, 0.02, 0)))
-        const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: '#b7e879', dashSize: 0.4, gapSize: 0.25 }))
+        const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: C.region, dashSize: 0.4, gapSize: 0.25 }))
         line.computeLineDistances()
         w.staticGroup.add(line)
       })
@@ -286,15 +314,16 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
     for (const c of candidates) {
       const marker = new THREE.Mesh(
         new THREE.RingGeometry(0.22, 0.34, 32),
-        new THREE.MeshBasicMaterial({ color: c.selected ? '#b7e879' : '#f1f5ee', side: THREE.DoubleSide }),
+        new THREE.MeshBasicMaterial({ color: c.selected ? C.candidateSelected : C.candidate, side: THREE.DoubleSide }),
       )
       marker.rotation.x = -Math.PI / 2
       marker.position.copy(toV(c.position)).add(new THREE.Vector3(0, 0.03, 0))
-      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16), new THREE.MeshBasicMaterial({ color: c.selected ? '#b7e879' : '#f1f5ee', side: THREE.DoubleSide }))
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16), new THREE.MeshBasicMaterial({ color: c.selected ? C.candidateSelectedDot : C.candidate, side: THREE.DoubleSide }))
       dot.rotation.x = -Math.PI / 2
       dot.position.copy(marker.position)
       w.staticGroup.add(marker, dot)
     }
+    w.invalidate()
   }, [scene, candidateKey, state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Alternative layouts from a stored search result: a ring per placement; the highlighted one also gets crowns.
@@ -308,19 +337,20 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
         const r = treeState ? Math.max(treeState.crown_radii_m[0], treeState.crown_radii_m[1]) : 0.5
         const ring = new THREE.Mesh(
           new THREE.RingGeometry(r * 0.9, r * 1.05, 40),
-          new THREE.MeshBasicMaterial({ color: layout.highlighted ? '#9fd3ff' : '#c9d8c3', side: THREE.DoubleSide, transparent: true, opacity: layout.highlighted ? 0.95 : 0.45 }),
+          new THREE.MeshBasicMaterial({ color: layout.highlighted ? C.option : C.optionMuted, side: THREE.DoubleSide, transparent: true, opacity: layout.highlighted ? 0.95 : 0.45 }),
         )
         ring.rotation.x = -Math.PI / 2
         ring.position.copy(toV(p)).add(new THREE.Vector3(0, 0.015, 0))
         w.overlayGroup.add(ring)
         if (layout.highlighted && treeState) {
-          const crown = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ color: '#9fd3ff', transparent: true, opacity: 0.45, depthWrite: false }))
+          const crown = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ color: C.option, transparent: true, opacity: 0.35, depthWrite: false }))
           crown.scale.set(treeState.crown_radii_m[0], treeState.crown_radii_m[2], treeState.crown_radii_m[1])
           crown.position.copy(toV(p)).add(new THREE.Vector3(0, treeState.crown_center_height_m, 0))
           w.overlayGroup.add(crown)
         }
       }
     }
+    w.invalidate()
   }, [overlayKey, treeState, state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Proposed tree (draft) and, when moved, a ghost at the last committed position.
@@ -331,6 +361,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       const old = w[key]
       if (old) { w.scene.remove(old); disposeObject(old); w[key] = null }
     }
+    w.invalidate()
     if (!treeState || !draft) return
     const tree = buildTree(treeState, false)
     tree.position.copy(toV(draft))
@@ -354,7 +385,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
     const box = new THREE.Box3().setFromPoints(points)
     const centre = box.getCenter(new THREE.Vector3()).add(new THREE.Vector3(0, 0.5, 0))
     const span = box.getSize(new THREE.Vector3()).length()
-    const scale = Math.max(1, span / 7)
+    const scale = Math.max(1, span / 7) * framing
     w.controls.target.copy(centre)
     w.camera.position.copy(centre).add(HOME.clone().multiplyScalar(scale))
     w.controls.update()
@@ -413,7 +444,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       <div className="scene-topline"><span className="pill pill-lime">{siteLabel}</span><span className="scene-scale">ENU metres · grid 1 m</span></div>
       {state === 'loading' && <div className="scene-message" role="status">Loading scene…</div>}
       {state === 'error' && <div className="scene-message" role="alert">3D view unavailable on this device. Use the position fields to edit the proposed tree.</div>}
-      {state === 'ready' && !scene && <div className="scene-message" role="status">No verified site geometry to draw yet.</div>}
+      {state === 'ready' && !scene && <div className="scene-message" role="status">No hash-checked site geometry to draw yet.</div>}
       <div className="north-indicator" aria-label="North direction in the current camera view"><span ref={northRef}>↑</span> N</div>
       <div className="scene-toolbar" aria-label="Camera controls">
         <button type="button" onClick={() => moveCamera('left')} aria-label="Orbit camera left">↶</button>
@@ -428,7 +459,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
           ? `Target receiver sample at east ${scene.declaration.receiver_point[0]} m, north ${scene.declaration.receiver_point[1]} m representing ${scene.declaration.receiver_area_m2} square metres. ${draft ? `Proposed tree at east ${draft[0]} m, north ${draft[1]} m.` : ''} A dashed line shows the declared sun direction used by the evaluator; it is an input, not a result.`
           : scene?.kind === 'physical'
             ? `${scene.scene.samples.length} receiver samples, ${scene.scene.triangles.length} static triangles, ${Object.keys(scene.scene.regions).length} planting region(s) and ${candidates.length} catalogue positions. ${draft ? `Proposed tree at east ${draft[0]} m, north ${draft[1]} m.` : ''}`
-            : 'No verified site geometry is available.'}
+            : 'No hash-checked site geometry is available.'}
       </p>
     </div>
   )

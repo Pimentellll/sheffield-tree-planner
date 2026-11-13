@@ -38,6 +38,10 @@ async function head() {
   return (await backend('GET', `/scenarios/${id}?revision=${rev}`)).json
 }
 const currentLabel = page => page.locator('.currentness strong').textContent()
+// After "Completed" the workspace still fetches the Result, its scenario snapshot and the backend selection before the
+// card can say CURRENT. Wait (bounded) for that state; the caller's assertion still decides pass or fail.
+const waitCurrentAt = (page, revision) => page.waitForFunction(rev => /CURRENT\b/.test(document.querySelector('.currentness strong')?.textContent ?? '') &&
+  (document.querySelector('.result-section')?.textContent ?? '').includes(`${rev} (accepted)`), revision, { timeout: 15000 }).catch(() => {})
 const evidenceDir = join(__dirname, '..', 'artifacts')
 mkdirSync(evidenceDir, { recursive: true })
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -75,17 +79,17 @@ async function online() {
     await page.getByText('Local backend connected').waitFor({ timeout: 20000 })
     check('connects to the local backend', true)
     const text = await panel(page).innerText()
-    check('site geometry bytes verified against SiteBundle hash', /Verified · sha256/.test(text))
+    check('site geometry bytes match the SiteBundle hash', /Hash matches · sha256/.test(text))
     check('synthetic site is labelled as not Sheffield', /Synthetic test \(not Sheffield\)/.test(text))
     check('identity analysis_to_viewer is reported, not hidden', /Identity in SiteBundle/.test(text))
     await shot(page, '01-loaded')
 
     // Camera keyboard alternative still changes the canvas.
     const canvas = page.locator('.scene-canvas canvas')
-    const before = hash(await canvas.screenshot())
+    const before = hash(await canvas.evaluate(el => el.toDataURL('image/png')))
     await page.getByRole('button', { name: 'Orbit camera left' }).click()
     await page.waitForTimeout(400)
-    check('camera orbit control changes the view', before !== hash(await canvas.screenshot()))
+    check('camera orbit control changes the view', before !== hash(await canvas.evaluate(el => el.toDataURL('image/png'))))
     await page.getByRole('button', { name: 'Reset view' }).click()
 
     // 1. Positive evaluation at the seeded position.
@@ -104,10 +108,10 @@ async function online() {
     const stale = await page.locator('.currentness strong').textContent()
     check('unsaved move marks the result stale immediately', /STALE/.test(stale), stale)
     check('stale number is visibly struck through', await page.locator('.metric-stale').count() === 1)
-    const beforeFind = hash(await canvas.screenshot())
+    const beforeFind = hash(await canvas.evaluate(el => el.toDataURL('image/png')))
     await page.getByRole('button', { name: 'Find tree' }).click()
     await page.waitForTimeout(400)
-    check('Find tree recentres the camera on the moved tree', beforeFind !== hash(await canvas.screenshot()))
+    check('Find tree recentres the camera on the moved tree', beforeFind !== hash(await canvas.evaluate(el => el.toDataURL('image/png'))))
     await shot(page, '03-edit-stale')
 
     // 3. Save + evaluate: valid zero, and the old result is superseded.
@@ -209,6 +213,8 @@ async function online() {
 
 // STP-021: requirement drafts, human acceptance, recompute, refused concurrent edit, proposal review.
 async function requirementsFlow(page) {
+  // The scenario editor (C01) is a panel the user opens from the scenario strip.
+  if (await page.locator('#scenario-editor').count() === 0) await page.getByRole('button', { name: 'Edit scenario' }).click()
   const budget = page.getByLabel('Upfront budget in pounds')
   const before = await head()
   await budget.fill('80')
@@ -232,6 +238,7 @@ async function requirementsFlow(page) {
     accepted.revision === before.revision + 1 && accepted.input.constraints.budget_pence === 8000 && accepted.input.constraints.max_tree_count === 1 &&
     JSON.stringify(accepted.input.proposed_layout_ref) === JSON.stringify(before.input.proposed_layout_ref),
     `rev ${accepted.revision}, budget ${accepted.input.constraints.budget_pence}, max ${accepted.input.constraints.max_tree_count}`)
+  await waitCurrentAt(page, accepted.revision)
   check('acceptance triggers a real recomputation that is CURRENT', /CURRENT\b/.test(await currentLabel(page)) &&
     (await page.locator('.result-section').innerText()).includes(`${accepted.revision} (accepted)`))
   await shot(page, '08-requirements-accepted')
@@ -275,6 +282,7 @@ async function requirementsFlow(page) {
   await page.waitForTimeout(400)
   const afterAccept = await head()
   check('human acceptance of the proposal creates the next accepted revision', afterAccept.revision === base.revision + 1 && afterAccept.input.constraints.budget_pence === 5000)
+  await waitCurrentAt(page, afterAccept.revision)
   check('accepted proposal is recomputed and CURRENT', /CURRENT\b/.test(await currentLabel(page)))
   // A second acceptance of the same proposal is refused by the backend.
   let refused = false
@@ -362,7 +370,7 @@ async function offlineCheck() {
   const { browser, page, errors } = await launch(1440, 900)
   try {
     await page.goto(url)
-    await page.getByText('Backend not connected').waitFor({ timeout: 20000 })
+    await page.getByTestId('backend-status').filter({ hasText: 'Backend not connected' }).waitFor({ timeout: 20000 })
     check('offline state is explicit', true)
     check('no metric is shown without a backend', await metric(page).count() === 0)
     check('evaluate is disabled offline', await page.getByRole('button', { name: /Evaluate planting/ }).isDisabled())

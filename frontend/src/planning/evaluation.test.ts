@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Job, Layout, Result, Scenario } from '../api/types'
 import {
   DEADLINE_MARGIN_MS, candidateAt, nearestCandidate, stepCandidate, diffInputs, parsePounds, requirementsOf, sameRequirements, validateRequirements, buildCommit, clampPosition, classifyResult, describeJob, evaluateRequest, formatPence, formatValue,
-  nudge, primaryMetric, samePosition, unitLabel,
+  nudge, primaryMetric, samePosition, unitLabel, progressView, NO_PROGRESS_CAPTION,
 } from './evaluation'
 
 // Labelled synthetic test inputs shaped like the backend wire types. Not runtime results.
@@ -121,6 +121,26 @@ describe('describeJob', () => {
     expect(failed.tone).toBe('danger')
     expect(failed.detail).toContain('NUMERICAL_FAILURE')
     expect(describeJob(job({ status: 'completed', run_id: 'r1', superseded_by_revision: 4 })).detail).toContain('Superseded by revision 4')
+  })
+  it('prints no "0/0" count when the backend reports a zero total (-51 E)', () => {
+    expect(describeJob(job({ status: 'running', progress: { phase: 'rays', completed: 0, total: 0, unit: 'bins' } })).detail).not.toContain('0/0')
+  })
+})
+
+describe('progressView (-51 Q, brief §11 #10)', () => {
+  it('shows counts only for a positive backend total', () => {
+    expect(progressView(job({ status: 'running', progress: { phase: 'rays', completed: 1, total: 4, unit: 'bins' } }))).toEqual({ kind: 'counts', completed: 1, total: 4 })
+  })
+  it('is indeterminate, with the no-estimate caption, when no counts are reported', () => {
+    for (const progress of [null, { phase: 'rays', completed: 0, total: 0, unit: 'bins' }]) {
+      const view = progressView(job({ status: 'running', progress }))
+      expect(view).toEqual({ kind: 'indeterminate', caption: NO_PROGRESS_CAPTION })
+    }
+    expect(progressView(job({ status: 'queued' })).kind).toBe('indeterminate')
+    expect(NO_PROGRESS_CAPTION).toContain('no percentage or phase is estimated')
+  })
+  it('shows nothing for a finished job', () => {
+    for (const status of ['completed', 'failed', 'cancelled'] as const) expect(progressView(job({ status })).kind).toBe('none')
   })
 })
 

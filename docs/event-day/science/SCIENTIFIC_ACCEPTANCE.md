@@ -74,7 +74,7 @@ Source facts are from `main` @ `630ee65`; seeded values assume `create_physical_
 
 | Gate | Evidence link | Decision | Time (GMT) | By |
 |---|---|---|---|---|
-| Token validity rule (X-06) and protocol pass/fail amendments | X-06, N-09 and X-02 above (commit `8f5aeee`); [protocol §8](AGENT_EVALUATION_PROTOCOL.md#8-changes-from-earlier-drafts-and-why) amendments row (commit `feeeb68`) | accepted | 13 Nov 2026 | Arnav's coordinating session (-9f) under Arnav's delegation |
+| Token validity rule (X-06) and protocol pass/fail amendments | X-06, N-09 and X-02 above (commit `8f5aeee`); [protocol §8](AGENT_EVALUATION_PROTOCOL.md#8-changes-from-earlier-drafts-and-why) amendments row (commit `feeeb68`) | Decided 13 Nov 2026, before any run, by Arnav's coordinating session under his general delegation of that day. Arnav's own confirmation: pending. Revert commits 8f5aeee and feeeb68 if he declines. | 13 Nov 2026 | Arnav's coordinating session (-9f); Arnav's own confirmation pending |
 | N rows complete | | | | Arnav |
 | A + X rows complete (five-case run) | | | | Arnav |
 | Claims frozen for video | | | | Arnav → Alex |

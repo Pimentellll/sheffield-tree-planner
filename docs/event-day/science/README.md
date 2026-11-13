@@ -55,9 +55,9 @@ All of [Protocol](AGENT_EVALUATION_PROTOCOL.md) execution; acceptance rows marke
 
 1. Release SHA running on the Spark and the command or service that started it.
 2. `ollama --version`, `ollama ps` (model name, size, processor, context) and `ollama show <tag>` (parameters, quantization) at evaluation time.
-3. The base URL and transport the agent uses (native `/api/chat`, the active lane per PR #70 @ `8d24e73`, or the `/v1` fallback), plus `options.num_ctx` and `options.num_predict` (native), `OLLAMA_CONTEXT_LENGTH` or Modelfile `num_ctx`, as applicable. If an alias is served, the organiser base tag behind it (`ollama show <alias> --modelfile`).
+3. The base URL and transport the agent uses (native `/api/chat`, the active lane per PR #70 @ `8d24e73`, or the `/v1` fallback), plus the `think`/`num_ctx`/`num_predict` values actually sent (native), `OLLAMA_CONTEXT_LENGTH` or Modelfile `num_ctx`, as applicable. If an alias is served, the organiser base tag behind it (`ollama show <alias> --modelfile`).
 4. Which driver can run a **custom prompt with a chosen tool set** through the unchanged `AgentLoop` and save raw request/response exchanges (`RecordingClient` style). If none exists, say so; the protocol stays blocked rather than being improvised.
-5. The accepted scenario reference (`scenario_id`, `revision`), `site_id`, `scene_revision`, `layout_ref`, placement IDs and catalogue coordinates. These fill the protocol's host-context block.
+5. Confirmation that the driver fills the protocol's host-context block from its own fresh `create_physical_runtime(winter=True)` (do **not** hand over a `scenario_id`: it is a new uuid4 per runtime), plus the FIX-3 smoke output: argument type, call id, finish/done reason and usage fields.
 6. A 30–40 minute window with no other model loaded and no other job running.
 7. Known defects at handoff.
 

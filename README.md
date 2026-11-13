@@ -1,5 +1,7 @@
 # Sheffield Tree Planner
 
+**Event-day coordination (13 November 2026):** [Parallel team task board, 15:00–16:00 functional freeze, Spark proof gates and presentation plan](docs/EVENT_DAY_EXECUTION_2026-11-13.md). This schedule is a coordination plan; completion requires recorded evidence. The older status section below describes the pre-integration readiness baseline and must not be read as the current status of separate development branches.
+
 An urban tree-planning project for NVIDIA Hack for Impact Sheffield, 13 November 2026.
 
 The intended system combines deterministic shade analysis and constrained tree-placement search with a local planning agent that investigates alternatives and explains computed evidence. Sheffield is the first case study; existing trees, winter sunlight, costs and uncertainty remain explicit.

@@ -1,0 +1,22 @@
+/* C03 running-job card and superseded-result banner: layout only. Colours, type and surfaces come
+   from shared classes in styles.css (.section-kicker, .section-title, .status-pill/.sp-*,
+   .fine-print, .caption, .readiness-row, .secondary-action, .glass-light). */
+
+.rjc-status { display: grid; justify-items: start; margin-top: 8px; }
+.rjc-status .secondary-action { justify-self: stretch; }
+
+.rjc-progress { display: grid; gap: 4px; margin: 10px 0; }
+.rjc-progress progress { width: 100%; margin: 0; }
+.rjc-progress .caption { margin: 0; }
+.rjc-progress .mono { justify-self: end; }
+
+.rjc-facts { margin: 10px 0; }
+.rjc-actions { display: grid; gap: 4px; }
+.rjc-actions .caption { margin: 0; }
+
+/* Surface from .glass-light (background, border, radius, ink, shadow); the same insets and size as .draft-banner. */
+.rjc-superseded { display: flex; flex-direction: column; gap: 8px; padding: 11px 12px 11px 14px; font-size: 12.5px; line-height: 1.45; }
+.rjc-superseded p { margin: 0; }
+.rjc-superseded-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rjc-superseded-head .caption { margin: 0; }
+.rjc-strike { text-decoration: line-through; }

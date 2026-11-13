@@ -31,7 +31,6 @@ jobs:
       CANOPY_LOCAL_MODEL_BASE: ''
       CANOPY_LOCAL_MODEL: ''
       CANOPY_LIVE_PROOF_DIR: ''
-      ARTIFACT_DIR: ${{ runner.temp }}/canopy-artifacts
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -69,6 +68,7 @@ jobs:
       - name: Build and verify clean installed artifacts
         shell: bash
         env:
+          ARTIFACT_DIR: ${{ runner.temp }}/canopy-artifacts
           UV_PYTHON: ${{ steps.python.outputs.python-path }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}

@@ -72,7 +72,7 @@ Status values initially **Planned** or **In progress (owner-reported)**; replace
 | **B-E05** | P0 | Ben | Wire model + bounded agent loop + registered tools on Spark; check current refs and output validation | B-E03 + B-E04 | One real agent-selected tool, completed job, matching evidence run ID |
 | **B-E06** | P0 | Ben | Device stability, safe bounded load, error/restart proof and fixed release runbook | B-E03–E05 | Cold/warm logs; measured latency/resource receipt; restart/rollback |
 | **B-E07** | P0 | Ben | Freeze known-good release; tell team one deploy SHA, URL and operational restrictions | B-E06 + A-E05 + X-E04 | Release receipt; no unapproved restarts/features |
-| **A-E01** | P0 | Arnav | Review `backend/tests/benchmarks/` B11 runner/scorer and existing agent test contract, reuse instead of replacing | None | List of existing capabilities/gaps; stable test case format |
+| **A-E01** | P0 | Arnav | **REVIEWED (13 Nov)** B11 runner/scorer and agent contracts on pushed `demo/hackathon` baseline; recheck Ben's final SHA before harness work | None | Capabilities/gaps recorded in §9; no live model or manual benchmark claimed |
 | **A-E02** | P0 | Arnav | Freeze small scored scenario suite: tool selection, valid args, budget, comparison, evidence, unsupported claims, stale/failure cases | A-E01 | Immutable inputs/hashes, expected outcome, exact rubric, dry-run checks |
 | **A-E03** | P0 | Arnav | Run genuine available model against suite with Ben-agreed endpoint/window | B-E05 + A-E02 | Per-attempt trace: model, SHA, seed/settings, tool/result IDs, pass/fail, latency |
 | **A-E04** | P1 | Arnav | Fair local Nemotron vs available comparator; optionally scripted/manual baseline | A-E03, Ben's explicit load-test window | Same tasks/prompts/tool contracts/hardware where feasible; no false fairness claim |
@@ -162,3 +162,22 @@ Submission deadline and confirmation:
 **Next on-site action:** ask the event desk or official team communications for: (1) exact submission cutoff and platform; (2) pitch and demo length/order; (3) required artefacts and repo/public access rules; (4) whether pre-event code, AI assistants and third-party data need declaration; (5) confirmation that the three team member registrations/roster are recorded. Update this section with the organiser's answer and a time/source, and then mark S-E01 **Verified**. Do not hold Ben's deployment or Arnav's independent benchmark audit while waiting.
 
 **Audit progress:** Coordination/event eligibility and published judging facts checked; submission-specific gate remains pending. **Next independent Arnav task: A-E01**, audit the existing B11 benchmark runner/scorers on the live integration revision.
+
+
+## 9. A-E01 benchmark infrastructure audit — reviewed pushed baseline (13 Nov)
+
+**Task A-E01: REVIEWED on `demo/hackathon` baseline, not a completed B11 experiment.** The newer `integration/arnav/spark-demo` agent-manager work was not a visible pushed branch at inspection time; reconcile against Ben's final deployed SHA before modifying or running the harness.
+
+**Source inspected:** `backend/tests/benchmarks/{runner.py,physical_adapter.py,test_runner.py,README.md}`, the existing `backend/tests/agents/test_live_local.py`, `backend/src/tree_planner/agents/__init__.py`, and issue [#31](https://github.com/Pimentellll/sheffield-tree-planner/issues/31). This is a read-only source audit; no benchmark run or test execution is claimed here.
+
+| Already implemented | Gap/limitation to address next |
+|---|---|
+| `run_suite` accepts `canopy-b11-heldout-v1` task manifests and creates fresh per-arm task workspaces | Must select/freeze the actual held-out cases, expected outcome and repeat count; inspect any task manifest from the final release before generating duplicates |
+| `RecordingDispatcher` records **real** dispatch/poll/result events and elapsed time | For live agent, preserve actual HTTP/model trace and end-to-end timing broken into inference, dispatch and numerical compute where measurable |
+| Same-case identity checks include input fingerprint, data SHA256, tools SHA256 and backend config SHA256 | Per-model comparison also needs model checkpoint/revision, quantisation, inference engine, hardware, settings, release SHA and run ID, plus equal task schema |
+| `score_run` checks required operation outcomes, observed/current result IDs, compound task completion, failures, constraint check statuses, human actions, latency and citation IDs | Separate explicit model **tool selection**, schema-valid argument correctness, unsupported-claim audit and experimental task success from deterministic operation execution; avoid trusting model narrative as ground truth |
+| Unsupported numerical claims and useful analyses support independent review flags; unreviewed usefulness remains `null` | Need independent, recorded actual claim/usefulness reviews rather than labelling empty lists as proven zero |
+| `physical_adapter` executes true **scripted fixed** workflow on the synthetic physical runtime | It deliberately reports **manual and adaptive arms blocked**; neither is a real human nor live Nemotron evaluation. Add a small real-agent adapter only when Ben's stable API/model are ready |
+| `backend/tests/benchmarks/test_runner.py` tests observed ID integrity, multi-operation completion, failure handling and unreviewed usefulness semantics | Validate changes locally on actual release SHA, then run genuine-model comparisons under Ben-approved shared GPU windows |
+
+**Next task A-E02:** freeze **three minimum** scenarios first: `evaluate_layout` current result citation, `search_layouts` budget/feasibility, and `compare_locations` or stale/failure handling. Add a compact eight-task suite only after these work. Preserve synthetic labels and immutable fixture hashes. For every run record observed tool path, schema validity, current result IDs, supportable claims, failures and wall-clock time. Comparison with Qwen or other models is P1 until Nemotron's first real tool round-trip is verified; don't run second model concurrently on a busy Spark.

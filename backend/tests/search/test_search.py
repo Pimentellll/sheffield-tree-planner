@@ -91,6 +91,7 @@ def test_relocation_keeps_identity_and_others():
     assert moved.placements[0]["placement_id"] == old[0]["placement_id"]
     assert moved.placements[1:] == old[1:]
     assert moved.verdict.feasible is False
+    assert moved.verdict.evaluation is not None
 
 
 def test_stop_is_not_a_result():

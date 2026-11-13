@@ -166,7 +166,17 @@ def test_non_finite_coordinates_are_rejected():
 
 @pytest.mark.parametrize(
     "sr",
-    [None, {}, {"wkid": "27700"}, {"wkid": 3857}, {"wkt": "PROJCS[...]"}],
+    [
+        None,
+        {},
+        {"wkid": "27700"},
+        {"wkid": 3857},
+        {"wkt": "PROJCS[...]"},
+        # Ben's review of #77 (1): contradictory codes are refused, whichever comes first.
+        {"wkid": 3857, "latestWkid": 27700},
+        {"wkid": 27700, "latestWkid": 3857},
+        {"wkid": 27700, "latestWkid": "27700"},
+    ],
 )
 def test_unknown_or_unsupported_crs_fails_closed(sr):
     with pytest.raises(InventoryError):
@@ -365,25 +375,124 @@ LAYER = {
 }
 
 
-def _write_raw(raw_dir: Path, pages, count=None, status="complete", extra_files=(), layer=None):
-    """SYNTHETIC raw directory in the exact layout `fetch` writes (receipt + hashed files)."""
+def _write_raw(raw_dir: Path, pages, count=None, status="complete", extra_files=(), layer=None,
+               paging=None):
+    """SYNTHETIC raw directory in the exact layout `fetch` writes (receipt + hashed files).
+
+    The layer metadata states the same paging settings the receipt records (as fetch reads
+    them), and each file gets the request URL fetch would have made for it, if any."""
     raw_dir.mkdir()
     count = {"count": 3} if count is None else count
+    paging = len(pages) > 1 if paging is None else paging
+    layer = {
+        **(LAYER if layer is None else layer),
+        "maxRecordCount": 2,
+        "advancedQueryCapabilities": {"supportsPagination": paging},
+    }
     files = []
-    entries = [("layer.json", LAYER if layer is None else layer), ("count.json", count)]
+    entries = [("layer.json", layer), ("count.json", count)]
     entries += [(f"page-{i:04d}.json", p) for i, p in enumerate(pages)]
     for name, value in [*entries, *extra_files]:
         body = json.dumps(value).encode()
         (raw_dir / name).write_bytes(body)
-        files.append({"file": name, "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body)})
+        files.append(
+            {"file": name, "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body),
+             "http_status": 200}
+        )
     acquisition = {
+        "layer_url": SYNTHETIC_RECEIPT["layer_url"],
+        "bbox_27700": list(SYNTHETIC_RECEIPT["bbox_27700"]),
         "status": status,
         "max_features": 500,
+        "page_size": 2,
+        "supports_pagination": paging,
         "acquisition_approval_ref": "role:operator",
         "files": files,
     }
+    # The request URLs fetch() would have made for these files (replay requires them).
+    urls = _script().expected_request_urls(acquisition, "objectid", list(pages))
+    for record in files:
+        if record["file"] in urls:
+            record["url"] = record["final_url"] = urls[record["file"]]
     (raw_dir / "acquisition.json").write_text(json.dumps(acquisition))
     return acquisition
+
+
+# A small BNG box that is deliberately NOT the decision-1a envelope.
+SYNTHETIC_RECEIPT = {
+    "layer_url": "https://sheffieldcitycouncil.cloud.esriuk.com/server/rest/services/AGOL/INSPIRE/FeatureServer/14",
+    "bbox_27700": (430000.0, 380000.0, 430100.0, 380100.0),
+}
+
+
+def test_replay_refuses_files_not_requested_from_the_fixed_layer(tmp_path):
+    """Ben's review of #77 (3): before SOURCE is stamped, every raw file must carry the exact
+    request URL fetch would have made to the fixed layer, served from that same URL."""
+    script = _script()
+    cases = {
+        "missing-url": lambda a: a["files"][1].pop("url"),
+        "other-bbox": lambda a: a["files"][1].update(
+            url=script._count_url((430000.0, 380000.0, 430200.0, 380200.0)),
+            final_url=script._count_url((430000.0, 380000.0, 430200.0, 380200.0)),
+        ),
+        "served-elsewhere": lambda a: a["files"][0].update(final_url=script.LAYER_URL + "/query?f=json"),
+        "wrong-offset": lambda a: a["files"][3].update(
+            url=a["files"][3]["url"].replace("resultOffset=2", "resultOffset=0"),
+            final_url=a["files"][3]["url"].replace("resultOffset=2", "resultOffset=0"),
+        ),
+        "no-bbox": lambda a: a.pop("bbox_27700"),
+        "paging-differs-from-layer": lambda a: a.update(page_size=3),
+    }
+    for label, tamper in cases.items():
+        raw = tmp_path / label / "raw"
+        raw.parent.mkdir()
+        acquisition = _write_raw(raw, SYNTHETIC_PAGES)
+        assert acquisition["files"][3]["file"] == "page-0001.json"
+        tamper(acquisition)
+        (raw / "acquisition.json").write_text(json.dumps(acquisition))
+        with pytest.raises(SystemExit, match="replay refused"):
+            script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / label / "o")])
+        assert not (tmp_path / label / "o").exists(), label
+    # Untampered, the same receipt replays.
+    raw = tmp_path / "ok" / "raw"
+    raw.parent.mkdir()
+    _write_raw(raw, SYNTHETIC_PAGES)
+    assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "ok" / "o")]) == 0
+
+
+def test_replay_refuses_pages_fetch_would_never_have_requested(tmp_path):
+    """Ben's review of #77 (3): the set of raw files must be exactly fetch's requests."""
+    script = _script()
+    first, second = SYNTHETIC_PAGES[0]["features"], SYNTHETIC_PAGES[1]["features"]
+    # Non-paging receipt with an extra page-0001 (fetch makes one single query).
+    raw = tmp_path / "extra" / "raw"
+    raw.parent.mkdir()
+    acquisition = _write_raw(raw, [page(first), page(second)], paging=False)
+    assert "url" not in acquisition["files"][3]  # fetch never requested it
+    with pytest.raises(SystemExit, match="replay refused: the raw files"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "extra" / "o")])
+    # Paging receipt whose first page did not report more records: fetch stopped there.
+    raw = tmp_path / "stopped" / "raw"
+    raw.parent.mkdir()
+    _write_raw(raw, [page(first), page(second)], paging=True)
+    with pytest.raises(SystemExit, match="replay refused: the raw files"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "stopped" / "o")])
+    # Ben's review of #77 (2), replay side: a single query over the cap is refused too.
+    raw = tmp_path / "cap" / "raw"
+    raw.parent.mkdir()
+    acquisition = _write_raw(raw, [page(first + second)], paging=False)
+    acquisition["max_features"] = 3
+    (raw / "acquisition.json").write_text(json.dumps(acquisition))
+    with pytest.raises(SystemExit, match="more than max_features 3"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "cap" / "o")])
+    # A layer without objectIdField cannot show which ordered requests were made.
+    raw = tmp_path / "noid" / "raw"
+    raw.parent.mkdir()
+    _write_raw(raw, SYNTHETIC_PAGES, layer={k: v for k, v in LAYER.items() if k != "objectIdField"})
+    with pytest.raises(SystemExit, match="declares no objectIdField"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "noid" / "o")])
+    for label in ("extra", "stopped", "cap", "noid"):
+        assert not (tmp_path / label / "o").exists(), label
 
 
 def test_replay_cli_builds_manifest_and_is_reproducible(tmp_path):
@@ -421,7 +530,7 @@ def test_replay_cli_builds_manifest_and_is_reproducible(tmp_path):
     assert decisions["sample_envelope"].startswith("1a:")
     assert decisions["rights"].startswith("2a:") and decisions["featurelocation"].startswith("3a:")
     assert "delegation" in decisions["decided_by"]
-    # This synthetic receipt has no bbox, so decision 1a's envelope is not claimed for it.
+    # This synthetic receipt's bbox is not the 1a envelope, so 1a is not claimed for it.
     assert decisions["sample_envelope_applies_to_this_acquisition"] is False
     assert not any("Park-interior coverage" in limit for limit in manifest["limitations"])
     assert "local_only" not in json.loads(
@@ -478,29 +587,212 @@ def test_sample_keeps_only_allowlisted_attributes(tmp_path):
     assert "notes" not in kept["features"][0]["attributes"]
 
 
-def test_a_layer_whose_native_crs_is_not_bng_is_refused(tmp_path):
+@pytest.mark.parametrize(
+    "declared",
+    [
+        {"wkid": 3857, "latestWkid": 3857},
+        # Ben's review of #77 (1): contradictory native codes are refused, either order.
+        {"wkid": 3857, "latestWkid": 27700},
+        {"wkid": 27700, "latestWkid": 3857},
+        {"wkid": "27700"},
+    ],
+)
+def test_a_layer_whose_native_crs_is_not_bng_is_refused(tmp_path, declared):
     script = _script()
-    layer = {**LAYER, "spatialReference": {"wkid": 3857, "latestWkid": 3857}}
+    layer = {**LAYER, "spatialReference": declared}
     raw = tmp_path / "raw"
     _write_raw(raw, SYNTHETIC_PAGES, layer=layer)
-    with pytest.raises(SystemExit, match="not EPSG:27700"):
+    with pytest.raises(SystemExit, match="not consistently EPSG:27700"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "o")])
+    assert not (tmp_path / "o").exists()
+
+
+def test_replay_reports_a_non_integer_count_honestly(tmp_path):
+    """With paging, fetch continues past a count that is not an integer; replay reports it."""
+    script = _script()
+    raw = tmp_path / "raw"
+    _write_raw(raw, SYNTHETIC_PAGES, count={"count": "3"})
+    script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "out")])
+    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
+    assert manifest["acquisition"]["service_count_status"] == "non_integer"
+    assert manifest["counts"]["completeness_relative_to_service"].startswith("unknown")
+    assert "not requested" not in manifest["counts"]["completeness_relative_to_service"]
+
+
+def _rewrite_raw_file(raw: Path, acquisition: dict, name: str, value) -> None:
+    """SYNTHETIC: replace one raw file and keep its receipt hash consistent."""
+    body = json.dumps(value).encode()
+    (raw / name).write_bytes(body)
+    for record in acquisition["files"]:
+        if record["file"] == name:
+            record.update(sha256=hashlib.sha256(body).hexdigest(), bytes=len(body))
+    (raw / "acquisition.json").write_text(json.dumps(acquisition))
+
+
+def test_replay_refuses_runs_fetch_could_not_have_completed(tmp_path):
+    """Ben's review of #77 (2) and (3), replay side: a receipt is accepted only if fetch could
+    have produced it as a complete run."""
+    script = _script()
+    first, second = SYNTHETIC_PAGES[0]["features"], SYNTHETIC_PAGES[1]["features"]
+
+    def refused(label, pages, match, tamper=None, **kwargs):
+        raw = tmp_path / label / "raw"
+        raw.parent.mkdir()
+        acquisition = _write_raw(raw, pages, **kwargs)
+        if tamper:
+            tamper(raw, acquisition)
+        with pytest.raises(SystemExit, match=match):
+            script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / label / "o")])
+        assert not (tmp_path / label / "o").exists(), label
+
+    # Trailing page removed: page-0000 reported more records, so fetch requested page-0001.
+    refused("truncated", [page(first, more=True)], "replay refused: the raw files", paging=True)
+    # A file served with a non-200 status (fetch stops on any non-200 response).
+    refused(
+        "status-404", SYNTHETIC_PAGES, "not 200",
+        tamper=lambda raw, a: (
+            a["files"][2].update(http_status=404),
+            (raw / "acquisition.json").write_text(json.dumps(a)),
+        ),
+    )
+    # An error-body count (fetch stops there; no page could follow).
+    refused("count-error", SYNTHETIC_PAGES, "service error body",
+            count={"error": {"code": 400, "message": "synthetic"}})
+    # Without paging: the count must be an integer no larger than max_features.
+    refused("count-over-cap", [page(first + second)], "no larger than", paging=False,
+            count={"count": 600})
+    refused("count-not-int", [page(first + second)], "no larger than", paging=False,
+            count={"count": "3"})
+    # Non-finite maxRecordCount in the layer metadata is refused, not a traceback.
+    refused(
+        "inf-max-records", SYNTHETIC_PAGES, "unreadable paging settings",
+        tamper=lambda raw, a: _rewrite_raw_file(
+            raw, a, "layer.json",
+            {**LAYER, "maxRecordCount": float("inf"),
+             "advancedQueryCapabilities": {"supportsPagination": True}},
+        ),
+    )
+    # An error body as layer metadata (fetch stops on an error body in any response).
+    refused(
+        "layer-error", SYNTHETIC_PAGES, "layer.json is a service error body",
+        tamper=lambda raw, a: _rewrite_raw_file(
+            raw, a, "layer.json",
+            {**LAYER, "maxRecordCount": 2, "advancedQueryCapabilities": {"supportsPagination": True},
+             "error": {"code": 500, "message": "synthetic"}},
+        ),
+    )
+    # With paging, a page holding more records than requested (fetch refuses it).
+    third = [feature(3, 430020.0, 380020.0), feature(4, 430030.0, 380030.0),
+             feature(5, 430040.0, 380040.0)]
+    refused("page-over-size", [page(first, more=True), page(third)], "for a request of 2",
+            paging=True)
+
+
+def test_a_page_without_a_features_list_is_refused_cleanly(tmp_path):
+    """The identity check counts it as no records; the build then refuses it by name."""
+    script = _script()
+    raw = tmp_path / "raw"
+    _write_raw(raw, [{"geometryType": "esriGeometryPoint", "features": 5, "spatialReference": BNG}])
+    with pytest.raises(SystemExit, match="inventory refused"):
         script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "o")])
     assert not (tmp_path / "o").exists()
 
 
 @pytest.mark.parametrize(
-    "count,status",
-    [({"error": {"code": 400, "message": "synthetic"}}, "service_error"), ({"count": "3"}, "non_integer")],
+    "sr", [{"wkid": 27700}, {"wkid": 27700, "latestWkid": None}, {"latestWkid": 27700}]
 )
-def test_replay_reports_a_failed_count_honestly(tmp_path, count, status):
+def test_consistent_crs_declarations_are_accepted(sr):
+    built = build([page([feature(1, 430000.0, 380000.0)], sr=sr)])
+    assert built["inventory"]["source_crs"] == "EPSG:27700"
+
+
+def test_native_crs_uses_data_declarations_and_only_records_the_extent(tmp_path):
     script = _script()
-    raw = tmp_path / "raw"
-    _write_raw(raw, SYNTHETIC_PAGES, count=count)
-    script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "out")])
-    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
-    assert manifest["acquisition"]["service_count_status"] == status
-    assert manifest["counts"]["completeness_relative_to_service"].startswith("unknown")
-    assert "not requested" not in manifest["counts"]["completeness_relative_to_service"]
+    # A stored bounding box in another CRS does not decide (it is recorded, not checked).
+    extent = {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1, "spatialReference": {"wkid": 3857}}
+    raw = tmp_path / "ok" / "raw"
+    raw.parent.mkdir()
+    _write_raw(raw, SYNTHETIC_PAGES, layer={**LAYER, "extent": extent})
+    assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "ok" / "o")]) == 0
+    manifest = json.loads((tmp_path / "ok" / "o" / "manifest.json").read_text())
+    assert manifest["layer_schema"]["extent_spatialReference"] == {"wkid": 3857}
+    assert manifest["layer_schema"]["native_crs_check"].startswith("matches")
+    # A storage CRS (sourceSpatialReference) that disagrees is refused.
+    raw = tmp_path / "src" / "raw"
+    raw.parent.mkdir()
+    _write_raw(raw, SYNTHETIC_PAGES, layer={**LAYER, "sourceSpatialReference": {"wkid": 3857}})
+    with pytest.raises(SystemExit, match="not consistently EPSG:27700"):
+        script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "src" / "o")])
+    # A layer whose only declaration is latestWkid 27700 (wkid null) is accepted.
+    raw = tmp_path / "latest" / "raw"
+    raw.parent.mkdir()
+    _write_raw(raw, SYNTHETIC_PAGES,
+               layer={**LAYER, "spatialReference": {"wkid": None, "latestWkid": 27700}})
+    assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "latest" / "o")]) == 0
+
+
+def test_fetch_refuses_a_page_larger_than_requested(tmp_path, monkeypatch):
+    """With paging, a server that ignores resultRecordCount cannot push past the cap."""
+    script = _script()
+    layer = {**LAYER, "maxRecordCount": 2, "advancedQueryCapabilities": {"supportsPagination": True}}
+    third = [feature(3, 430020.0, 380020.0), feature(4, 430030.0, 380030.0),
+             feature(5, 430040.0, 380040.0)]
+
+    def opener(request):
+        url = request.full_url
+        if "returnCountOnly" in url:
+            value = {"count": 3}
+        elif "/query" in url:
+            value = page(third, more=True)
+        else:
+            value = layer
+        return _FakeResponse(value, url)
+
+    monkeypatch.setattr(script, "_open", opener)
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    with pytest.raises(SystemExit, match="returned 3 features for a request of 2"):
+        script.main(
+            ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approval-ref",
+             "role:operator", "--raw-dir", str(raw), "--output-dir", str(out)]
+        )
+    assert json.loads((raw / "acquisition.json").read_text())["status"] == "failed"
+    assert not out.exists()
+
+
+def test_a_multi_page_fetch_replays_through_the_identity_check(tmp_path, monkeypatch):
+    """fetch's own paging loop and the replay rebuild must agree page by page (not only via
+    the test helper, which uses the replay builder)."""
+    script = _script()
+    first, second = SYNTHETIC_PAGES[0]["features"], SYNTHETIC_PAGES[1]["features"]
+    layer = {**LAYER, "maxRecordCount": 2, "advancedQueryCapabilities": {"supportsPagination": True}}
+    requested = []
+
+    def opener(request):
+        url = request.full_url
+        requested.append(url)
+        if "returnCountOnly" in url:
+            value = {"count": 3}
+        elif "resultOffset=0" in url:
+            value = page(first, more=True)
+        elif "resultOffset=2" in url:
+            value = page(second)
+        elif "/query" in url:
+            raise AssertionError(f"unexpected page request {url}")
+        else:
+            value = layer
+        return _FakeResponse(value, url)
+
+    monkeypatch.setattr(script, "_open", opener)
+    raw, out = tmp_path / "raw", tmp_path / "out"
+    assert script.main(
+        ["fetch", "--bbox-27700", "433700,387100,434500,387700", "--acquisition-approval-ref",
+         "role:operator", "--raw-dir", str(raw), "--output-dir", str(out)]
+    ) == 0
+    files = json.loads((raw / "acquisition.json").read_text())["files"]
+    assert [f["file"] for f in files] == ["layer.json", "count.json", "page-0000.json", "page-0001.json"]
+    assert sum("resultOffset" in u for u in requested) == 2
+    # The same raw directory replays: fetch's recorded URLs pass the identity check.
+    assert script.main(["replay", "--raw-dir", str(raw), "--output-dir", str(tmp_path / "again")]) == 0
 
 
 def test_replay_refuses_changed_bytes_without_leaving_an_output_dir(tmp_path):
@@ -835,16 +1127,13 @@ def test_a_negative_service_count_is_refused(tmp_path, monkeypatch):
     acquisition = json.loads((raw / "acquisition.json").read_text())
     assert [f["file"] for f in acquisition["files"]] == ["layer.json", "count.json"]
     assert acquisition["status"] == "failed" and not out.exists()
-    # On replay a negative count is never used as a service count.
+    # A receipt with a negative count and pages is one fetch could never have completed,
+    # so replay refuses it (the count is never used either way).
     raw2 = tmp_path / "raw2"
     _write_raw(raw2, SYNTHETIC_PAGES, count={"count": -1})
-    script.main(["replay", "--raw-dir", str(raw2), "--output-dir", str(tmp_path / "o2")])
-    manifest = json.loads((tmp_path / "o2" / "manifest.json").read_text())
-    assert manifest["acquisition"]["service_count_status"] == "negative_count"
-    assert manifest["counts"]["service_reported_count"] is None
-    assert manifest["counts"]["completeness_relative_to_service"] == (
-        "unknown: service count negative_count"
-    )
+    with pytest.raises(SystemExit, match="replay refused: the service count is negative"):
+        script.main(["replay", "--raw-dir", str(raw2), "--output-dir", str(tmp_path / "o2")])
+    assert not (tmp_path / "o2").exists()
 
 
 _LAYER = "https://sheffieldcitycouncil.cloud.esriuk.com/server/rest/services/AGOL/INSPIRE/FeatureServer/14"

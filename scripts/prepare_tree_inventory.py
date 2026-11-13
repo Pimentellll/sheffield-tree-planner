@@ -272,6 +272,164 @@ def _query_url(params: dict) -> str:
     return LAYER_URL + "/query?" + urllib.parse.urlencode(params)
 
 
+# The request URLs fetch() makes. Replay rebuilds them with the same functions and requires
+# exact equality, so a receipt can only describe requests to the fixed publisher layer.
+LAYER_METADATA_URL = LAYER_URL + "?f=json"
+
+
+def _spatial(bbox) -> dict:
+    return {
+        "geometry": ",".join(repr(float(v)) for v in bbox),
+        "geometryType": "esriGeometryEnvelope",
+        "inSR": "27700",
+        "spatialRel": "esriSpatialRelIntersects",
+        "where": "1=1",
+    }
+
+
+def _common(bbox) -> dict:
+    return {**_spatial(bbox), "outFields": "*", "returnGeometry": "true", "outSR": "27700", "f": "json"}
+
+
+def _count_url(bbox) -> str:
+    return _query_url({**_spatial(bbox), "returnCountOnly": "true", "f": "json"})
+
+
+def _page_url(bbox, id_field=None, offset=None, size=None) -> str:
+    if id_field is None:  # the single query of a layer without paging
+        return _query_url(_common(bbox))
+    return _query_url(
+        {
+            **_common(bbox),
+            "orderByFields": f"{id_field} ASC",
+            "resultOffset": str(offset),
+            "resultRecordCount": str(size),
+        }
+    )
+
+
+def _paging_from_layer(layer: dict) -> tuple[bool, int]:
+    """fetch()'s own reading of the layer metadata: (supports_pagination, page_size)."""
+    page_size = min(int(layer.get("maxRecordCount") or 1000), 1000)
+    paging = bool((layer.get("advancedQueryCapabilities") or {}).get("supportsPagination"))
+    return paging, page_size
+
+
+def _feature_count(page) -> int:
+    """Records in a page; anything that is not a features list counts as none (the build
+    then refuses it with its own message)."""
+    features = page.get("features") if isinstance(page, dict) else None
+    return len(features) if isinstance(features, list) else 0
+
+
+def expected_request_urls(acquisition: dict, id_field: str, pages: list) -> dict:
+    """The exact URL fetch() requested for each raw file, rebuilt from the receipt with the
+    same builders and the same stop rule: there is no entry for a page fetch() would never
+    have requested."""
+    bbox = acquisition["bbox_27700"]
+    urls = {"layer.json": LAYER_METADATA_URL, "count.json": _count_url(bbox)}
+    if not acquisition["supports_pagination"]:
+        urls["page-0000.json"] = _page_url(bbox)
+        return urls
+    max_features, offset, index = acquisition["max_features"], 0, 0
+    while offset < max_features:
+        size = min(acquisition["page_size"], max_features - offset)
+        urls[f"page-{index:04d}.json"] = _page_url(bbox, id_field, offset, size)
+        if index >= len(pages):
+            # fetch() would have requested this page but the receipt has none: the
+            # resulting set mismatch refuses a receipt with its trailing pages removed.
+            break
+        page = pages[index]
+        received = _feature_count(page)
+        offset += received
+        index += 1
+        if received < size or not (isinstance(page, dict) and page.get("exceededTransferLimit")):
+            break
+    return urls
+
+
+def _check_request_identity(acquisition: dict, layer: dict, count_value, pages: list) -> None:
+    """Before SOURCE is stamped on the outputs, the receipt must describe exactly the
+    requests fetch() would have made to the fixed layer, and only a run fetch() could have
+    completed: the same paging reading of the layer metadata, the same set of files, each
+    with the exact request URL, served from it with HTTP 200, the same count-based stops
+    and the same feature cap."""
+
+    def refuse(why: str):
+        raise SystemExit(f"replay refused: {why}")
+
+    required = ("layer_url", "bbox_27700", "supports_pagination", "page_size", "max_features")
+    missing = [k for k in required if k not in acquisition]
+    if missing:
+        refuse(f"the receipt cannot show the fixed publisher-layer requests (missing {missing})")
+    if acquisition["layer_url"] != LAYER_URL:
+        refuse(f"layer_url {acquisition['layer_url']!r} is not the fixed publisher layer")
+    id_field = layer.get("objectIdField") if isinstance(layer, dict) else None
+    if not isinstance(id_field, str) or not id_field:
+        refuse("layer metadata declares no objectIdField")
+    try:
+        paging, page_size = _paging_from_layer(layer)
+    except (TypeError, ValueError, AttributeError, OverflowError):
+        refuse("layer metadata has unreadable paging settings")
+    if (acquisition["supports_pagination"], acquisition["page_size"]) != (paging, page_size):
+        refuse(
+            "the receipt's paging settings "
+            f"({acquisition['supports_pagination']}, {acquisition['page_size']}) differ from "
+            f"the layer metadata's ({paging}, {page_size})"
+        )
+    expected = expected_request_urls(acquisition, id_field, pages)
+    names = [record.get("file") for record in acquisition.get("files", [])]
+    if sorted(names) != sorted(expected):
+        refuse(
+            f"the raw files {sorted(names)} are not exactly the requests fetch would have made "
+            f"({sorted(expected)})"
+        )
+    for record in acquisition.get("files", []):
+        url = record.get("url")
+        if not isinstance(url, str) or url != expected[record["file"]]:
+            refuse(f"{record['file']} was not requested from the fixed publisher-layer URL")
+        if record.get("final_url") != url:
+            refuse(f"{record['file']} was not served from its request URL")
+        if record.get("http_status") != 200:
+            refuse(f"{record['file']} has HTTP status {record.get('http_status')!r}, not 200")
+    # fetch() stops on an error body in any response, before any page on a negative count,
+    # and, without paging, unless the count is an integer no larger than max_features.
+    if isinstance(layer, dict) and "error" in layer:
+        refuse("layer.json is a service error body; fetch would have stopped there")
+    if isinstance(count_value, dict) and "error" in count_value:
+        refuse("count.json is a service error body; fetch would have stopped there")
+    if any(isinstance(p, dict) and "error" in p for p in pages):
+        refuse("a page is a service error body; fetch would have stopped there")
+    # With paging, fetch() refuses a page holding more records than it asked for, so the
+    # pages together can never exceed max_features.
+    if acquisition["supports_pagination"]:
+        offset = 0
+        for index, page_value in enumerate(pages):
+            size = min(acquisition["page_size"], acquisition["max_features"] - offset)
+            received = _feature_count(page_value)
+            if received > size:
+                refuse(
+                    f"page {index} holds {received} features for a request of {size}; fetch "
+                    "would have refused it"
+                )
+            offset += received
+    reported = count_value.get("count") if isinstance(count_value, dict) else None
+    if type(reported) is int and reported < 0:
+        refuse(f"the service count is negative ({reported}); fetch would have stopped there")
+    if not acquisition["supports_pagination"]:
+        if type(reported) is not int or reported > acquisition["max_features"]:
+            refuse(
+                f"without paging the service count must be an integer no larger than "
+                f"max_features {acquisition['max_features']} (got {reported!r})"
+            )
+        received = _feature_count(pages[0]) if pages else 0
+        if received > acquisition["max_features"]:
+            refuse(
+                f"the single query holds {received} features, more than max_features "
+                f"{acquisition['max_features']}"
+            )
+
+
 def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
     """Acquire layer metadata, the service count and pages; always leave a receipt."""
     acquisition = {
@@ -314,22 +472,13 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
         return value
 
     try:
-        layer = get("layer.json", LAYER_URL + "?f=json")
+        layer = get("layer.json", LAYER_METADATA_URL)
         id_field = layer.get("objectIdField")
         if not isinstance(id_field, str) or not id_field:
             raise SystemExit("layer metadata declares no objectIdField")
-        page_size = min(int(layer.get("maxRecordCount") or 1000), 1000)
-        paging = bool((layer.get("advancedQueryCapabilities") or {}).get("supportsPagination"))
+        paging, page_size = _paging_from_layer(layer)
         acquisition.update(page_size=page_size, supports_pagination=paging)
-        spatial = {
-            "geometry": ",".join(repr(v) for v in bbox),
-            "geometryType": "esriGeometryEnvelope",
-            "inSR": "27700",
-            "spatialRel": "esriSpatialRelIntersects",
-            "where": "1=1",
-        }
-        count = get("count.json", _query_url({**spatial, "returnCountOnly": "true", "f": "json"}))
-        common = {**spatial, "outFields": "*", "returnGeometry": "true", "outSR": "27700", "f": "json"}
+        count = get("count.json", _count_url(bbox))
         reported_count = count.get("count") if isinstance(count, dict) else None
         if type(reported_count) is int and reported_count < 0:
             raise SystemExit(
@@ -349,7 +498,7 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
                     f"layer does not support paging and the service reports {reported} features, "
                     f"more than --max-features {max_features}; refusing an uncapped single query"
                 )
-            page = get("page-0000.json", _query_url(common))
+            page = get("page-0000.json", _page_url(bbox))
             received = len(page.get("features") or []) if isinstance(page, dict) else 0
             if received > max_features:  # the layer changed between count and query
                 raise SystemExit(
@@ -360,15 +509,14 @@ def fetch(bbox, max_features: int, raw_dir: Path, approval: str) -> None:
             pages, offset = 0, 0
             while offset < max_features:
                 size = min(page_size, max_features - offset)
-                params = {
-                    **common,
-                    "orderByFields": f"{id_field} ASC",
-                    "resultOffset": str(offset),
-                    "resultRecordCount": str(size),
-                }
-                page = get(f"page-{pages:04d}.json", _query_url(params))
+                page = get(f"page-{pages:04d}.json", _page_url(bbox, id_field, offset, size))
                 pages += 1
-                received = len(page.get("features") or [])
+                received = _feature_count(page)
+                if received > size:  # the server ignored resultRecordCount
+                    raise SystemExit(
+                        f"page {pages - 1} returned {received} features for a request of "
+                        f"{size}; refusing the acquisition (--max-features {max_features})"
+                    )
                 offset += received
                 if received < size or not page.get("exceededTransferLimit"):
                     break
@@ -532,17 +680,30 @@ def _recorded_command(args: argparse.Namespace) -> list[str]:
 
 def _native_crs_check(layer: dict) -> str:
     """Queries force outSR=27700, so the page CRS cannot reveal a server reprojection; the
-    layer's own declared CRS must agree, or the build is refused."""
-    declared = layer.get("spatialReference")
-    if not isinstance(declared, dict):
-        return "not declared by the layer metadata; native CRS unverified"
-    codes = [declared.get(k) for k in ("latestWkid", "wkid") if type(declared.get(k)) is int]
+    layer's own declared CRS must agree, or the build is refused. Every code declared at the
+    top level or under ``sourceSpatialReference`` (the CRS the data is stored in) is
+    checked. ``extent.spatialReference`` only describes a stored bounding box (implausible
+    for this layer, see the README), so it is recorded in the manifest but never decides.
+    A layer that declares no code at all is recorded as unverified, not refused."""
+    places = {
+        "spatialReference": layer.get("spatialReference"),
+        "sourceSpatialReference": layer.get("sourceSpatialReference"),
+    }
+    codes = {
+        f"{place}.{key}": ref[key]
+        for place, ref in places.items()
+        if isinstance(ref, dict)
+        for key in ("latestWkid", "wkid")
+        if ref.get(key) is not None
+    }
     if not codes:
         return "not declared by the layer metadata; native CRS unverified"
-    if 27700 not in codes:
+    # Every declared code must be the integer 27700: a contradictory pair (for example
+    # latestWkid 27700 with wkid 3857) is refused, not resolved by taking one of them.
+    if any(type(c) is not int or c != 27700 for c in codes.values()):
         raise SystemExit(
-            f"layer native CRS wkid {codes[0]} is not EPSG:27700; outSR=27700 would hide a "
-            "server-side reprojection"
+            f"layer native CRS {codes} is not consistently EPSG:27700; outSR=27700 would hide "
+            "a server-side reprojection"
         )
     return "matches: layer declares EPSG:27700"
 
@@ -556,6 +717,7 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
             "never a person's name); refusing to write a committable manifest"
         )
     _validate_receipt_values(acquisition)
+    _check_request_identity(acquisition, layer, count_value, pages)
     native_crs = _native_crs_check(layer)
     fields = layer.get("fields") or []
     id_field = layer.get("objectIdField")
@@ -636,6 +798,11 @@ def build_outputs(raw_dir: Path, output_dir: Path, sample_size: int, keep_locati
             "name": layer.get("name"),
             "geometryType": layer.get("geometryType"),
             "spatialReference": layer.get("spatialReference"),
+            "sourceSpatialReference": layer.get("sourceSpatialReference"),
+            # Informational only: the CRS of a stored bounding box, never of the data.
+            "extent_spatialReference": (layer.get("extent") or {}).get("spatialReference")
+            if isinstance(layer.get("extent"), dict)
+            else None,
             "native_crs_check": native_crs,
             "hasZ": layer.get("hasZ"),
             "objectIdField": id_field,

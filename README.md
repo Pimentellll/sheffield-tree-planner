@@ -1,79 +1,117 @@
-# Sheffield Tree Planner
+# CANOPY Sheffield · tree-planning workbench
 
-An urban tree-planning project for NVIDIA Hack for Impact Sheffield, 13 November 2026.
+**Event-day coordination:** [Team execution board, owners, Spark proof gates and presentation handoff](docs/EVENT_DAY_EXECUTION_2026-11-13.md). The 15:00 target / 16:00 latest engineering freeze is the team’s plan; the organiser’s actual cutoff takes precedence. [BUILD](docs/BUILD.md) remains the canonical engineering evidence record.
 
-The intended system combines deterministic shade analysis and constrained tree-placement search with a local planning agent that investigates alternatives and explains computed evidence. Sheffield is the first case study; existing trees, winter sunlight, costs and uncertainty remain explicit.
+Compare where trees could provide additional shade, what a proposed layout costs, and which modelled constraints it satisfies.
 
-## Status
+## Why this exists
 
-**Application implementation has not started.** This branch adds an installable **readiness diagnostic**, a pinned inference-service candidate and a [DGX Spark access/integration runbook](docs/DGX_SPARK.md). It is not a simulator, product agent or verified Spark deployment. Protocol tests exercise a labelled synthetic HTTP fixture, not a model; hosted checks likewise do not provide GPU evidence.
+A tree that looks well placed in a 3D view might shade the wrong place, overlap shade already provided by a building, or exceed the planting budget. Comparing alternatives also means keeping the location, time period and assumptions consistent. CANOPY joins a numerical evaluator to an editable planning studio so a proposal can be inspected, changed and computed again—with the evidence kept alongside it.
 
-## Run the readiness diagnostic
+The project is being developed for NVIDIA Hack for Impact Sheffield. **The runnable demonstration uses labelled synthetic geometry, not an accepted Sheffield site or a planting recommendation.**
 
-Requires Python 3.11 or newer. This diagnostic needs no runtime dependencies, model weights or credentials for its `environment` command. From a source checkout, install in an isolated environment:
+## What works, and what remains
 
-Windows PowerShell, with [uv](https://docs.astral.sh/uv/) installed:
+The integrated source contains:
 
-```powershell
-uv venv --python 3.11 .venv
-uv pip install --python .venv/Scripts/python.exe .
-.venv/Scripts/sheffield-readiness.exe --version
-.venv/Scripts/sheffield-readiness.exe environment
-.venv/Scripts/python.exe -m unittest discover -s tests -v
-```
+- A React/Three.js studio with catalogue-position editing, accepted revisions, stale-result warnings and a review-pack download.
+- A Python CPU evaluator for baseline versus proposed-tree shade, including static occluders, multiple trees, growth/leaf-state cases and supported winter limits.
+- Finite-catalogue search with upfront costs in integer pence, overlap-aware marginal gains and a separate final-layout constraint checker. Results are best evaluated alternatives, not claimed global optima.
+- Controlled relocation and scenario comparisons, with exact inputs, run IDs, units and source hashes.
+- Immutable SQLite scenarios, asynchronous jobs, generated API types, rights-checked assets and current-selection/cache safeguards.
+- A bounded local-model adapter and domain-tool loop. In a local development test (laptop/WSL, not the DGX Spark), a small Qwen model (not Nemotron) selected `evaluate_layout` and cited the stored run; tiny-model metadata completion still fails safely. Nemotron tool use on the DGX, reliable autonomous investigation and an AI advantage have **not** been established.
 
-Linux:
+The full product is not finished. Real Sheffield geometry/rights/parity, target-model tool use on the DGX, complete autonomous planning, independent manual-versus-AI evaluation and full-system acceptance remain open. SSH access to the assigned DGX is verified. Ben reports ([#54](https://github.com/Pimentellll/sheffield-tree-planner/issues/54), team-reported) a loopback-only SSH preview of the CI-built release wheel (frontend built on the DGX) in which a browser click completed an evaluation on synthetic flat-ground geometry; it is a controlled baseline, not a deployment, and his hands-on acceptance is pending. A single Nemotron API smoke returned a response without a tool call. [BUILD](docs/BUILD.md) records issue-level evidence and the next gates; the #54 report is newer than BUILD's DGX entries.
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install .
-.venv/bin/sheffield-readiness --version
-.venv/bin/sheffield-readiness environment
-.venv/bin/python -m unittest discover -s tests -v
-```
+### A concrete run
 
-The receipt describes the machine running the diagnostic and explicitly does not certify Spark/GPU availability. After a real model server and SSH tunnel exist:
+Launch the physical studio below, evaluate the initial placement, run a constrained search, then change a supported requirement and accept it. The old result becomes stale; the backend computes a new result for the accepted revision. The comparison and review-pack views expose the stored records rather than estimates written by the UI.
+
+For a repeatable non-interactive check, run the installed `tree_planner.evaluators.physical_demo` module. It exercises real loopback HTTP, jobs, CPU evaluation, search and comparisons, writes the observed evidence, and shuts down its owned server. It does not need a model or a DGX.
+
+## How it is built
+
+- **Numerical tools own the numbers.** The model can request registered domain operations, but has no shell, arbitrary network or direct database tool.
+- **Inputs and results have identities.** Accepted/hypothetical scenarios, immutable revisions, input fingerprints and selection slots prevent late or cached results being presented as current.
+- **Feasibility is checked separately.** The search proposes layouts; a distinct validator checks the supported hard constraints. Unknown utilities, soil and permissions stay survey requirements.
+- **Geometry and uncertainty are explicit.** The CPU runtime currently supports an authored, flat-ground scene/catalogue. It does not infer canopy semantics from a real-world mesh or equate shade with cooling, carbon, air quality or flood reduction.
+
+The canonical product version is `0.2.0` in `pyproject.toml`, a minor expansion from the readiness-only `0.1.0`. It has not been tagged or published as a release. The frontend's private npm version is component metadata, not a second product version.
+
+## Install and run
+
+Requires Python 3.11+ (CI covers 3.11/3.12), Node.js 22.12+ and [uv](https://docs.astral.sh/uv/). From a checkout:
 
 ```text
-sheffield-readiness inference --base-url http://127.0.0.1:8001/v1 --model tree-planner-local --disable-thinking
+uv sync --frozen --extra dev --python 3.11
+npm ci --prefix frontend
 ```
 
-Use the executable inside the environment above, or activate that environment. On Spark itself, use port `8000`. `--disable-thinking` is for the selected Nemotron profile; omit it for servers that do not support that option. Only loopback endpoints are accepted; there is no hosted fallback. Nonzero exit means failure, not permission to substitute a scripted answer. This proves transport and a harmless tool-observation exchange only; B09 still needs real domain integration.
+**Windows PowerShell — terminal 1, repository root:**
 
-Build the distributable with `uv build`. Install the resulting wheel, rather than an editable source tree, into a fresh environment for artifact proof. `pyproject.toml` is the only package-version source; see [CHANGELOG](CHANGELOG.md). The wheel packages the diagnostic only. Deployment templates and project documentation stay in this repository. There is no application image/package yet.
+```powershell
+.venv/Scripts/python.exe frontend/scripts/serve_physical.py --workspace ../canopy-physical-01 --winter
+```
 
-CI runs unit/protocol checks, builds wheel/sdist, clean-installs the wheel outside the source tree and runs `--version`, `--help` and `environment`. It does not download a model, contact a DGX or deploy. A matching, separately authorised version-tag push can create a private **draft** release with checksummed assets; no tag/release has been created and that trigger is not yet exercised.
+**Windows PowerShell — terminal 2, repository root:**
 
-## Start developing
+```powershell
+$env:CANOPY_SESSION = (Resolve-Path ../canopy-physical-01/session.json).Path
+npm --prefix frontend run dev -- --host 127.0.0.1
+```
 
-1. Read the [development entry point](docs/README.md).
-2. Use [BUILD.md](docs/BUILD.md) as the single task/decision home. Begin B01 (shared schemas and portable application foundation) with B03 (site/rights audit) in parallel; B02 integration follows the required B01 models.
-3. Agree the producer/consumer meaning in [CONTRACTS.md](docs/CONTRACTS.md) before parallel implementation. The first integrated target is **baseline → one proposed tree → computed difference → UI**, with stale-result rejection.
-4. Implement and test against the [validation criteria](docs/VALIDATION.md). Application setup/run commands follow actual implementation; the readiness commands above cover only the diagnostic.
+**Linux — terminal 1, repository root:**
 
-### Working references
+```bash
+.venv/bin/python frontend/scripts/serve_physical.py --workspace ../canopy-physical-01 --winter
+```
 
-- [Product and architecture](docs/SPEC.md)
-- [Numerical specification](docs/NUMERICS.md)
-- [Sources and evidence boundaries](docs/SOURCES.md)
-- [Agentic architecture, feature review and team inputs](docs/references/AGENTIC_FEATURE_REVIEW.md)
-- [Historical research handoff](docs/references/RESEARCH_HANDOFF.md)
-- [Coding-assistant boundaries](AGENTS.md)
+**Linux — terminal 2, repository root:**
 
-## Team and collaboration
+```bash
+CANOPY_SESSION="$(realpath ../canopy-physical-01/session.json)" npm --prefix frontend run dev -- --host 127.0.0.1
+```
 
-- Ben — [bbeennyy860-cyber](https://github.com/bbeennyy860-cyber), repository owner.
-- Arnav — [reverez](https://github.com/reverez).
-- Alex — [akurkar07](https://github.com/akurkar07).
+Open **http://127.0.0.1:5173**. The API uses loopback port 8765. Use a new workspace name for each fresh run; the launcher refuses to overwrite an existing workspace. Stop both terminals with Ctrl-C. This is a local demonstration, not a publicly authenticated service.
 
-Invited collaborators must accept GitHub's invitation before their write access is active. Proposed implementation responsibilities remain in BUILD; repository access does not establish agreement to every technical default.
+Run the numerical evidence path without the browser:
 
-Use small scoped branches and isolated worktrees/clones for concurrent writers. Update the relevant docs and tests with interface changes. PRs open ready (not draft) with no reviewers and are merged automatically by the auto-merge workflow when CI passes; there are no sign-off gates (see AGENTS.md, Merge policy). No CODEOWNERS auto-review requests or automated deployment is configured by this bootstrap.
+```text
+uv run --frozen --no-sync python -m tree_planner.evaluators.physical_demo --output ../canopy-proof-01
+```
 
-Advance development is planned; retain truthful prior-work/AI/asset provenance and confirm current entry eligibility separately. Do not commit credentials, restricted site assets, model weights, private working logs or generated proof bundles. This private repository has no open-source licence assigned by this setup; visibility/licensing changes require team approval.
+For the separate pinned one-tree reference, failure/zero rehearsal and UI controls, see [frontend setup](frontend/README.md), [demo runbook](frontend/DEMO.md), [physical runtime](docs/PHYSICAL_RUNTIME.md) and [reference runtime](docs/REFERENCE_RUNTIME.md).
 
-Canonical repository: https://github.com/bbeennyy860-cyber/sheffield-tree-planner
+### Build an installable artifact
 
-## MVP and milestones
+```text
+uv build
+```
 
-The [feature priority and milestone plan](docs/FEATURE_PRIORITIES.md) defines the competitive P0 MVP, P1 enhancements, longer-term P2/P3 scope, and the smaller first vertical slice. BUILD remains the single task-status home; the product capability status is still planned.
+The wheel packages the Python backend and readiness CLI. The source distribution additionally contains frontend source, its lockfile and launch scripts; it needs `npm ci` and a frontend build. Neither artifact includes model weights, restricted site assets or the external checkout used by the historical one-tree reference. Install the built wheel in a fresh environment and run `python -m tree_planner.evaluators.physical_demo` outside the source checkout for a real package smoke test.
+
+### Tests
+
+```text
+uv run --frozen --no-sync python -m pytest -q -rs
+uv run --frozen --no-sync ruff check src backend scripts tests ci
+uv run --frozen --no-sync python scripts/generate_api_types.py --check
+npm --prefix frontend run build
+npm --prefix frontend test
+```
+
+The reference tests need the exact numerical checkout documented in [REFERENCE_RUNTIME](docs/REFERENCE_RUNTIME.md). Live-model tests are explicit opt-ins; skipped device/model tests are not passes. The frontend's `test:physical` and `test:browser` scripts run against real, fresh backend/UI sessions; follow its setup instructions rather than reusing a demo workspace.
+
+[Readiness CI](.github/workflows/readiness.yml) checks Linux/Windows, generated contracts, built artifacts and installed smoke paths. [Frontend CI](.github/workflows/frontend.yml) checks the build, units and real browser integrations. Consult the checks on the exact commit: an older green branch does not verify a new one. PR checks do not deploy or download models. Tags, releases, DGX deployment and competition submission are separate operations.
+
+## Team and next steps
+
+- Ben — backend, integration and local-model tools: [bbeennyy860-cyber](https://github.com/bbeennyy860-cyber).
+- Arnav — numerical and geospatial foundations: [reverez](https://github.com/reverez).
+- Alex — planning studio and evidence UI: [akurkar07](https://github.com/akurkar07).
+
+Start with [development documentation](docs/README.md) and the current [BUILD status](docs/BUILD.md). The [contracts](docs/CONTRACTS.md), [numerics](docs/NUMERICS.md) and [validation criteria](docs/VALIDATION.md) define meaning and evidence; the [feature catalogue](docs/FEATURE_PRIORITIES.md) distinguishes the MVP from later research.
+
+Use scoped branches and isolated worktrees. Preserve source credit, advance-work provenance and existing teammates' branches. Never commit passwords, private keys, private prompts, raw restricted assets or generated runtime workspaces. Repository visibility is public; no open-source licence has been assigned. Confirm event eligibility and third-party asset/model permissions independently.
+
+Canonical repository: https://github.com/Pimentellll/sheffield-tree-planner.

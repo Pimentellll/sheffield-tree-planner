@@ -1,0 +1,101 @@
+name: frontend checks
+
+on:
+  pull_request:
+    paths: ['frontend/**', 'generated/**', 'backend/**', 'pyproject.toml', 'uv.lock', 'ci/uv-requirements.txt', '.github/workflows/frontend.yml', '.github/scripts/frontend_lifecycle_test.py']
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Pimentellll/sheffield-tree-planner
+          ref: 33493a327a99e5de2e579b5c3070ada137047c7e
+          path: .ci-numerics
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        id: python
+        with:
+          python-version: '3.12'
+      - name: Install frontend and backend
+        env:
+          UV_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          npm ci --prefix frontend --no-audit --no-fund
+          python -m pip install --require-hashes -r ci/uv-requirements.txt
+          uv sync --frozen
+      - name: Typecheck, build and unit tests
+        working-directory: frontend
+        run: |
+          npm run build
+          npm test
+      - name: Test browser server lifecycle
+        run: python .github/scripts/frontend_lifecycle_test.py
+      - name: Integrated browser checks
+        env:
+          CANOPY_BROWSER: /usr/bin/google-chrome
+        run: |
+          set -Eeuo pipefail
+          backend_pid= vite_pid=
+          cleanup() {
+            for pid in "$vite_pid" "$backend_pid"; do
+              if [[ -n "$pid" ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+            done
+            backend_pid= vite_pid=
+          }
+          trap cleanup EXIT
+          ready() {
+            local url="$1" pid="$2"
+            for i in $(seq 60); do
+              kill -0 "$pid" 2>/dev/null || return 1
+              if curl -fsS "$url" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            return 1
+          }
+          for mode in physical reference; do
+            export CANOPY_DEV_WORKSPACE="$RUNNER_TEMP/canopy-$mode"
+            export CANOPY_SESSION="$CANOPY_DEV_WORKSPACE/session.json"
+            if [[ "$mode" == physical ]]; then
+              .venv/bin/python frontend/scripts/serve_physical.py --workspace "$CANOPY_DEV_WORKSPACE" --winter > "$RUNNER_TEMP/backend-$mode.log" 2>&1 &
+            else
+              .venv/bin/python frontend/scripts/serve_reference.py --workspace "$CANOPY_DEV_WORKSPACE" --numerical-source .ci-numerics > "$RUNNER_TEMP/backend-$mode.log" 2>&1 &
+            fi
+            backend_pid=$!
+            ready http://127.0.0.1:8765/api/v1/health "$backend_pid"
+            (cd frontend && exec node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 --strictPort) > "$RUNNER_TEMP/vite-$mode.log" 2>&1 &
+            vite_pid=$!
+            ready http://127.0.0.1:5173/ "$vite_pid"
+            if [[ "$mode" == physical ]]; then node frontend/tests/physical-check.cjs; else node frontend/tests/browser-check.cjs; fi
+            cleanup
+          done
+      - name: Show server logs
+        if: failure()
+        run: cat "$RUNNER_TEMP"/backend-*.log "$RUNNER_TEMP"/vite-*.log || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: frontend-browser-evidence
+          path: frontend/artifacts/
+          if-no-files-found: ignore

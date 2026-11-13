@@ -1,0 +1,77 @@
+# Impact and feasibility research — event-day synthesis
+
+**Scope:** targeted research for judging (Impact, Technical Execution, Feasibility) and for the science checks. The broad literature, software and data review is in the [deep research dossier](../../references/DEEP_RESEARCH_DOSSIER.md) and [SOURCES](../../SOURCES.md); it is not repeated here. Sources marked **new** were not cited in the repository before this package. Every statement is labelled **[S]** source-supported, **[R]** repository-observed, or **[I]** research-derived inference.
+
+## 1. The real problem in Sheffield
+
+- **[S]** Sheffield manages street trees through a formal partnership strategy. The *Sheffield Street Tree Partnership Strategy* was approved by Cabinet on 17 March 2021 and published in May 2021 as a supplement ("sub-strategy") to the *Sheffield Trees and Woodlands Strategy 2018–33* (**new:** [strategy PDF](https://www.sheffield.gov.uk/sites/default/files/docs/roads-and-pavements/managing-trees/sheffield-street-tree-strategy-2021.pdf); [Cabinet report](https://sheffieldcc.moderngov.co.uk/documents/s43856/Cabinet%20Report%20Street%20Tree%20Partnership%20Strategy.pdf); [council street-tree page](https://www.sheffield.gov.uk/home/roads-pavements/managing-street-trees)).
+- **[S]** The Partnership brings together Sheffield City Council, Amey (highways contractor), Sheffield & Rotherham Wildlife Trust, the Woodland Trust and Sheffield Tree Action Groups ([Wildlife Trust partnership page](https://www.wildsheffield.com/getinvolved/sheffield-street-tree-partnership/sheffield-street-tree-partnership-meeting-minutes/)). Tree decisions in Sheffield are therefore multi-stakeholder and publicly scrutinised. The strategy followed a years-long city dispute over street-tree removals ([The Star](https://thestar.co.uk/news/environment/sheffield-groups-sign-pledge-to-deliver-on-new-street-tree-plan-including-volunteer-tree-wardens-3342202)), which local judges may know about. **[I]** Transparent, explainable comparison of options is a credible need in that setting. Automated or opaque recommendation is not.
+- **[S]** Highway works and tree retention interact operationally. The council's December 2021 *Street Tree Appraisal Report* sets out issues and options for resurfacing roads and footways while retaining street trees, and refers individual replacement decisions to the strategy's Appendix 5 process (**new:** [appraisal report](https://www.sheffield.gov.uk/sites/default/files/docs/roads-and-pavements/managing-trees/street-tree-appraisal-report.pdf)).
+- **[S]** Delivering trees in streets is constrained by underground utilities, surfacing and space allocation. TDAG's *Trees in Hard Landscapes: A Guide for Delivery* (2014), produced with ICE, CIHT, CIBSE, ICF and the Landscape Institute, covers these, and NJUG Volume 4 gives utility guidance near trees (**new:** [TDAG](https://tdag.org.uk/trees-in-hard-landscapes.html); [NJUG Vol 4 via a highway design guide](https://www.ashfield.gov.uk/media/5p1gtlqc/ncc-highway-design-guide-part-28.pdf)). A recent London guidance document on trees, SuDS and utilities refers to NUAR and PAS 128 utility detection (**new:** [GLA document](https://www.london.gov.uk/media/113095/download)).
+
+**Stakeholders who meet the problem [I]:** council tree and highways officers, highway contractors, community tree wardens and partnership members, planners and landscape designers, and residents who scrutinise decisions.
+
+**Why tree counts or visual placement are not enough [S + I]:** the benefit of a tree depends on where its shade falls relative to buildings, existing trees, sun angle and season. Shade that duplicates existing shade adds nothing. Winter shading of the same spot can be a cost. Tree-placement studies optimise position because position changes outcomes ([Wallenberg et al., GMD 2022](https://gmd.copernicus.org/articles/15/1107/2022/); [Schrodi et al., 2023](https://arxiv.org/abs/2310.05691)). Budget, spacing, utilities and permissions then decide what is deliverable.
+
+**What a decision-support prototype can contribute [I]:** make the trade-offs explicit and reproducible: computed shade for a declared time sample, cost against an accepted budget, independently checked constraints, explicit unknowns (survey status), and comparisons that keep inputs fixed. The agent helps a person ask for and read these analyses; it does not decide.
+
+**Not supported — do not say:** any Sheffield planting statistic, budget, canopy-cover figure or local temperature effect (none was sourced for this package); any council endorsement, partnership, data-sharing or use of CANOPY.
+
+## 2. Shade is not cooling: what the evidence supports
+
+- **[S]** Field evidence links tree shade to lower radiant heat load. In Manchester, shading reduced globe temperatures by up to 5–7 °C, while grass had little effect on globe temperatures ([Armson, Stringer & Ennos 2012, *Urban For. Urban Green.* 11:245–255, doi:10.1016/j.ufug.2012.05.002](https://doi.org/10.1016/j.ufug.2012.05.002) — **new**). The same group calculated street-tree shade areas from crown morphology and found species and leaf area mattered ([Armson, Rahman & Ennos 2013, *Arboric. Urban For.* 39(4):157–164](https://auf.isa-arbor.com/content/39/4/157.full.pdf) — **new**).
+- **[S]** Turning shade into a thermal-comfort quantity needs a radiation model with meteorological forcing. SOLWEIG estimates mean radiant temperature from shortwave radiation, air temperature, humidity and surface geometry; TreePlanter optimises tree positions on SOLWEIG output ([Lindberg & Grimmond 2011, *Theor. Appl. Climatol.*, doi:10.1007/s00704-010-0382-8](https://doi.org/10.1007/s00704-010-0382-8); [UMEP TreePlanter docs](https://umep-docs.readthedocs.io/en/latest/processor/Outdoor%20Thermal%20Comfort%20TreePlanter.html)). Recent SOLWEIG work also notes that a fixed canopy transmissivity limits accuracy ([Kang et al., EGUsphere preprint 2026](https://egusphere.copernicus.org/preprints/2026/egusphere-2026-6123/) — preprint, not peer-reviewed).
+- **[R]** CANOPY computes **additional direct-beam blocking on declared receivers, in m²·h**, for opaque or fixed-transmission crowns, using pvlib SPA sun positions and no weather, longwave, air-temperature or energy model ([NUMERICS §4](../../NUMERICS.md); result `limitations[]`).
+- **[I] Conclusion:** CANOPY's metric is a legitimate *intermediate physical* quantity, the first step of the chain that the literature uses. A temperature, comfort or energy claim needs at least meteorological forcing, real geometry and a validated radiation model, followed by comparison with observations. None of these exists in the prototype.
+
+| Claim type | Supported by the prototype now? | Minimum additional evidence |
+|---|---|---|
+| Additional geometric shade (m²·h) at declared times on synthetic receivers | Yes, as a computed model output | — (still unvalidated for real sites) |
+| Shade on a real Sheffield street | No | Rights-cleared geometry and existing trees, CRS/transform checks, sample-design review, comparison against an independent shadow reference (e.g. SOLWEIG shadow output or site photos) |
+| Mean radiant temperature / thermal comfort | No | Meteorological forcing, SOLWEIG-class model, transmissivity assumptions, field validation |
+| Air-temperature change (°C) | No | Microclimate model and observations; cooling depends on placement, species, size and surroundings (Forest Research, already cited in [handoffs §1](../../EVENT_DAY_CONTENT_AND_CLAUDE_HANDOFFS_2026-11-13.md)) |
+| Building energy or bills | No | Thermal building model, occupancy and systems ([NUMERICS §4.4](../../NUMERICS.md)) |
+| Carbon, air quality, flooding, health or financial return | No | Separate validated models and data (dossier §1 "should not survive evidence") |
+| Plantability or permission | No | Arboricultural and utility survey, highway and planning process; stays "survey required" |
+
+## 3. Numerical method: soundness and limits (audit of repository against method requirements)
+
+| Requirement | Repository status [R] | Assessment [I] |
+|---|---|---|
+| Sun position | pvlib SPA, geometric elevation, declared ΔT 67 s, UTC-only instants, DST-ambiguous local times rejected | Appropriate. Independent solar reference comparison (V02) should be cited from Ben's test log, not assumed |
+| Shadow geometry | Ray–ellipsoid/cylinder crowns and trunks, static triangles, origin-triangle exclusion, union/multiplicative transmission | Sound for direct beam. Opaque/fixed transmission is a scenario, not species optics |
+| Occlusion by buildings and existing trees | Baseline transmission B includes static scene and existing trees; tree benefit = B − V | Correctly prevents counting shade already provided |
+| Metric definition | Area × duration × difference in transmission; unweighted kept beside weighted | Correct; the weighted figure must never be shown as area |
+| Time sampling | Midpoint quadrature; **seed uses one 1-h bin per case** | Fine for a demonstration; values are snapshots. Real use needs hourly bins over representative days |
+| Spatial sampling | 0.5 m receiver spacing (seed) | Discretisation sensitivity not reported on Spark; quote no convergence claim |
+| Optimisation | Overlap-aware greedy plus local swaps plus deterministic reference; separate full-layout checker; "best evaluated", no optimality claim | Honest. With 3 candidates, exhaustive checking is trivial, so search quality is **not** demonstrated at scale |
+| Costs | Integer pence, single upfront assumed cost, no lifecycle | Adequate for a prototype; not a real price |
+| Growth and season | Establishment (year 1) vs mature (year 20) states; leaf-off transmission 0.7 assumed | Labelled assumptions; not biological forecasts |
+| Uncertainty | Separated in method text (discretisation / input / model inadequacy); no runtime sensitivity analysis | Communicate as limitation |
+| Verification vs validation | Unit/analytic tests exist (reported on PR #52); no field validation | Say "verified against analytic test cases in development"; never "validated" |
+
+## 4. Agent evaluation: method basis
+
+- **[S]** Tool-using agents should be evaluated on end-state correctness and policy adherence, with reliability over repeated trials. τ-bench introduced pass^k and found large drops in consistency across trials ([Yao et al., ICLR 2025](https://arxiv.org/abs/2406.12045)).
+- **[S]** Function-call correctness can be judged structurally (name and arguments), and abstention when no function applies is a separate capability ([Patil et al., BFCL, ICML 2025, PMLR 267:48371–48392](https://proceedings.mlr.press/v267/patil25a.html) — **new**).
+- **[S]** Abstention covers a spectrum, from full "I don't know" to partial hedged answers. Answerability depends on the query (ambiguous or unanswerable inputs) and on the model ([Wen et al., *TACL* 13:529–556, 2025, doi:10.1162/tacl_a_00754](https://doi.org/10.1162/tacl_a_00754) — **new**). This is why C5 fails a hedged numeric guess.
+- **[S]** Agent evaluations are often irreproducible and conflate model and system effects; they should report cost/latency and keep proper hold-outs ([Kapoor et al., *TMLR* 2025](https://arxiv.org/abs/2407.01502)).
+- **[I] Applied:** the [protocol](AGENT_EVALUATION_PROTOCOL.md) scores tool choice, arguments, execution, evidence identity, narrative faithfulness, constraint compliance, abstention and output format separately. It attributes failures to model, host or numerics and reports raw counts only.
+
+**Audit of the existing B11 design [R + I]:** `runner.py`/`score_run` already checks real operation receipts, current IDs, constraint statuses, failures and latency, and correctly keeps unreviewed usefulness as `null`. Its gaps for event day are (1) no genuine adaptive arm on `main` (blocked by provider), (2) model tool selection, argument validity and narrative faithfulness are not scored as separate dimensions, and (3) the manual arm is absent. These are P1 for #31 and need no change for the five-case suite. The suite does **not** support any claim that the agent beats manual or fixed workflows.
+
+**Runtime risk [S + R]:** the agent talks to Ollama through the OpenAI-compatible `/v1` route. Ollama's documentation lists tools as supported there, but states that the OpenAI API has no way to set context size ([Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility); statement also quoted by [this analysis](https://particula.tech/blog/ollama-num-ctx-silent-prompt-truncation)). So the organiser's 8,192-token rule must be evidenced from per-response `usage.prompt_tokens` and the loaded context on the Spark.
+
+## 5. Staged adoption pathway (feasibility)
+
+| Stage | What exists or is needed | Exit evidence | Who must be involved |
+|---|---|---|---|
+| **0. Hackathon prototype (today)** | Synthetic site, deterministic CPU shade/constraint engine, typed jobs and provenance, local model choosing registered tools on DGX Spark (if verified) | Five-case receipts; acceptance checklist; public repo | Team |
+| **1. Desk pilot on one real street** | Rights-cleared geometry (candidate public datasets are listed in [SOURCES](../../SOURCES.md), each subject to its licence), existing-tree inventory, verified CRS/transform, multi-day hourly time bins | Shadow comparison against an independent reference (SOLWEIG shadow output or dated photographs); documented sensitivity to crown and sampling assumptions | Council tree officer (data and questions), GIS support |
+| **2. Scientific extension** | Optional radiation/Tmrt module through UMEP/SOLWEIG with meteorological forcing; transmissivity assumptions by species group | Validation against field globe or Tmrt measurements; uncertainty bounds | Urban climate researchers |
+| **3. Workflow integration** | Candidate sites from survey data; utilities (NUAR/PAS 128 surveys), soil volume and highway constraints as hard rules; exportable review pack | Planners use it on real decisions in parallel with the existing process; record disagreements | Highways, arboriculture, Street Tree Partnership process |
+| **4. Governed operation** | Versioned data, audit trail, access control, model and tool change control, local inference sizing | Documented governance; periodic revalidation | Council IT and information governance |
+
+**Local inference feasibility [R + I]:** one DGX Spark-class device runs the model locally (to be evidenced today). The numerical engine is CPU-only and small. Local hosting avoids sending site data to a hosted model service, which matters for council data governance. That is an argument, not a measured requirement. **Maintenance [I]:** the main recurring costs are data refresh, recalibration and model/tool regression testing, not the hardware.
+
+**Not recommended today:** new modules, real-site import or GPU physics. None fits the schedule, and each would weaken evidence quality.

@@ -111,6 +111,12 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const scenarioRef = useRef<Scenario | null>(null)
   const activeJobId = useRef<string | null>(null)
   const alive = useRef(true)
+  // Selection reads can overlap (the early refresh after submit and the one after a job finishes). Each read is
+  // numbered when issued; a reply older than the last applied selection is dropped, so a late reply cannot roll
+  // the selection back. Direct writes (adopting a head, the initial load) count as applied too.
+  const selectionIssued = useRef(0)
+  const selectionApplied = useRef(0)
+  const markSelectionWrite = () => { selectionIssued.current += 1; selectionApplied.current = selectionIssued.current }
 
   useEffect(() => { scenarioRef.current = scenario }, [scenario])
   useEffect(() => {
@@ -139,8 +145,12 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
 
   /** Re-read the backend's evaluation selection for the head revision. */
   const refreshSelection = useCallback(async (head: Scenario) => {
+    selectionIssued.current += 1
+    const seq = selectionIssued.current
     const selections = await client.selections(refOf(head))
     if (!alive.current || scenarioRef.current?.revision !== head.revision) return
+    if (seq < selectionApplied.current) return // a newer selection was already applied
+    selectionApplied.current = seq
     setCurrentRunIds({
       evaluation: selections.evaluation.current_job?.run_id ?? null,
       search: selections.search.current_job?.run_id ?? null,
@@ -160,6 +170,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
       setDraft(nextLayout.placements[0]?.position_enu_m as Vec3)
       setDraftRequirements(requirementsOf(head))
     }
+    markSelectionWrite()
     setCurrentRunIds({ evaluation: null, search: null, comparison: null })
     return nextLayout
   }, [client])
@@ -206,6 +217,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
         scenarioRef.current = head
         setDraft(layoutValue.placements[0].position_enu_m as Vec3)
         setDraftRequirements(requirementsOf(head))
+        markSelectionWrite()
         setCurrentRunIds({
           evaluation: selections.evaluation.current_job?.run_id ?? null,
           search: selections.search.current_job?.run_id ?? null,

@@ -3,6 +3,7 @@ import type { SceneData } from '../api/session'
 import { agentPanelState, evidenceChain } from '../planning/agentEvidence'
 import { dataPillLabel, draftBannerText, headerStatus, latestEvaluation, layoutsFeasible, provenanceItems, provenanceStatus, scenarioSummary } from '../planning/shell'
 import type { Workspace } from '../planning/useWorkspace'
+import { FOCUS_TARGET, focusAfterRender } from './focus'
 
 /** Vision v2 application shell: navigation rail, context header and the Studio's floating panels. */
 
@@ -50,24 +51,27 @@ const short = (value: string, n = 8) => (value.length > n + 1 ? `${value.slice(0
 /** Context header: site / scenario / revision, one status pill, the data-kind pill and the backend state. */
 export function ContextHeader({ ws, screenTitle }: { ws: Workspace; screenTitle: string }) {
   const connected = ws.connection.status === 'connected'
+  const connecting = ws.connection.status === 'connecting'
   const evaluation = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
   const status = headerStatus({
     connected,
+    connecting,
     revision: ws.scenario?.revision ?? null,
     draftDirty: ws.draftDirty,
     activeJob: ws.activeJob,
     jobStatusLost: ws.jobStatusLost,
     evaluationCurrentness: evaluation?.result ? ws.currentness(evaluation.result) : null,
   })
-  const pill = dataPillLabel(connected, ws.site?.site_kind ?? null)
+  const pill = dataPillLabel(connected, ws.site?.site_kind ?? null, connecting)
   return (
     <header className="topbar context-bar no-print">
       <span className="wordmark">CANOPY</span>
       <span className="bar-divider" aria-hidden="true" />
-      <nav className="crumbs" aria-label="Context">
+      {/* Not a <nav>: these are labels, not links. The full scenario id is real text for assistive technology. */}
+      <div className="crumbs" role="group" aria-label="Current site and scenario">
         <span>{ws.site?.name ?? screenTitle}</span>
-        {ws.scenario && <><i aria-hidden="true">/</i><span className="mono" title={ws.scenario.scenario_id}>{short(ws.scenario.scenario_id)}</span><i aria-hidden="true">/</i><strong>Rev {ws.scenario.revision}{ws.draftDirty ? ' + draft' : ''}</strong></>}
-      </nav>
+        {ws.scenario && <><i aria-hidden="true">/</i><span className="mono" title={ws.scenario.scenario_id}><span aria-hidden="true">{short(ws.scenario.scenario_id)}</span><span className="sr-only">Scenario {ws.scenario.scenario_id}</span></span><i aria-hidden="true">/</i><strong>Rev {ws.scenario.revision}{ws.draftDirty ? ' + draft' : ''}</strong></>}
+      </div>
       <span className={`status-pill sp-${status.tone}`} data-testid="header-status"><i aria-hidden="true" />{status.label}</span>
       <span className={`status-pill ${pill.synthetic ? 'sp-synthetic' : 'sp-muted'}`}><i aria-hidden="true" />{pill.label}</span>
       <span className="topbar-status" data-testid="backend-status"><span className={`status-dot${connected ? '' : ' warning'}`} /> {connected ? 'Local backend connected' : ws.connection.status === 'connecting' ? 'Connecting…' : 'Backend not connected'}</span>
@@ -86,7 +90,7 @@ export function ScenarioStrip({ ws, editorOpen, onToggle }: { ws: Workspace; edi
       <span className="strip-objective" title={s.objective}>Objective <b>{s.objective}</b></span>
       <span>Max trees <b className="mono">{s.maxTrees}</b></span>
       <span>Exclusions <b className="mono">{s.exclusions}</b></span>
-      <button type="button" className="strip-button" aria-expanded={editorOpen} aria-controls="scenario-editor" onClick={onToggle}>
+      <button type="button" id={FOCUS_TARGET.editorToggle} className="strip-button" aria-expanded={editorOpen} aria-controls="scenario-editor" onClick={onToggle}>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>
         {editorOpen ? 'Close editor' : 'Edit scenario'}
       </button>
@@ -106,8 +110,8 @@ export function DraftBanner({ ws, editorOpen, onReview }: { ws: Workspace; edito
       {/* With the editor open, its own "Discard draft" is the one discard control (one button, one name). */}
       {!editorOpen && (
         <div className="banner-actions">
-          <button type="button" className="banner-button" onClick={onReview}>Review draft</button>
-          <button type="button" className="banner-button" onClick={ws.revertDraft}>Discard draft</button>
+          <button type="button" className="banner-button" onClick={() => { onReview(); focusAfterRender(FOCUS_TARGET.draftChanges) }}>Review draft</button>
+          <button type="button" className="banner-button" onClick={() => { ws.revertDraft(); focusAfterRender(FOCUS_TARGET.editorToggle) }}>Discard draft</button>
         </div>
       )}
     </div>

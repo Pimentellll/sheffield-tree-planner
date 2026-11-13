@@ -4,10 +4,11 @@ import type { DeclarationCheck } from '../api/session'
 import type { TransformCheck } from '../scene/transform'
 import {
   CURRENTNESS_LABEL, EDIT_LIMIT_M, samePosition, EXECUTION_MODE_LABEL, clampPosition, describeJob, formatPence, formatValue,
-  primaryMetric, unitLabel, type Currentness,
+  primaryMetric, progressView, unitLabel, type Currentness, type ProgressView,
 } from '../planning/evaluation'
 import type { RunRecord, Workspace } from '../planning/useWorkspace'
 import { latestEvaluation } from '../planning/shell'
+import { FOCUS_TARGET, focusAfterRender } from './focus'
 
 function describeAttenuation(a: unknown): string {
   const v = a as { mode?: string; transmission?: number | null } | null
@@ -104,7 +105,7 @@ export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; p
         </>
       )}
       {committed && draftDirty && (
-        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={ws.revertDraft}>Revert draft</button></p>
+        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={() => { ws.revertDraft(); focusAfterRender(FOCUS_TARGET.editorToggle) }}>Revert draft</button></p>
       )}
       {profile && state && (
         <>
@@ -125,6 +126,7 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
   const described = job ? describeJob(job) : null
   const lost = Boolean(job && ws.jobStatusLost && (job.status === 'queued' || job.status === 'running'))
   const running = !lost && (job ? job.status === 'queued' || job.status === 'running' : false)
+  const progress: ProgressView = job && !lost ? progressView(job) : { kind: 'none' }
   const label = ws.busy === 'committing' ? 'Accepting revision…' : ws.busy === 'submitting' ? 'Submitting…' : ws.draftDirty ? 'Accept changes & evaluate' : 'Evaluate planting'
   return (
     <div className="detail-section">
@@ -157,13 +159,13 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
             <strong>{described.label}</strong>
             <span>Job {short(job.job_id, 8)} · scenario rev {job.scenario_revision}</span>
             <span>{described.detail}</span>
-            {job.progress && job.progress.total > 0 && (
-              <progress max={job.progress.total} value={job.progress.completed} aria-label="Job progress" />
+            {progress.kind === 'counts' && (
+              <progress max={progress.total} value={progress.completed} aria-label="Job progress" />
             )}
-            {running && !(job.progress && job.progress.total > 0) && (
+            {progress.kind === 'indeterminate' && (
               <>
                 <progress aria-label="Job in progress; the backend reports no progress counts" data-testid="indeterminate-progress" />
-                <span className="caption">The backend reports no progress counts, so no percentage or phase is estimated.</span>
+                <span className="caption">{progress.caption}</span>
               </>
             )}
           </div>

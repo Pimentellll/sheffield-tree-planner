@@ -72,7 +72,8 @@ export function describeJob(job: Job): { label: string; tone: JobTone; detail: s
       return { label: job.cancel_requested ? 'Cancelling…' : 'Queued', tone: 'progress', detail: `Waiting for the local worker.${superseded}` }
     case 'running': {
       const p = job.progress
-      const progress = p ? ` ${p.phase}: ${p.completed}/${p.total} ${p.unit}.` : ''
+      // Counts are shown only when the backend reports a positive total; "0/0" is no count at all.
+      const progress = p && p.total > 0 ? ` ${p.phase}: ${p.completed}/${p.total} ${p.unit}.` : ''
       return { label: job.cancel_requested ? 'Cancelling…' : 'Running', tone: 'progress', detail: `Evaluating on the local worker.${progress}${superseded}` }
     }
     case 'completed':
@@ -86,6 +87,24 @@ export function describeJob(job: Job): { label: string; tone: JobTone; detail: s
         detail: `${job.error ? `${job.error.code}: ${job.error.message}` : 'The job failed without a stored error.'} No result was stored.${superseded}`,
       }
   }
+}
+
+/**
+ * How the job's progress may be shown. Counts only when the backend reported a positive total;
+ * otherwise an indeterminate indicator that says nothing is estimated. Nothing for a finished job.
+ */
+export type ProgressView =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'counts'; readonly completed: number; readonly total: number }
+  | { readonly kind: 'indeterminate'; readonly caption: string }
+
+export const NO_PROGRESS_CAPTION = 'The backend reports no progress counts, so no percentage or phase is estimated.'
+
+export function progressView(job: Pick<Job, 'status' | 'progress'>): ProgressView {
+  if (job.status !== 'queued' && job.status !== 'running') return { kind: 'none' }
+  const p = job.progress
+  if (p && p.total > 0) return { kind: 'counts', completed: p.completed, total: p.total }
+  return { kind: 'indeterminate', caption: NO_PROGRESS_CAPTION }
 }
 
 const EPS = 1e-9

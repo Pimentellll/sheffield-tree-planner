@@ -98,12 +98,29 @@
       },
       "Attenuation": {
         "additionalProperties": false,
-        "description": "Only validated opaque mode is currently serializable for execution.",
+        "description": "takeover-v1 adds a bounded, explicitly assumed fixed-crossing scenario.",
         "properties": {
           "mode": {
-            "const": "opaque",
+            "enum": [
+              "opaque",
+              "fixed_crossing"
+            ],
             "title": "Mode",
             "type": "string"
+          },
+          "transmission": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Transmission"
           }
         },
         "required": [
@@ -1517,6 +1534,220 @@
           "revision"
         ],
         "title": "LayoutRef",
+        "type": "object"
+      },
+      "M2Scene": {
+        "additionalProperties": false,
+        "description": "The actual explicit numerical declaration, not imported site geometry.",
+        "properties": {
+          "above_horizon": {
+            "title": "Above Horizon",
+            "type": "boolean"
+          },
+          "duration_h": {
+            "exclusiveMinimum": 0,
+            "title": "Duration H",
+            "type": "number"
+          },
+          "evidence": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Evidence",
+            "type": "string"
+          },
+          "kind": {
+            "const": "explicit synthetic ENU reference inputs; no geometry importer",
+            "title": "Kind",
+            "type": "string"
+          },
+          "midpoint_utc": {
+            "title": "Midpoint Utc",
+            "type": "string"
+          },
+          "obstacle_ellipsoids": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                {
+                  "maxItems": 3,
+                  "minItems": 3,
+                  "prefixItems": [
+                    {
+                      "exclusiveMinimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "exclusiveMinimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "exclusiveMinimum": 0,
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Obstacle Ellipsoids",
+            "type": "array"
+          },
+          "receiver_area_m2": {
+            "exclusiveMinimum": 0,
+            "title": "Receiver Area M2",
+            "type": "number"
+          },
+          "receiver_normal": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Receiver Normal",
+            "type": "array"
+          },
+          "receiver_point": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Receiver Point",
+            "type": "array"
+          },
+          "solar_algorithm": {
+            "const": "analytic-chosen-synthetic-direction",
+            "title": "Solar Algorithm",
+            "type": "string"
+          },
+          "solar_version": {
+            "const": "1",
+            "title": "Solar Version",
+            "type": "string"
+          },
+          "sun_direction": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Sun Direction",
+            "type": "array"
+          },
+          "target_id": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Target Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target_id",
+          "receiver_point",
+          "receiver_normal",
+          "receiver_area_m2",
+          "solar_algorithm",
+          "solar_version",
+          "sun_direction",
+          "above_horizon",
+          "midpoint_utc",
+          "duration_h",
+          "obstacle_ellipsoids",
+          "evidence"
+        ],
+        "title": "M2Scene",
+        "type": "object"
+      },
+      "M2Session": {
+        "additionalProperties": false,
+        "description": "Read-only exact input snapshot; result numbers are obtained only via jobs.",
+        "properties": {
+          "layout": {
+            "$ref": "#/components/schemas/Layout"
+          },
+          "mode": {
+            "const": "synthetic_one_tree_reference",
+            "title": "Mode",
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/TreeProfile"
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/Scenario"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/M2Scene"
+          },
+          "session_id": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "site": {
+            "$ref": "#/components/schemas/SiteBundle"
+          },
+          "source_asset_sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Asset Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode",
+          "session_id",
+          "source_asset_sha256",
+          "scene",
+          "scenario",
+          "site",
+          "layout",
+          "profile"
+        ],
+        "title": "M2Session",
         "type": "object"
       },
       "Metric": {

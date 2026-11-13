@@ -435,11 +435,36 @@ class Result(ContractModel):
             raise ValueError("finite-model infeasibility requires explicit proof")
         metrics = {m.metric_instance_id: m for m in self.metrics}
         if self.comparison is not None:
+            from math import isclose
+
+            if (
+                self.operation == "compare_scenarios"
+                and self.comparison.mode != self.arguments.mode
+            ):
+                raise ValueError("comparison mode differs from request")
             for delta in self.comparison.deltas:
                 a = metrics.get(delta.base_metric_instance_id)
                 b = metrics.get(delta.alternative_metric_instance_id)
                 if a is None or b is None or a.unit != b.unit or a.unit != delta.unit:
                     raise ValueError("comparison delta references missing/incompatible metrics")
+                if any(
+                    getattr(a, key) != getattr(b, key)
+                    for key in (
+                        "metric_id",
+                        "case_id",
+                        "target_id",
+                        "quantity_kind",
+                        "horizon_years",
+                        "weighting",
+                        "area_basis",
+                    )
+                ) or not isclose(delta.value, b.value - a.value, rel_tol=1e-12, abs_tol=1e-12):
+                    raise ValueError("comparison delta meaning/arithmetic mismatch")
+                if (
+                    delta.mode != self.comparison.mode
+                    or delta.changed_inputs != self.comparison.changed_inputs
+                ):
+                    raise ValueError("comparison delta metadata mismatch")
         return self
 
 

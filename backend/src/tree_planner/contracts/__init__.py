@@ -81,6 +81,7 @@ from .results import (
     validate_job_transition,
     validate_metric_set,
 )
+from .m2 import M2Scene, M2Session
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -164,4 +165,6 @@ __all__ += [
     "validate_job_transition",
     "validate_delivery_currentness",
     "validate_metric_set",
+    "M2Scene",
+    "M2Session",
 ]

@@ -128,7 +128,7 @@ class ApplicationService:
             geometry_refs=geometry_refs,
             target_overlap=target_overlap,
         )
-        self.jobs = JobStore(self.repository.db_path)
+        self.jobs = JobStore(self.repository.db_path, cache_verifier=self._verify_cached_execution)
         self.lease = WorkspaceLease(self.repository.workspace)
         self.worker = None
 
@@ -136,6 +136,19 @@ class ApplicationService:
         """Manual deterministic execution; no restart recovery or fabricated output."""
         with self.lease.held():
             return self.jobs.run_one(self.handlers, stop_event or threading.Event())
+
+    def _verify_cached_execution(self, context):
+        request = JobRequest.model_validate(context["request"]).root
+        deps, hashes = self.resolve_for_execution(
+            request.scenario_ref,
+            operation=request.operation,
+            arguments=request.arguments if request.operation == "compare_scenarios" else None,
+        )
+        if (
+            hashes != context["identity"]["content_hashes"]
+            or deps["scenario"] != context["identity"]["scenario"]
+        ):
+            raise DomainError("RESULT_VALIDATION_FAILED", "Cached execution dependencies changed")
 
     def recover_startup(self):
         """Explicit manual recovery after acquiring exclusive workspace ownership."""
@@ -155,12 +168,20 @@ class ApplicationService:
         """Human-only callable; deliberately absent from the agent dispatcher."""
         return self.scenarios.accept_scenario(ref, if_match=revision, on_accept=self.jobs.activate)
 
-    def resolve_for_execution(self, ref: ScenarioRef, *, operation: str):
+    def resolve_for_execution(self, ref: ScenarioRef, *, operation: str, arguments=None):
         """Bind authoritative dependencies and trusted execution inputs to admission."""
         dependencies, hashes = self.scenarios.resolve_for_job(ref, operation=operation)
         handler = self.handlers.get(operation)
         if handler is None:
             raise DomainError("TOOL_UNAVAILABLE", "No trusted provider is configured", True)
+        if operation == "compare_scenarios":
+            resolve = getattr(handler, "comparison_dependencies", None)
+            if not callable(resolve) or arguments is None:
+                raise DomainError(
+                    "UNSUPPORTED_OPERATION", "Scenario comparison admission is unavailable"
+                )
+            dependencies, context = resolve(dependencies, arguments)
+            hashes = {**hashes, "comparison-context": content_hash(context)}
         describe = getattr(handler, "execution_hashes", None)
         if describe is None:
             extra = {"unversioned-provider-instance": self._unversioned_execution_identity}
@@ -198,7 +219,9 @@ class ApplicationService:
             if right.local_use_status != "permitted" or not right.evidence:
                 raise DomainError("RIGHTS_UNKNOWN", "Local source permission is not evidenced")
         deps, hashes = self.resolve_for_execution(
-            operation.scenario_ref, operation=operation.operation
+            operation.scenario_ref,
+            operation=operation.operation,
+            arguments=operation.arguments if operation.operation == "compare_scenarios" else None,
         )
         # Only the exact proposed layout has currently been validated by the typed
         # service. Resolve other refs first, then refuse a scientific scope expansion.
@@ -215,12 +238,6 @@ class ApplicationService:
                 not in {p.placement_id for p in layout.placements}
             ):
                 raise DomainError("INVALID_INPUT", "Placement reference is unresolved")
-        if operation.operation == "compare_scenarios":
-            # Shared comparison/investigation validation is not yet supplied by
-            # ScenarioService. Never submit an incompletely resolved comparison.
-            raise DomainError(
-                "UNSUPPORTED_OPERATION", "Scenario comparison admission is unavailable"
-            )
         if operation.operation not in self.handlers:
             raise DomainError(
                 "TOOL_UNAVAILABLE", "No trusted provider is configured for this operation", True
@@ -229,11 +246,26 @@ class ApplicationService:
         # Share the repository write transaction so acceptance cannot interleave
         # selection admission. Dependency objects themselves are immutable.
         with self.repository.transaction() as connection:
+            deadline = resolved.input.search.deadline_utc
+            if operation.operation == "compare_scenarios":
+                context = deps["comparison_context"]
+                digest = hashes["comparison-context"]
+                if not connection.execute(
+                    "SELECT 1 FROM snapshots WHERE kind=? AND id=?", ("typed_comparison", digest)
+                ).fetchone():
+                    self.repository._insert(connection, "typed_comparison", digest, 1, "", context)
+                from datetime import datetime
+
+                deadline = min(
+                    deadline,
+                    context["alternative"]["scenario"]["input"]["search"]["deadline_utc"],
+                    key=lambda value: datetime.fromisoformat(value.replace("Z", "+00:00")),
+                )
             return self.jobs.submit(
                 request,
                 resolved,
                 content_hashes=hashes,
-                deadline_utc=resolved.input.search.deadline_utc,
+                deadline_utc=deadline,
                 connection=connection,
             )
 

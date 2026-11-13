@@ -64,7 +64,7 @@ def test_strict_nested_unknown_and_finite():
 
 
 def test_unsupported_attenuation_fails_closed():
-    for mode in ("fixed_crossing", "path_length"):
+    for mode in ("path_length", "invented"):
         with pytest.raises(ValidationError):
             Attenuation.model_validate({"mode": mode, "transmission": 0.5})
 

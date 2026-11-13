@@ -106,10 +106,11 @@ def _validate_bindings(db, result, identity):
     arguments = identity["arguments"]
     if result.input_snapshot_ref != ref:
         raise ValueError("result scenario mismatch")
-    # Scenario comparison has no admitted two-scenario dependency graph yet.
-    # Do not infer its contexts from result refs or pretend all scopes are equal.
     if operation == "compare_scenarios":
-        raise ValueError("scenario comparison context unavailable")
+        from .comparison import validate_comparison
+
+        validate_comparison(db, result, identity, _snapshot, _validate_bindings)
+        return
     cases = {case.case_id: case for case in inp.evaluation_cases}
     original = None
     site = None
@@ -262,7 +263,10 @@ def _validate_bindings(db, result, identity):
 
 
 class JobStore:
-    def __init__(self, db_path: Path, *, capacity: int = 64):
+    def __init__(self, db_path: Path, *, capacity: int = 64, cache_verifier=None):
+        if cache_verifier is not None and not callable(cache_verifier):
+            raise TypeError("Trusted cache verifier must be callable")
+        self.cache_verifier = cache_verifier
         self.db_path = Path(db_path).resolve()
         self.capacity = _positive(capacity)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -278,6 +282,7 @@ class JobStore:
             CREATE TABLE IF NOT EXISTS job_active (singleton INTEGER PRIMARY KEY CHECK(singleton=1), scenario_id TEXT NOT NULL, revision INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS job_invalidations (job_id TEXT PRIMARY KEY);
             CREATE TABLE IF NOT EXISTS job_runs (run_id TEXT PRIMARY KEY, identity_json TEXT NOT NULL, result_json TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS job_run_integrity (run_id TEXT PRIMARY KEY, result_sha256 TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS job_events (id INTEGER PRIMARY KEY, job_id TEXT NOT NULL, event TEXT NOT NULL, at_utc TEXT NOT NULL);
             """)
         finally:
@@ -663,8 +668,12 @@ class JobStore:
                     "INSERT INTO job_runs VALUES (?,?,?)",
                     (result.run_id, row["identity_json"], encoded),
                 )
+                db.execute(
+                    "INSERT INTO job_run_integrity VALUES (?,?)", (result.run_id, content_hash(raw))
+                )
                 if _time(_now()) >= _time(row["deadline"]):
                     db.execute("DELETE FROM job_runs WHERE run_id=?", (result.run_id,))
+                    db.execute("DELETE FROM job_run_integrity WHERE run_id=?", (result.run_id,))
                     self._terminal(db, row, "DEADLINE_EXCEEDED")
                     return False
             except (ValueError, TypeError, KeyError, sqlite3.IntegrityError):
@@ -700,6 +709,11 @@ class JobStore:
     def _validated_run(self, db, run):
         try:
             result = Result.model_validate_json(run["result_json"])
+            integrity = db.execute(
+                "SELECT result_sha256 FROM job_run_integrity WHERE run_id=?", (run["run_id"],)
+            ).fetchone()
+            if integrity is None or integrity[0] != content_hash(result.model_dump(mode="json")):
+                raise ValueError("Stored result integrity is unavailable or changed")
             source = self._row(db, result.source_job_id)
             source_job = Job.model_validate_json(source["data"])
             identity = json.loads(run["identity_json"])
@@ -732,8 +746,24 @@ class JobStore:
             raise JobStoreError("stored result failed validation") from exc
 
     def deliver_cached(self, job_id, run_id):
+        # External assets/code cannot be verified by SQLite snapshots alone.
+        # Resolve them before opening the write transaction (resolver uses DB reads).
+        admitted = self._read("SELECT * FROM job_records WHERE job_id=?", (job_id,))
+        if admitted is None:
+            raise JobStoreError("unknown job")
+        context = json.loads(admitted["request_json"])
+        try:
+            if self.cache_verifier is not None:
+                self.cache_verifier(context)
+            elif "execution:physical-implementation" in context["identity"]["content_hashes"]:
+                raise ValueError("Physical cache requires current trusted execution verification")
+        except Exception:
+            self.fail(job_id, "RESULT_VALIDATION_FAILED")
+            return False
         with self._write() as db:
             row = self._row(db, job_id)
+            if row["identity_json"] != admitted["identity_json"]:
+                raise JobStoreError("cache admission changed")
             data = json.loads(row["data"])
             if data["status"] != "queued":
                 raise JobStoreError("cache requires queued job")

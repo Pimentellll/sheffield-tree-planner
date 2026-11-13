@@ -397,3 +397,125 @@ def test_final_checker_rejects_compromised_search_admission(monkeypatch):
     verdict = search_module.check(p, result.best.placements, calc)
     assert not verdict.feasible
     assert "budget" in verdict.reasons
+
+
+def test_valid_concave_u_region_and_manual_placement():
+    d = deps()
+    d["site"]["planting_regions"] = [
+        dict(
+            feature_id="plant",
+            geometry_ref="g",
+            evidence_status="synthetic",
+            source_ids=[],
+            assumption_ids=["synthetic"],
+        )
+    ]
+    d["scenario"]["input"]["constraints"]["accepted_planting_region_ids"] = ["plant"]
+    d["scene"]["regions"] = {
+        "plant": [[0, 0], [3, 0], [3, 3], [2, 3], [2, 1], [1, 1], [1, 3], [0, 3]]
+    }
+    p = prepare(d)
+    manual = dict(
+        placement_id="manual",
+        location_id="manual",
+        position_enu_m=[0.5, 0.5, 0],
+        profile_id="synthetic-profile",
+        candidate_id=None,
+        pinned=False,
+    )
+    assert check(p, (manual,), lambda _: calc([])).feasible
+
+
+def test_manual_requires_explicit_region_and_supports_pins():
+    d = deps()
+    manual = dict(
+        placement_id="manual",
+        location_id="manual",
+        position_enu_m=[0.5, 0.5, 0],
+        profile_id="synthetic-profile",
+        candidate_id=None,
+        pinned=True,
+    )
+    assert not check(prepare(d), (manual,), lambda _: calc([])).feasible
+    d["site"]["planting_regions"] = [
+        dict(
+            feature_id="plant",
+            geometry_ref="g",
+            evidence_status="synthetic",
+            source_ids=[],
+            assumption_ids=["synthetic"],
+        )
+    ]
+    d["scene"]["regions"] = {"plant": [[-1, -1], [10, -1], [10, 3], [-1, 3]]}
+    rules = d["scenario"]["input"]["constraints"]
+    rules["accepted_planting_region_ids"] = ["plant"]
+    rules["pinned_placements"] = [manual]
+    p = prepare(d)
+
+    def evaluate(items):
+        return calc([i for i in items if i["candidate_id"] is not None])
+
+    assert check(p, (manual,), evaluate).feasible
+    result = search(p, evaluate)
+    assert result.best.placements[0] == manual
+    assert check(p, result.best.placements, evaluate).feasible
+
+
+def test_manual_pin_with_real_physics():
+    physics = pytest.importorskip("tree_planner.physics")
+    d = deps()
+    d["scenario"]["input"]["numerics"].update(
+        evaluator="canopy-cpu-reference",
+        evaluator_version="takeover-v1",
+        solar_algorithm="pvlib-spa-geometric",
+        solar_version="0.15.2",
+        ray_offset_m=1e-6,
+        intersection_tolerance_m=1e-10,
+        feasibility_tolerance=1e-9,
+    )
+    d["site"]["planting_regions"] = [
+        dict(
+            feature_id="plant",
+            geometry_ref="g",
+            evidence_status="synthetic",
+            source_ids=[],
+            assumption_ids=["synthetic"],
+        )
+    ]
+    manual = dict(
+        placement_id="manual",
+        location_id="manual",
+        position_enu_m=[0.5, 0, 0],
+        profile_id="synthetic-profile",
+        candidate_id=None,
+        pinned=True,
+    )
+    d["scenario"]["input"]["constraints"].update(
+        accepted_planting_region_ids=["plant"], pinned_placements=[manual]
+    )
+    d["scene"].update(
+        regions={"plant": [[-1, -1], [10, -1], [10, 1], [-1, 1]]},
+        format_version="canopy-physical-scene/1",
+        spatial_spacing_m=1.0,
+        triangles=[],
+        existing_trees=[],
+        samples=[
+            {
+                "sample_id": "s",
+                "position_enu_m": [0.0, 0.0, 0.0],
+                "normal_enu": [0.0, 0.0, 1.0],
+                "area_m2": 1.0,
+                "target_id": "target",
+                "area_basis": "surface",
+            }
+        ],
+    )
+    p = prepare(d)
+
+    def evaluate(items):
+        return physics.compute(d, items)
+
+    result = search(p, evaluate)
+    assert result.best.placements[0] == manual
+    assert check(p, result.best.placements, evaluate).feasible
+    assert result.best.evaluation["cases"][0]["physical_m2_h"] > 0

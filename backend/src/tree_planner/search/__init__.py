@@ -142,7 +142,14 @@ def prepare(deps):
                 a, b = poly[i], poly[(i + 1) % len(poly)]
                 c, d = poly[j], poly[(j + 1) % len(poly)]
                 o1, o2, o3, o4 = orient(a, b, c), orient(a, b, d), orient(c, d, a), orient(c, d, b)
-                if o1 * o2 <= 0 and o3 * o4 <= 0:
+                if (
+                    o1 * o2 <= 0
+                    and o3 * o4 <= 0
+                    and max(min(a[0], b[0]), min(c[0], d[0]))
+                    <= min(max(a[0], b[0]), max(c[0], d[0]))
+                    and max(min(a[1], b[1]), min(c[1], d[1]))
+                    <= min(max(a[1], b[1]), max(c[1], d[1]))
+                ):
                     raise ValueError("self-intersecting polygon")
     candidate_ids = {c.candidate_id for c in site.candidate_catalogue}
     if any(
@@ -206,7 +213,10 @@ def check(problem, placements, evaluate, *, diagnostic=False):
             continue
         cost += profile.cost_pence
         c = candidates.get(p.candidate_id)
-        if c is None or (p.location_id, p.position_enu_m, p.profile_id) != (
+        if p.candidate_id is None:
+            if not rules.accepted_planting_region_ids:
+                reasons.append("manual requires planting region")
+        elif c is None or (p.location_id, p.position_enu_m, p.profile_id) != (
             c.location_id,
             c.position_enu_m,
             c.profile_id,
@@ -308,6 +318,7 @@ def check(problem, placements, evaluate, *, diagnostic=False):
         "candidate and profile": (
             "invalid placement",
             "candidate mismatch",
+            "manual requires planting region",
             "excluded candidate",
             "unresolved profile",
             "profile not allowed",
@@ -372,19 +383,20 @@ def _admissible(problem, placements, evaluate):
     for p in items:
         c = candidates.get(p.candidate_id)
         profile = problem.profiles.get(p.profile_id)
-        if (
-            c is None
-            or profile is None
-            or c.plantability_status == "excluded"
-            or p.profile_id not in rules.allowed_profile_ids
-        ):
+        if profile is None or p.profile_id not in rules.allowed_profile_ids:
             return None
-        if (p.location_id, p.position_enu_m, p.profile_id) != (
-            c.location_id,
-            c.position_enu_m,
-            c.profile_id,
-        ):
-            return None
+        if p.candidate_id is None:
+            if not rules.accepted_planting_region_ids:
+                return None
+        else:
+            if c is None or c.plantability_status == "excluded":
+                return None
+            if (p.location_id, p.position_enu_m, p.profile_id) != (
+                c.location_id,
+                c.position_enu_m,
+                c.profile_id,
+            ):
+                return None
         if (
             abs(p.position_enu_m[2] - problem.flat_ground_z_m)
             > problem.scenario.input.numerics.intersection_tolerance_m

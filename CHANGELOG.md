@@ -8,6 +8,7 @@ Minor capability expansion from the readiness-only package; shared contracts and
 - Immutable typed SQLite scenarios, optimistic revision conflicts, source/asset rights admission and complete source-graph fingerprints.
 - Bounded jobs with cancellation/deadline/recovery fences, separate view selections, immutable cached origins and nested result-to-input validation.
 - Trusted hash-bound synthetic one-tree evaluator runtime and a reproducible real-HTTP positive/zero/stale/failure/recovery demonstration.
+- Local-only browser integration using the existing frontend: typed input-only bootstrap, single-origin installed harness, real job/result provenance, human revision controls and stale/source-failure guards. Source distribution includes frontend source; no prebuilt UI or shared acceptance is implied.
 - Host-scoped model dispatcher, loopback domain transport, native tool schemas and fail-closed evidence/currentness checks. Local-model proof is opt-in; incomplete/model-invalid traces do not pass.
 - Dependency-ready constrained-search consumer only; no real search or independent feasibility producer, real Sheffield site, frontend acceptance, Spark execution or scientific sign-off is claimed.
 - Wheel/sdist version remains sourced solely from pyproject.toml. No commit, push, merge, tag, release, deployment or registry publication is implied by this entry.

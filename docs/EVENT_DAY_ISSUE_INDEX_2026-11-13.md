@@ -41,7 +41,7 @@ This is an **index**, not a claim that every issue is implemented. The [detailed
 | X-E04 rehearsed scenario/fallback | #32 | #56, #58 | Real Spark evidence mandatory for final footage |
 | X-E05 final video and optional slides | #32 | #58 | YouTube/Loom up to 5 minutes |
 | X-E06 Sheffield mesh | #9, #30 | — | **P2 deferred** until rights and CRS/solver parity pass |
-| S-E01 organiser requirements | #5 | #60 | Organiser Kunal email gives required fields; form URL/precise closure still need confirming |
+| S-E01 organiser requirements | #5 | #60 | NVIDIA organiser email gives required fields; form URL/precise closure still need confirming |
 | S-E02 submission/links/receipt | #33 | #59, #60 | 17:30 target based on 18:00 team-reported shutdown/form timing |
 
 ## Reconciled code/evidence status at this audit

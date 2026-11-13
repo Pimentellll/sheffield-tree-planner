@@ -1,6 +1,6 @@
 # CANOPY — agent evidence UX, browser integration and acceptance handoff
 
-**Proposed for:** Arnav (`reverez`) — frontend agent-evidence consumer, tracked in [#74](https://github.com/Pimentellll/sheffield-tree-planner/issues/74); Ben (`bbeennyy860-cyber`) — producer agent-run API ([#73](https://github.com/Pimentellll/sheffield-tree-planner/issues/73)) and job worker (#72); Alex (`akurkar07`) — owner of agent-visible UI and failure states (#56, event board X-E02) and film capture (#58). **Ownership note:** #74 and #56 overlap on the agent-visible panels, and the team has not yet settled this. Until it does, Arnav's #74 work stays in new, non-panel files, and shared panels are edited only after agreement with Alex. **Date:** 13 Nov 2026. **Status:** DESIGN AND ACCEPTANCE PLAN, not wired or tested. **Base inspected:** `main` `ca1662de978758044561ea005c77b95ef8609aeb`.
+**Proposed for:** Arnav (`reverez`) — frontend agent-evidence consumer, tracked in [#74](https://github.com/Pimentellll/sheffield-tree-planner/issues/74); Ben (`bbeennyy860-cyber`) — producer agent-run API ([#73](https://github.com/Pimentellll/sheffield-tree-planner/issues/73)) and job worker (#72); Alex (`akurkar07`) — owner of the surrounding UI shell, panels and their failure states (#56, event board X-E02) and film capture (#58). **Ownership (decided by Arnav, recorded on [#56](https://github.com/Pimentellll/sheffield-tree-planner/issues/56) at 13:56 GMT, 13 Nov):** Arnav owns the agent-evidence UI (#74); everything else under #56 stays with Alex. Alex keeps the existing static "no agent endpoint" slot until the working panel arrives from #74 once Ben's #73 API exists. Placement in the shell is coordinated through #56. **Date:** 13 Nov 2026. **Status:** DESIGN AND ACCEPTANCE PLAN, not wired or tested. **Base inspected:** `main` `ca1662de978758044561ea005c77b95ef8609aeb`.
 
 **Revision (13 Nov, ~14:00 UTC):** corrected after an adversarial source/issue audit. It now references #72–#74 (opened after the first commit), fixes the dependency diagram, aligns the run states and field names with the companion audit, places all test execution in CI or the DGX window (event-day §12), and repairs the Markdown code formatting. Contract-independent presentation helpers for #74 (unavailable state, Job→Result evidence chain, untrusted-narrative figure guard) are proposed separately in draft [PR #76](https://github.com/Pimentellll/sheffield-tree-planner/pull/76).
 
@@ -61,7 +61,7 @@ These names mirror the companion audit §3, including its mapping from the exist
 
 ## 4. Frontend implementation slices Arnav can own
 
-These slices are tracked in #74 and consume Ben's #73. FE-A3 to FE-A6 touch agent-visible panels that overlap Alex's #56, so coordinate before editing shared panels (see the ownership note at the top).
+These slices are tracked in #74 and consume Ben's #73. Arnav owns the agent-evidence UI (see the ownership note at the top). FE-A3 to FE-A6 replace the agent slot inside Alex's shell, so where the panel sits and any edits to surrounding panels are coordinated through #56.
 
 | Slice | Files / steps | Testable acceptance | Priority |
 | --- | --- | --- | --- |
@@ -162,7 +162,7 @@ UI lane:
 FE-A1/A2 (#74, Arnav)
           |
           v
-FE-A3/A4/A5/A6 (#74, Arnav; coordinate Alex #56 on shared panels)
+FE-A3/A4/A5/A6 (#74, Arnav; shell placement via #56)
           |
           v
 #58 (Alex: film) --> #60 (Arnav: form/receipt)
@@ -176,4 +176,4 @@ If API delivery is blocked: **do not fake an agent panel**. Record the real Nemo
 
 For each FE-A slice, test the normal path, malformed response, timeout, revision race, cancellation, safe refusal, redaction and accessibility. Recheck adjacent boundaries after each fix: API type → frontend client → state hook → status card → evidence panel → video capture. Stop for event-day P0 only when each case has an executable receipt and no unknown-critical interface remains; keep P1/P2 open rather than declaring "no holes".
 
-**Files intentionally not modified here:** `frontend/src/*` (Alex may own overlapping work), `backend/src/tree_planner/api/app.py`, `generated/*`, `docs/BUILD.md`, and the frozen five-case prompt fixture. This documentation PR proposes an agreed contract and tests; it does **not** implement those routes or falsely report passing CI.
+**Files intentionally not modified here:** `frontend/src/*` (Alex owns the shell and panels under #56; the agent-evidence UI lands in its own #74 PR), `backend/src/tree_planner/api/app.py`, `generated/*`, `docs/BUILD.md`, and the frozen five-case prompt fixture. This documentation PR proposes an agreed contract and tests; it does **not** implement those routes or falsely report passing CI.

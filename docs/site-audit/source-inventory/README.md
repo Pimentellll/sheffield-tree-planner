@@ -29,8 +29,8 @@ These were decided by the #69 owner's coordinating session under the owner's gen
 Facts that shape the importer:
 
 - **CRS:** `f=json` returns native British National Grid metres (EPSG:27700). The catalogue's `f=geojson` link returns server-reprojected WGS84 lon/lat. The importer uses `f=json` with `outSR=27700` so source geometry and CRS are preserved, and its output is deliberately not GeoJSON.
-- **Missing values:** a schema probe of three records showed one without a `featurelocation` key. Missing values are kept as explicit `unknown`, never filled.
-- **Address-like text:** `featurelocation` holds frontage text such as "Outside 7-9" (house-number positions). It refers to street frontages, not people, but the review sample (`review-sample.json`) drops it. `--keep-location-text` writes a separate `local-only-sample-with-location-text.json` that keeps it, for local inspection only (decision 3a).
+- **Missing values:** a manual schema inspection, not an importer run, viewed three records through the service's public query page. One had no `featurelocation` key. No record from it was saved, retained or committed. Missing values are kept as explicit `unknown`, never filled.
+- **Address-like text:** `featurelocation` holds free-text frontage notes that give house-number positions. Real values are deliberately not quoted here (decision 3a). The text refers to street frontages, not people, but the review sample (`review-sample.json`) drops it. `--keep-location-text` writes a separate `local-only-sample-with-location-text.json` that keeps it, for local inspection only (decision 3a).
 - **Extent:** the layer's stored extent is not plausible for Sheffield. Coverage must come from the query results, not the layer extent.
 
 ## Rights (unresolved licence conflict; asset-level decision still needed)
@@ -74,11 +74,23 @@ python scripts/prepare_tree_inventory.py replay \
 
 **Script safeguards:**
 - **Network:** HTTPS to the one fixed layer only. Redirects are refused, not followed, and each response's final URL is recorded and checked. Every site test runs with urllib calls (`urlopen`, `OpenerDirector.open`) blocked, and with socket connects to anything but loopback or a Unix socket blocked. Attempts are recorded as failures (`backend/tests/site/conftest.py`). Host names are not resolved by the guard, so a connect by host name other than `localhost` is refused. DNS lookups before a refused connect, and UDP sends, are not intercepted.
-- **Service count:** a negative count is refused before any feature is fetched. On replay it is never used as a count: the status is `negative_count`, and completeness reads `unknown: service count negative_count`.
+- **Service count:** a negative count is refused before any feature is fetched. Replay also refuses a receipt with an error-body or negative count, because `fetch` could not have completed one.
 - **Feature cap:** with paging, pages stop at `--max-features`. A layer without paging allows only one uncapped query. In that case the service count must be an integer no larger than `--max-features`, or nothing is downloaded. The single page is also checked afterwards, so a layer that changed in between fails the acquisition.
 - **Locations:** raw and output directories must be outside every git checkout or worktree, and must not be equal or nested. This is checked before any download.
 - **Committable command:** the manifest's `command` is rebuilt from the parsed arguments. Paths become the fixed placeholders `<raw-dir>` and `<output-dir>`, because even a directory's final name could be a person's name. Option abbreviations are refused.
-- **CRS:** queries ask for `f=json` with `outSR=27700`, never GeoJSON (which the server reprojects to WGS84). The layer's own declared CRS must also be EPSG:27700, or the build is refused.
+- **CRS:** queries ask for `f=json` with `outSR=27700`, never GeoJSON (which the server reprojects to WGS84). Every declared code must be an integer, and the declared codes must agree:
+  - **Pages:** `latestWkid` and `wkid` must agree with each other.
+  - **Layer metadata:** every code declared at the top level or under `sourceSpatialReference` must be 27700. A declaration there that is not an object is refused as unreadable. `extent.spatialReference` describes only a stored bounding box (implausible for this layer), so it never refuses the build. If it declares anything other than 27700, or is the only declaration, `native_crs_check` reads `unverified: ...` and names it, never `matches` or `not declared`.
+
+  Contradictory metadata, such as 27700 with 3857, is refused rather than resolved by taking whichever code comes first. A layer that declares no code at all is recorded as `native CRS unverified`, not refused.
+- **Request identity on replay:** before the fixed source is stamped on the outputs, the receipt must describe exactly the requests `fetch` would have made to the fixed layer:
+  - its paging settings must be those `fetch` reads from the saved layer metadata;
+  - the set of raw files must be exactly the ones `fetch` would have requested, using the same stop rule (an extra or post-stop page is refused, and so is a receipt missing a page `fetch` would still have requested);
+  - every file must have been served with HTTP 200, and no response may be a service error body;
+  - with paging, the pages together must hold no more than `max_features` records (`fetch` also refuses a page that holds more than it asked for);
+  - the count must not be an error body or negative; without paging, it must be an integer no larger than `max_features`;
+  - each file must carry the exact request URL, rebuilt with the same code, and must have been served from it;
+  - without paging, the single query must hold no more than `max_features` records.
 - **On failure:** the script always leaves `acquisition.json` (status, error, every request URL, final URL, retrieval time, HTTP status and SHA-256).
 - **On replay:** it refuses:
   - an incomplete acquisition;
@@ -97,7 +109,12 @@ python scripts/prepare_tree_inventory.py replay \
   - the approval reference (a role or a reference, never a name);
   - the recorded decisions.
 
-  Path arguments become fixed placeholders, and only allowlisted, validated receipt values are copied. **Publisher text is also copied and is not validated:** `layer_schema` (name, field names, types, aliases and lengths; `editingInfo`; `serviceItemId`) and `rights_detail.layer_copyright_text`. Review it before any commit.
+  Path arguments become fixed placeholders, and only allowlisted, validated receipt values are copied. **Publisher text is also copied and is not validated:**
+  - `layer_schema`: name, `geometryType`, `hasZ`, `objectIdField`, `maxRecordCount`; `spatialReference`, `sourceSpatialReference` and `extent_spatialReference`; field names, types, aliases and lengths; `editingInfo`; `serviceItemId`;
+  - `source.source_layer_name`;
+  - `rights_detail.layer_copyright_text`.
+
+  Review it before any commit.
 - `review-sample.json`: a small sample **for review, not redistribution**. Its schema is tagged `#sample`, and each record lists any `withheld_for_sample` fields. Only `sitename` and `featuretypename` are kept; any other field is withheld.
 - `local-only-sample-with-location-text.json` (only with `--keep-location-text`, written instead of `review-sample.json`): it also keeps `featurelocation` and is stamped `local_only`. Under decision 3a it is never committed.
 
@@ -135,8 +152,9 @@ Each feature:
 
 ## Known limits (from review, not fixed)
 
-The non-paging cap and the completeness wording are addressed in the #69 follow-up; its CI result is recorded on #69. These remain:
+The non-paging cap and the completeness wording were addressed in the first #69 follow-up. The CRS agreement and replay request-identity checks from Ben's review of #77 are covered above. These remain:
 
 - **Same-ID conflicts:** a same-ID copy rejected for bad geometry is not compared, so its valid twin is kept. Copies that differ only in non-string values hash as identical repeats.
-- **Count status:** `fetch` stops on a count error body, so the `service_error` count status is reachable only through a hand-made raw directory.
-- **Provenance on replay:** `replay` stamps the fixed Sheffield source on any raw directory; provenance rests on the receipt.
+- **Count status:** `fetch` stops on a count error body, and replay refuses such a receipt, so the importer's `service_error` count status is now reachable only by calling `build_inventory` directly.
+- **Provenance on replay:** `replay` stamps the fixed Sheffield source only on a receipt that describes exactly `fetch`'s requests to the fixed layer. Those URLs can be recomputed from the receipt itself, so provenance still rests on the receipt's integrity, not on any server signature. A consistently hand-built receipt is not detected.
+- **Real layer metadata:** where the real layer-14 metadata declares its CRS (top level, `sourceSpatialReference` or `extent.spatialReference`) has not been checked against a saved `layer.json`. The first real acquisition should confirm it.

@@ -58,15 +58,27 @@ class InventoryError(ValueError):
 
 
 def _crs(spatial_reference: Any) -> str:
+    """Every declared code (``latestWkid`` and ``wkid``) must be an integer, all must agree
+    and the shared code must be known; contradictory metadata is refused, never resolved by
+    taking whichever key comes first."""
     if not isinstance(spatial_reference, Mapping):
         raise InventoryError("page has no spatialReference; source CRS is unknown")
-    for key in ("latestWkid", "wkid"):
-        code = spatial_reference.get(key)
-        if type(code) is int:
-            if code not in KNOWN_CRS:
-                raise InventoryError(f"unsupported source CRS wkid {code}")
-            return KNOWN_CRS[code]
-    raise InventoryError("spatialReference has no integer wkid; source CRS is unknown")
+    declared = {
+        key: spatial_reference[key]
+        for key in ("latestWkid", "wkid")
+        if spatial_reference.get(key) is not None
+    }
+    if not declared:
+        raise InventoryError("spatialReference has no integer wkid; source CRS is unknown")
+    if any(type(code) is not int for code in declared.values()):
+        raise InventoryError(f"spatialReference has a non-integer wkid: {declared}")
+    codes = set(declared.values())
+    if len(codes) > 1:
+        raise InventoryError(f"spatialReference codes disagree: {declared}")
+    (code,) = codes
+    if code not in KNOWN_CRS:
+        raise InventoryError(f"unsupported source CRS wkid {code}")
+    return KNOWN_CRS[code]
 
 
 def _finite_number(value: Any) -> bool:

@@ -350,6 +350,95 @@ def check(problem, placements, evaluate, *, diagnostic=False):
     return Verdict(not reasons, tuple(reasons), cost, evaluation, tuple(records))
 
 
+def _admissible(problem, placements, evaluate):
+    """Search-side admission, deliberately separate from the final full checker."""
+    rules = problem.scenario.input.constraints
+    try:
+        items = [Placement.model_validate(p) for p in placements]
+    except ValueError:
+        return None
+    if (
+        len({p.placement_id for p in items}) != len(items)
+        or len({p.location_id for p in items}) != len(items)
+        or len({p.position_enu_m for p in items}) != len(items)
+    ):
+        return None
+    if any(pin not in items for pin in rules.pinned_placements):
+        return None
+    if rules.max_tree_count is not None and len(items) > rules.max_tree_count:
+        return None
+    candidates = {c.candidate_id: c for c in problem.site.candidate_catalogue}
+    spend = 0
+    for p in items:
+        c = candidates.get(p.candidate_id)
+        profile = problem.profiles.get(p.profile_id)
+        if (
+            c is None
+            or profile is None
+            or c.plantability_status == "excluded"
+            or p.profile_id not in rules.allowed_profile_ids
+        ):
+            return None
+        if (p.location_id, p.position_enu_m, p.profile_id) != (
+            c.location_id,
+            c.position_enu_m,
+            c.profile_id,
+        ):
+            return None
+        if (
+            abs(p.position_enu_m[2] - problem.flat_ground_z_m)
+            > problem.scenario.input.numerics.intersection_tolerance_m
+        ):
+            return None
+        if rules.accepted_planting_region_ids and not any(
+            _inside(p.position_enu_m, problem.regions[k])
+            for k in rules.accepted_planting_region_ids
+        ):
+            return None
+        if any(_inside(p.position_enu_m, problem.regions[k]) for k in rules.excluded_region_ids):
+            return None
+        if any(r.clearance_state not in profile.states for r in rules.spacing_rules):
+            return None
+        for case in problem.scenario.input.evaluation_cases:
+            state = profile.states.get(case.profile_state)
+            if state is None or state.horizon_years != case.horizon_years:
+                return None
+        spend += profile.cost_pence
+    if spend > rules.budget_pence:
+        return None
+    conflicts = {frozenset(pair) for pair in rules.incompatible_candidate_pairs}
+    for a, b in combinations(items, 2):
+        if frozenset((a.candidate_id, b.candidate_id)) in conflicts:
+            return None
+        if any(
+            math.dist(a.position_enu_m, b.position_enu_m) < r.minimum_centre_separation_m
+            for r in rules.spacing_rules
+        ):
+            return None
+    result = evaluate([p.model_dump(mode="json") for p in items])
+    for limit in rules.winter_limits:
+        case = next(
+            (
+                c
+                for c in result["cases"]
+                if c["case_id"] == limit.case_id and c["role"] == "winter_check"
+            ),
+            None,
+        )
+        if case is None:
+            raise ValueError("winter case missing")
+        if limit.target_id is not None:
+            case = next((t for t in case["targets"] if t["target_id"] == limit.target_id), None)
+            if case is None:
+                raise ValueError("winter target missing")
+        loss = case["physical_m2_h"]
+        if not math.isfinite(loss) or loss < 0:
+            raise ValueError("invalid winter loss")
+        if loss > limit.maximum_loss_m2_h:
+            return None
+    return spend, result
+
+
 def _score(problem, result):
     obj = problem.scenario.input.objective
     cases = [
@@ -379,11 +468,12 @@ def search(problem, evaluate, stop=None, exact_limit=0):
         nonlocal evaluated
         if stop is not None and stop():
             raise InterruptedError("search stopped")
-        v = check(problem, items, evaluate)
+        admission = _admissible(problem, items, evaluate)
         evaluated += 1
-        if not v.feasible:
+        if admission is None:
             return None
-        return Choice(tuple(items), _score(problem, v.evaluation), v.cost_pence, v.evaluation)
+        cost, evaluation = admission
+        return Choice(tuple(items), _score(problem, evaluation), cost, evaluation)
 
     def rank(c):
         if obj.kind == "minimise_cost_for_target":

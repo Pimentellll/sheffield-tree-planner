@@ -381,3 +381,19 @@ def test_maximisation_uses_weighted_utility_target_uses_physical():
     target_result = search(prepare(d), weighted)
     assert target_result.best.placements[0]["candidate_id"] == "c0"
     assert target_result.best.score == 5
+
+
+def test_final_checker_rejects_compromised_search_admission(monkeypatch):
+    import tree_planner.search as search_module
+
+    p = prepare(deps())
+
+    def compromised(problem, placements, evaluate):
+        return len(placements) * 5, evaluate(list(placements))
+
+    monkeypatch.setattr(search_module, "_admissible", compromised)
+    result = search_module.search(p, calc)
+    assert result.best.cost_pence > p.scenario.input.constraints.budget_pence
+    verdict = search_module.check(p, result.best.placements, calc)
+    assert not verdict.feasible
+    assert "budget" in verdict.reasons

@@ -350,3 +350,33 @@ def test_real_physics_winter_limits_aggregate_and_target():
     assert len(winter_records) == 2
     assert all(r["observed_value"] > 0 and r["status"] == "fail" for r in winter_records)
     assert not verdict.feasible
+
+
+def test_maximisation_uses_weighted_utility_target_uses_physical():
+    d = deps()
+    d["scenario"]["input"]["constraints"]["max_tree_count"] = 1
+
+    def weighted(placements):
+        cid = placements[0]["candidate_id"] if placements else None
+        physical = {"c0": 5.0, "c1": 2.0, "c2": 0.0, None: 0.0}[cid]
+        utility = {"c0": 5.0, "c1": 8.0, "c2": 0.0, None: 0.0}[cid]
+        return {
+            "cases": [
+                {
+                    "case_id": "summer",
+                    "role": "benefit",
+                    "quantity_kind": "geometric",
+                    "physical_m2_h": physical,
+                    "weighted_m2_h": utility,
+                    "targets": [],
+                }
+            ]
+        }
+
+    max_result = search(prepare(d), weighted)
+    assert max_result.best.placements[0]["candidate_id"] == "c1"
+    assert max_result.best.score == 8
+    d["scenario"]["input"]["objective"].update(kind="minimise_cost_for_target", target_gain_m2_h=4)
+    target_result = search(prepare(d), weighted)
+    assert target_result.best.placements[0]["candidate_id"] == "c0"
+    assert target_result.best.score == 5

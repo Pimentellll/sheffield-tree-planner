@@ -181,7 +181,7 @@ def _placement(c, pinned=False):
     )
 
 
-def check(problem, placements, evaluate):
+def check(problem, placements, evaluate, *, diagnostic=False):
     """Recompute all hard conditions from full placements; evaluator failures propagate."""
     rules = problem.scenario.input.constraints
     candidates = {c.candidate_id: c for c in problem.site.candidate_catalogue}
@@ -254,7 +254,7 @@ def check(problem, placements, evaluate):
             reasons.append("spacing")
     evaluation = None
     winter_records = []
-    if not reasons:
+    if not reasons or diagnostic:
         evaluation = evaluate([p.model_dump(mode="json") for p in parsed])
         for limit in rules.winter_limits:
             case = next(
@@ -357,7 +357,8 @@ def _score(problem, result):
     ]
     if len(cases) != 1 or cases[0]["quantity_kind"] != obj.quantity_kind:
         raise ValueError("missing or incompatible objective case")
-    score = cases[0]["physical_m2_h"]
+    field = "weighted_m2_h" if obj.kind == "maximise_shade_under_budget" else "physical_m2_h"
+    score = cases[0][field]
     if type(score) not in (int, float) or not math.isfinite(score) or score < 0:
         raise ValueError("invalid objective")
     return float(score)
@@ -392,7 +393,7 @@ def search(problem, evaluate, stop=None, exact_limit=0):
 
     current = probe(pins)
     if current is None:
-        return SearchResult(None, None, "no_feasible_layout_found", tuple(trace), evaluated)
+        raise ValueError("pinned layout fails hard constraints")
     reference = current
     eligible = False
     # A distinct deterministic reference: first feasible additions in candidate order.
@@ -466,4 +467,6 @@ def relocate(problem, placements, placement_id, alternative_position_enu_m, eval
         raise ValueError("unresolved placement")
     i = indices[0]
     items[i]["position_enu_m"] = alternative_position_enu_m
-    return Comparison(tuple(items), check(problem, items, evaluate), ("position_enu_m",))
+    return Comparison(
+        tuple(items), check(problem, items, evaluate, diagnostic=True), ("position_enu_m",)
+    )

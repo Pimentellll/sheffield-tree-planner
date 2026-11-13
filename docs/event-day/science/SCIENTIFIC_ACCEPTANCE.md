@@ -2,6 +2,8 @@
 
 **Revised 13 Nov 2026 (issue #57 reconciliation):** checked against `origin/main` `033d56d` (PRs #66, #67, #70, #71, #76, #77, #78, #80 merged) and the branches listed in [README §Reconciliation](README.md#reconciliation-after-ca1662d-13-nov). "PR #70 @ `8d24e73`" below is its merged head, now `docs/implementation/NEMOTRON_AGENT_RUNTIME_AUDIT_20261113.md` on main. No backend file cited here changed between `ca1662d` and `033d56d`. Nothing was executed.
 
+**Re-checked 13 Nov 2026 against `origin/main` `be9d544`** (read-only; nothing was executed): no backend file, `frontend/scripts/` file or `frontend/DEMO.md` cited here changed between `033d56d` and `be9d544`. `frontend/src/planning/evaluation.ts` changed (pound parsing and a progress view), but `formatPence`, cited in N-04, did not. No row, gate or status in this checklist was changed, and the Sign-off record is untouched.
+
 **Use:** Arnav works through this on the DGX Spark release after Ben's handoff, then before the video facts and form are frozen. Allow about 20 minutes for the N and S rows and about 35 minutes for the five-case protocol (A and X rows).
 **State vocabulary:** `prepared` = check defined, no evidence yet · `blocked` = needs the Spark release or Ben's handoff · `verified` = observed on the stated SHA/device with evidence linked · `not examined`.
 **Rule:** a row is `verified` only with an observed artefact (Result JSON, exchange log, screenshot paired with run ID, command output) on the release SHA. A document, test name, code reading or AI statement is never enough. Code-reading notes below say what to look for, not that it passed.

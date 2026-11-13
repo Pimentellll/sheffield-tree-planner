@@ -2,6 +2,8 @@
 
 **Revised 13 Nov 2026 (issue #57 reconciliation):** checked against `origin/main` `033d56d` (PRs #66, #67, #70, #71, #76, #77, #78, #80 merged) and the branches listed in [README §Reconciliation](README.md#reconciliation-after-ca1662d-13-nov). "PR #70 @ `8d24e73`" below is its merged head, now `docs/implementation/NEMOTRON_AGENT_RUNTIME_AUDIT_20261113.md` on main. Nothing was executed.
 
+**Re-checked 13 Nov 2026 against `origin/main` `be9d544`** (read-only; nothing was executed): the runtime audit, `docs/SOURCES.md` and the backend files other than `agents/observation_views.py` (added) and `site/source_inventory.py` are unchanged between `033d56d` and `be9d544`. The **[R]** statements here were not re-read one by one, and no public source was fetched again. No statement in this file was changed in that pass. One wording rule was corrected afterwards: the §3 "Verification vs validation" row now gives the ledger S-04 wording ("checked", not "verified").
+
 **Scope:** targeted research for judging (Impact, Technical Execution, Feasibility) and for the science checks. The broad literature, software and data review is in the [deep research dossier](../../references/DEEP_RESEARCH_DOSSIER.md) and [SOURCES](../../SOURCES.md); it is not repeated here. Sources marked **new** were not cited in the repository before this package. Every statement is labelled **[S]** source-supported, **[R]** repository-observed, or **[I]** research-derived inference.
 
 ## 1. The real problem in Sheffield
@@ -50,7 +52,7 @@
 | Costs | Integer pence, single upfront assumed cost, no lifecycle | Adequate for a prototype; not a real price |
 | Growth and season | Establishment (year 1) vs mature (year 20) states; leaf-off transmission 0.7 assumed | Labelled assumptions; not biological forecasts |
 | Uncertainty | Separated in method text (discretisation / input / model inadequacy); no runtime sensitivity analysis | Communicate as limitation |
-| Verification vs validation | Unit/analytic tests exist (reported on PR #52); no field validation | Say "verified against analytic test cases in development"; never "validated" |
+| Verification vs validation | Unit/analytic tests exist (reported on PR #52); no field validation | Say "checked against analytic test cases during development; not field-validated" (ledger S-04); never "verified" or "validated" |
 
 ## 4. Agent evaluation: method basis
 

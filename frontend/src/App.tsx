@@ -4,6 +4,9 @@ import { checkSiteTransform } from './scene/transform'
 import { useWorkspace } from './planning/useWorkspace'
 import { EvaluationControls, ResultCard, RunHistory, SiteStatus, TreeEditor } from './panels/Panels'
 import { ProposalReviewPanel, RequirementsPanel } from './panels/Requirements'
+import { AlternativesPanel } from './panels/Alternatives'
+import { layoutRows } from './planning/alternatives'
+import type { Vec3 } from './api/types'
 
 type Screen = 'overview' | 'studio' | 'compare' | 'report'
 const screens: { id: Screen; number: string; label: string }[] = [
@@ -23,6 +26,11 @@ function App() {
   const connected = ws.connection.status === 'connected'
   const synthetic = ws.site?.site_kind === 'synthetic_test'
   const declaration = ws.declaration?.status === 'verified' ? ws.declaration.declaration : null
+  const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null)
+  const searchRecord = ws.runs.find(r => r.result?.operation === 'search_layouts') ?? null
+  const overlays = useMemo(() => (searchRecord?.result ? layoutRows(searchRecord.result, searchRecord.inputScenario) : [])
+    .filter(row => row.role !== 'baseline')
+    .map(row => ({ id: row.layoutId, positions: row.placements.map(p => p.position_enu_m as Vec3), highlighted: row.layoutId === selectedLayoutId })), [searchRecord, selectedLayoutId])
 
   return (
     <div className="app-shell">
@@ -45,13 +53,14 @@ function App() {
             {(synthetic || !connected) && <div className="notice" role="status"><span className="notice-icon" aria-hidden="true">ⓘ</span><div><strong>{connected ? 'Synthetic reference site' : 'Not connected to an evaluator'}</strong><p>{connected ? 'This site is an explicit synthetic test declaration, not Sheffield. Results are real computations of that synthetic geometry with a chosen sun direction; feasibility and constraints are not evaluated.' : 'Start the local backend (see frontend/README.md). No numbers are shown without a backend run.'}</p></div></div>}
             <div className="studio-grid">
               <section className="site-panel" aria-labelledby="site-heading"><div className="panel-head"><div><span className="section-kicker">ACTIVE SITE</span><h2 id="site-heading">{ws.site?.name ?? 'No site loaded'}</h2></div><span className="tiny-tag">{synthetic ? 'SYNTHETIC TEST' : ws.site ? ws.site.site_kind.toUpperCase() : 'OFFLINE'}</span></div>
-                <SiteScene declaration={declaration} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={ws.setDraftPosition} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} />
-                <div className="map-legend"><span><i className="legend-dot proposed" /> Proposed tree</span>{ws.draftDirty && <span><i className="legend-dot ghost" /> Last evaluated position</span>}<span><i className="legend-dot target" /> Target receiver (represented area)</span><span><i className="legend-line sun" /> Declared sun direction (input, view only)</span><span>Drag tree to move · drag elsewhere to orbit · scroll to zoom</span></div>
+                <SiteScene declaration={declaration} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={ws.setDraftPosition} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} />
+                <div className="map-legend"><span><i className="legend-dot proposed" /> Proposed tree</span>{ws.draftDirty && <span><i className="legend-dot ghost" /> Last evaluated position</span>}<span><i className="legend-dot target" /> Target receiver (represented area)</span><span><i className="legend-line sun" /> Declared sun direction (input, view only)</span>{overlays.length > 0 && <span><i className="legend-dot option" /> Search option placements</span>}<span>Drag tree to move · drag elsewhere to orbit · scroll to zoom</span></div>
               </section>
               <aside className="detail-panel" aria-label="Planning controls and evidence">
                 <ResultCard ws={ws} />
                 <EvaluationControls ws={ws} />
                 <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
+                <AlternativesPanel ws={ws} selectedLayoutId={selectedLayoutId} onSelectLayout={setSelectedLayoutId} />
                 <RequirementsPanel ws={ws} />
                 <ProposalReviewPanel ws={ws} />
                 <RunHistory ws={ws} />

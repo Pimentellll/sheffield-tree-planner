@@ -133,8 +133,9 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
 const CURRENTNESS_TONE: Record<Currentness, string> = { current: 'tone-success', 'stale-draft': 'tone-warning', 'not-selected': 'tone-warning', superseded: 'tone-muted' }
 
 export function ResultCard({ ws }: { ws: Workspace }) {
-  const record = ws.runs.find(r => r.result) ?? null
-  const latestFailure = ws.runs[0] && !ws.runs[0].result ? ws.runs[0] : null
+  const evaluations = ws.runs.filter(r => r.job.operation === 'evaluate_layout')
+  const record = evaluations.find(r => r.result) ?? null
+  const latestFailure = evaluations[0] && !evaluations[0].result ? evaluations[0] : null
   const primaryCase = ws.scenario?.input.objective.primary_case_id ?? null
   if (!record?.result) {
     return (
@@ -148,7 +149,7 @@ export function ResultCard({ ws }: { ws: Workspace }) {
   }
   const result = record.result
   const currentness = ws.currentness(result)
-  const failureNewer = latestFailure !== null && ws.runs.indexOf(latestFailure) < ws.runs.indexOf(record)
+  const failureNewer = latestFailure !== null && evaluations.indexOf(latestFailure) < evaluations.indexOf(record)
   return (
     <div className={`detail-section result-section result-${currentness}`}>
       <span className="section-kicker">{currentness === 'current' ? 'CURRENT RESULT' : 'LAST RESULT — NOT CURRENT'}</span>
@@ -220,7 +221,7 @@ export function RunHistory({ ws }: { ws: Workspace }) {
           const c = r.result ? ws.currentness(r.result) : null
           return (
             <li key={r.job.job_id}>
-              <span>rev {r.job.scenario_revision}</span>
+              <span>rev {r.job.scenario_revision}{r.job.operation !== 'evaluate_layout' ? ` · ${r.job.operation.replace('_layouts', '').replace('_', ' ')}` : ''}</span>
               <strong>{m ? `${formatValue(m.value)} ${unitLabel(m.unit)}` : r.job.status}</strong>
               <em className={c ? CURRENTNESS_TONE[c] : 'tone-danger'}>{c ? CURRENTNESS_LABEL[c].label : r.job.error?.code ?? r.job.status.toUpperCase()}</em>
             </li>

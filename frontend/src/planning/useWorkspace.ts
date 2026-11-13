@@ -16,7 +16,13 @@ export type ConnectionState =
 export interface RunRecord {
   readonly job: Job
   readonly result: Result | null
+  /** The exact scenario snapshot the result was computed from (budget, objective, cases). */
+  readonly inputScenario: Scenario | null
 }
+
+export type ViewSlot = 'evaluation' | 'search' | 'comparison'
+export const slotOf = (operation: Result['operation']): ViewSlot =>
+  operation === 'search_layouts' ? 'search' : operation === 'evaluate_layout' ? 'evaluation' : 'comparison'
 
 /** A hypothetical scenario prepared elsewhere (for example by the planning agent) awaiting a human decision. */
 export interface ProposalReview {
@@ -48,6 +54,7 @@ export interface Workspace {
   readonly activeJob: Job | null
   readonly runs: readonly RunRecord[]
   readonly currentRunId: string | null
+  readonly currentRunIds: Readonly<Record<ViewSlot, string | null>>
   readonly busy: 'committing' | 'submitting' | 'cancelling' | 'loading-proposal' | 'accepting-proposal' | null
   readonly notice: string | null
   readonly error: string | null
@@ -88,7 +95,8 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const [draftRequirements, setDraftRequirements] = useState<Requirements | null>(null)
   const [activeJob, setActiveJob] = useState<Job | null>(null)
   const [runs, setRuns] = useState<RunRecord[]>([])
-  const [currentRunId, setCurrentRunId] = useState<string | null>(null)
+  const [currentRunIds, setCurrentRunIds] = useState<Record<ViewSlot, string | null>>({ evaluation: null, search: null, comparison: null })
+  const currentRunId = currentRunIds.evaluation
   const [busy, setBusy] = useState<Workspace['busy']>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -127,7 +135,11 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const refreshSelection = useCallback(async (head: Scenario) => {
     const selections = await client.selections(refOf(head))
     if (!alive.current || scenarioRef.current?.revision !== head.revision) return
-    setCurrentRunId(selections.evaluation.current_job?.run_id ?? null)
+    setCurrentRunIds({
+      evaluation: selections.evaluation.current_job?.run_id ?? null,
+      search: selections.search.current_job?.run_id ?? null,
+      comparison: selections.comparison.current_job?.run_id ?? null,
+    })
   }, [client])
 
   /** Adopt a new accepted head: its layout becomes the committed (and draft) position. */
@@ -142,7 +154,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
       setDraft(nextLayout.placements[0]?.position_enu_m as Vec3)
       setDraftRequirements(requirementsOf(head))
     }
-    setCurrentRunId(null)
+    setCurrentRunIds({ evaluation: null, search: null, comparison: null })
     return nextLayout
   }, [client])
 
@@ -174,8 +186,10 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
         const profileValue = await client.profile(profileId, head.input.profile_library_revision)
         const check = dev ? await verifyDeclaration(dev, siteValue) : null
         const selections = await client.selections(refOf(head))
-        const selectedRun = selections.evaluation.current_job?.run_id ?? null
-        const existing = selectedRun ? await client.result(selectedRun) : null
+        const selected = (['evaluation', 'search', 'comparison'] as const)
+          .map(slot => selections[slot].current_job)
+          .filter((job): job is Job => Boolean(job?.run_id))
+        const existing: RunRecord[] = await Promise.all(selected.map(async job => ({ job, result: await client.result(job.run_id!), inputScenario: head })))
         if (cancelled) return
         setSession(dev)
         setDeclaration(check)
@@ -186,8 +200,12 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
         scenarioRef.current = head
         setDraft(layoutValue.placements[0].position_enu_m as Vec3)
         setDraftRequirements(requirementsOf(head))
-        setCurrentRunId(selectedRun)
-        setRuns(existing && selections.evaluation.current_job ? [{ job: selections.evaluation.current_job, result: existing }] : [])
+        setCurrentRunIds({
+          evaluation: selections.evaluation.current_job?.run_id ?? null,
+          search: selections.search.current_job?.run_id ?? null,
+          comparison: selections.comparison.current_job?.run_id ?? null,
+        })
+        setRuns(existing)
         setActiveJob(null)
         setReview(null)
         setConnection({ status: 'connected', health })
@@ -198,8 +216,8 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     return () => { cancelled = true }
   }, [client, attempt])
 
-  const record = useCallback((job: Job, result: Result | null) => {
-    setRuns(previous => [{ job, result }, ...previous.filter(r => r.job.job_id !== job.job_id)].slice(0, 30))
+  const record = useCallback((job: Job, result: Result | null, inputScenario: Scenario | null) => {
+    setRuns(previous => [{ job, result, inputScenario }, ...previous.filter(r => r.job.job_id !== job.job_id)].slice(0, 30))
   }, [])
 
   const poll = useCallback(async (job: Job) => {
@@ -213,7 +231,8 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     if (result && (result.source_job_id !== current.job_id || result.input_fingerprint !== current.input_fingerprint)) {
       throw new Error(`Result ${result.run_id} does not match job ${current.job_id}; not displayed`)
     }
-    record(current, result)
+    const inputScenario = result ? await client.scenario(result.input_snapshot_ref) : null
+    record(current, result, inputScenario)
     const head = scenarioRef.current
     if (head) await refreshSelection(head)
   }, [client, record, refreshSelection])
@@ -332,8 +351,8 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
 
   const currentness = useCallback((result: Result): Currentness => {
     if (!scenario) return 'superseded'
-    return classifyResult({ result, head: refOf(scenario), currentRunId, draftDirty })
-  }, [scenario, currentRunId, draftDirty])
+    return classifyResult({ result, head: refOf(scenario), currentRunId: currentRunIds[slotOf(result.operation)], draftDirty })
+  }, [scenario, currentRunIds, draftDirty])
 
   const jobRunning = activeJob !== null && !TERMINAL_JOB_STATES.has(activeJob.status)
   const connectedOk = connection.status === 'connected' && busy === null &&
@@ -343,7 +362,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     connection, session, declaration, site, profile, scenario, layout,
     placementId: placement?.placement_id ?? null,
     committedPosition, draftPosition, positionDirty, acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors,
-    draftChanges, draftDirty, activeJob, runs, currentRunId, busy, notice, error, review,
+    draftChanges, draftDirty, activeJob, runs, currentRunId, currentRunIds, busy, notice, error, review,
     canEvaluate: connectedOk && requirementErrors.length === 0 && !(jobRunning && !draftDirty),
     currentness,
     setDraftPosition: (p: Vec3) => setDraft(p),
@@ -356,6 +375,6 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     dismissProposal: () => setReview(null),
     reload: () => setAttempt(a => a + 1),
   }), [connection, session, declaration, site, profile, scenario, layout, placement, committedPosition, draftPosition, positionDirty,
-    acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors, draftChanges, draftDirty, activeJob, runs, currentRunId,
+    acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors, draftChanges, draftDirty, activeJob, runs, currentRunId, currentRunIds,
     busy, notice, error, review, connectedOk, jobRunning, currentness, evaluate, submit, cancel, loadProposal, acceptProposal])
 }

@@ -153,6 +153,20 @@ async function online() {
     } else {
       check('failure step skipped (CANOPY_DEV_WORKSPACE not set)', true)
     }
+    // STP-018: search is shown as unavailable on a backend without a search provider; nothing is invented.
+    const health = (await backend('GET', '/health')).json
+    if (!health.available_operations.includes('search_layouts')) {
+      check('search unavailable is stated, not filled with placeholder options', await page.getByTestId('search-unavailable').count() === 1 &&
+        await page.getByRole('button', { name: 'Find planting options' }).isDisabled() && await page.locator('.layout-table').count() === 0)
+      let refused = null
+      const h = await head()
+      try {
+        await backend('POST', '/jobs', { request_id: `test-search-${Date.now()}`, operation: 'search_layouts', scenario_ref: { scenario_id: h.scenario_id, revision: h.revision, scope: 'accepted' }, arguments: {} })
+      } catch (e) { refused = String(e) }
+      check('backend itself refuses search without a provider', refused !== null && /TOOL_UNAVAILABLE|UNSUPPORTED_OPERATION/.test(refused), refused?.slice(0, 120))
+    } else {
+      check('search provider present: run the live search check (not yet implemented in this script)', false)
+    }
     await requirementsFlow(page)
     check('no page errors', errors.length === 0, errors.join('; '))
   } finally { await browser.close() }

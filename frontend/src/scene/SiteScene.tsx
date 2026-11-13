@@ -17,6 +17,8 @@ export interface SiteSceneProps {
   readonly editable: boolean
   readonly onDraftChange: (position: Vec3) => void
   readonly siteLabel: string
+  /** Placements of evaluated alternative layouts from a stored search result (positions only). */
+  readonly overlays?: readonly { readonly id: string; readonly positions: readonly Vec3[]; readonly highlighted: boolean }[]
 }
 
 const HOME = new THREE.Vector3(6.5, 6, 8.5)
@@ -62,12 +64,12 @@ function disposeObject(object: THREE.Object3D) {
   })
 }
 
-export default function SiteScene({ declaration, treeState, committed, draft, editable, onDraftChange, siteLabel }: SiteSceneProps) {
+export default function SiteScene({ declaration, treeState, committed, draft, editable, onDraftChange, siteLabel, overlays = [] }: SiteSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null)
   const northRef = useRef<HTMLSpanElement>(null)
   const world = useRef<{
     scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; renderer: THREE.WebGLRenderer
-    staticGroup: THREE.Group; draftTree: THREE.Group | null; ghostTree: THREE.Group | null
+    staticGroup: THREE.Group; overlayGroup: THREE.Group; draftTree: THREE.Group | null; ghostTree: THREE.Group | null
   } | null>(null)
   const latest = useRef({ draft, editable, onDraftChange })
   latest.current = { draft, editable, onDraftChange }
@@ -125,9 +127,10 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
     coarse.position.y = 0.006
     scene.add(fine, coarse)
     const staticGroup = new THREE.Group()
-    scene.add(staticGroup)
+    const overlayGroup = new THREE.Group()
+    scene.add(staticGroup, overlayGroup)
 
-    world.current = { scene, camera, controls, renderer, staticGroup, draftTree: null, ghostTree: null }
+    world.current = { scene, camera, controls, renderer, staticGroup, overlayGroup, draftTree: null, ghostTree: null }
 
     // Pointer editing: drag the proposed tree across the ground plane (u = 0).
     const raycaster = new THREE.Raycaster()
@@ -245,6 +248,32 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
       w.staticGroup.add(obstacle)
     })
   }, [declaration, state])
+
+  // Alternative layouts from a stored search result: a ring per placement; the highlighted one also gets crowns.
+  const overlayKey = JSON.stringify(overlays)
+  useEffect(() => {
+    const w = world.current
+    if (!w) return
+    w.overlayGroup.children.slice().forEach(child => { w.overlayGroup.remove(child); disposeObject(child) })
+    for (const layout of overlays) {
+      for (const p of layout.positions) {
+        const r = treeState ? Math.max(treeState.crown_radii_m[0], treeState.crown_radii_m[1]) : 0.5
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(r * 0.9, r * 1.05, 40),
+          new THREE.MeshBasicMaterial({ color: layout.highlighted ? '#9fd3ff' : '#c9d8c3', side: THREE.DoubleSide, transparent: true, opacity: layout.highlighted ? 0.95 : 0.45 }),
+        )
+        ring.rotation.x = -Math.PI / 2
+        ring.position.copy(toV(p)).add(new THREE.Vector3(0, 0.015, 0))
+        w.overlayGroup.add(ring)
+        if (layout.highlighted && treeState) {
+          const crown = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ color: '#9fd3ff', transparent: true, opacity: 0.45, depthWrite: false }))
+          crown.scale.set(treeState.crown_radii_m[0], treeState.crown_radii_m[2], treeState.crown_radii_m[1])
+          crown.position.copy(toV(p)).add(new THREE.Vector3(0, treeState.crown_center_height_m, 0))
+          w.overlayGroup.add(crown)
+        }
+      }
+    }
+  }, [overlayKey, treeState, state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Proposed tree (draft) and, when moved, a ghost at the last committed position.
   useEffect(() => {

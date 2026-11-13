@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Metric } from '../api/types'
 import {
   AGENT_API_UNAVAILABLE_REASON, MODEL_INTERPRETATION_LABEL, agentPanelState, evidenceChain, linkageProblems, metricLabel, metricText, narrativeFigures,
-  narrativeView, type ChainJob, type ChainResult,
+  narrativeView, type ChainJob, type ChainLayout, type ChainResult,
 } from './agentEvidence'
 
 // Labelled synthetic test inputs shaped like the backend wire types (metric fixtures satisfy the
@@ -22,9 +22,14 @@ const delivery = (over: Partial<Delivery> = {}): Delivery => ({
 const job = (over: Partial<ChainJob> = {}): ChainJob => ({
   job_id: 'job-1', status: 'completed', operation: 'evaluate_layout', scenario_id: 's1', scenario_revision: 3, scope: 'accepted', delivery: delivery(), ...over,
 })
+// evaluate_layout returns comparison_completed and selects no layout (evaluators/__init__.py ~343-353).
+const layout = (over: Partial<ChainLayout> = {}): ChainLayout => ({
+  cost_pence: 45000, selected: false, role: 'alternative', feasibility: 'not_evaluated', layout: { layout_id: 'L1' }, ...over,
+})
 const result = (over: Partial<ChainResult> = {}): ChainResult => ({
   run_id: 'run-1', source_job_id: 'job-1', input_fingerprint: 'fp-1', input_snapshot_ref: ref, operation: 'evaluate_layout',
-  metrics: [metric()], missing_metrics: [], layouts: [{ cost_pence: 45000, selected: true }, { cost_pence: 99900, selected: false }],
+  analytical_outcome: 'comparison_completed', metrics: [metric()], missing_metrics: [],
+  layouts: [layout(), layout({ cost_pence: 99900, role: 'reference', feasibility: 'feasible', layout: { layout_id: 'L0' } })],
   limitations: ['Synthetic flat site; one-hour sample.'], provenance: { execution_mode: 'live' }, ...over,
 })
 
@@ -48,13 +53,25 @@ describe('evidenceChain (backend values only)', () => {
   it('links job → delivery → result → metric, cost and limitation with the supplied currentness', () => {
     const chain = evidenceChain(job(), result(), 'current')
     expect(chain.ok).toBe(true)
+    expect(chain.ok && [chain.outcome, chain.feasible]).toEqual(['comparison_completed', null])
+    expect(byKind(chain, 'outcome')).toEqual(['Computed (feasibility shown per layout)'])
     expect(byKind(chain, 'job')).toEqual(['job-1'])
     expect(byKind(chain, 'result')).toEqual(['run-1 · delivered as: Live computation'])
     expect(byKind(chain, 'provenance')).toEqual(['job job-1 · Live computation'])
     expect(byKind(chain, 'currentness')).toEqual(['CURRENT'])
     expect(byKind(chain, 'metric')).toEqual(['12.34 m²·h'])
-    expect(byKind(chain, 'cost')).toEqual(['£450.00']) // selected layout only, converted from pence once
+    // Every evaluated layout's cost, converted from pence once, even though evaluate_layout selects none.
+    expect(byKind(chain, 'cost')).toEqual(['£450.00 · not evaluated', '£999.00 · feasible'])
+    expect(chain.ok && chain.steps.filter(s => s.kind === 'cost').map(s => s.label)).toEqual(['Cost · alternative layout L1', 'Cost · reference layout L0'])
     expect(byKind(chain, 'limitation')).toEqual(['Synthetic flat site; one-hour sample.'])
+  })
+  it('reports the analytical outcome so an infeasible search is never shown as a success', () => {
+    const search = job({ operation: 'search_layouts' })
+    const found = evidenceChain(search, result({ operation: 'search_layouts', analytical_outcome: 'feasible_candidate', layouts: [layout({ selected: true, feasibility: 'feasible' })] }), 'current')
+    expect(found.ok && [found.feasible, byKind(found, 'outcome'), byKind(found, 'cost')]).toEqual([true, ['Feasible planting layout found'], ['£450.00 · feasible · selected']])
+    const infeasible = evidenceChain(search, result({ operation: 'search_layouts', analytical_outcome: 'proven_infeasible_finite_model', layouts: [layout({ feasibility: 'infeasible' })] }), 'current')
+    expect(infeasible.ok).toBe(true)
+    expect(infeasible.ok && [infeasible.feasible, byKind(infeasible, 'outcome')]).toEqual([false, ['Proven infeasible within the finite model']])
   })
   it('accepts a cache hit and shows it as cached, keeping the original live computation as provenance', () => {
     const cached = job({ job_id: 'job-2', delivery: delivery({ job_id: 'job-2', execution_mode: 'cached', source_job_id: 'job-1' }) })
@@ -151,8 +168,21 @@ describe('narrativeFigures (untrusted model text)', () => {
   it('never treats foreign currency or unattributable scales as backed by the result', () => {
     expect(statuses('$450')).toEqual([['$450', 'money', 'unverified']])
     expect(statuses('€450')).toEqual([['€450', 'money', 'unverified']])
-    expect(statuses('30 degrees')).toEqual([['30 degrees', 'unknown', 'unverified']])
+    expect(statuses('30 degrees')).toEqual([['30 degrees', 'degrees', 'unverified']])
     expect(statuses('2 K')).toEqual([['2 K', 'unknown', 'unverified']])
+  })
+  it('keeps the sign of a currency range to the figure it belongs to', () => {
+    expect(statuses('£400-£450')).toEqual([['£400', 'money', 'unverified'], ['£450', 'money', 'appears-in-result']])
+  })
+  it('reads decimal commas, markdown emphasis, hyphens and bare temperature letters', () => {
+    expect(statuses('1,5 °C')).toEqual([['1,5 °C', 'temperature', 'unsupported']])
+    expect(statuses('2,5 kWh', result({ metrics: [energy('kWh', 2.5)] }))).toEqual([['2,5 kWh', 'energy_kWh', 'appears-in-result']])
+    expect(statuses('**2** °C')).toEqual([['2 °C', 'temperature', 'unsupported']])
+    expect(statuses('2-degree')).toEqual([['2-degree', 'degrees', 'unverified']])
+    expect(statuses('3C')).toEqual([['3C', 'temperature', 'unsupported']])
+    expect(statuses('3 Celsius')).toEqual([['3 Celsius', 'temperature', 'unsupported']])
+    expect(statuses('2 deg')).toEqual([['2 deg', 'degrees', 'unverified']])
+    expect(statuses('–2.5 kWh', result({ metrics: [energy('kWh', -2.5)] }))).toEqual([['–2.5 kWh', 'energy_kWh', 'appears-in-result']])
   })
   it('recognises the other units in the wire Metric unit union', () => {
     const r = result({ metrics: [
@@ -162,7 +192,8 @@ describe('narrativeFigures (untrusted model text)', () => {
     ] })
     expect(statuses('12.3 weighted m²·h', r)).toEqual([['12.3 weighted m²·h', 'weighted_shade', 'appears-in-result']])
     expect(statuses('0.8 kWh/m²', r)).toEqual([['0.8 kWh/m²', 'energy_kWh_per_m2', 'appears-in-result']])
-    // No registered metric currently emits h or m (contracts/results.py), so these can only be unverified.
+    // No registered metric currently emits h or m: Metric.registry_pair in contracts/results.py
+    // (~202-224) allows only m2_h, weighted_m2_h, kWh and kWh_per_m2. So these can only be unverified.
     expect(statuses('3.5 h', r)).toEqual([['3.5 h', 'hours', 'unverified']])
     expect(statuses('4.2 m', r)).toEqual([['4.2 m', 'length_m', 'unverified']])
   })
@@ -185,9 +216,15 @@ describe('narrativeView', () => {
   it('lets a correct abstention through but catches temperatures the parser cannot read', () => {
     const abstain = narrativeView('I cannot estimate cooling in °C from a shade model.', result())
     expect([abstain.temperatureMentioned, abstain.needsWarning]).toEqual([false, false])
-    for (const text of ['cools by .5 °C', 'about 12,3 °C cooler', 'roughly 2°C']) {
+    for (const text of ['cools by .5 °C', 'about 12,3 °C cooler', 'roughly 2°C', 'a **2** °C drop', 'about 3C cooler']) {
       const v = narrativeView(text, result())
       expect([text, v.temperatureMentioned, v.needsWarning]).toEqual([text, true, true])
     }
+  })
+  it('lists context figures without warning on them, but warns on ambiguous degrees', () => {
+    const context = narrativeView('trees 3 m apart, shading 2 hours of the afternoon', result())
+    expect(context.figures.map(f => [f.kind, f.contextOnly])).toEqual([['length_m', true], ['hours', true]])
+    expect(context.needsWarning).toBe(false)
+    expect(narrativeView('a 2-degree drop', result()).needsWarning).toBe(true)
   })
 })

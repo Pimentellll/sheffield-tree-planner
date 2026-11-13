@@ -21,6 +21,10 @@ PowerShell: use `.venv/Scripts/python.exe`, `npm.cmd`, and `$env:CANOPY_SESSION=
 
 Without the launcher you can still open `?scenario=<id>&revision=<n>` against any running backend; geometry is then not drawn, because no verified declaration is supplied.
 
+## Physical runtime (Ben's takeover-v1)
+
+With Ben's `feat/ben/STP-arnav-logic-takeover` checkout (or later), start `python frontend/scripts/serve_physical.py --workspace <fresh> --winter` from that checkout's environment, then run the dev server with `CANOPY_SESSION=<fresh>/session.json`. The launcher calls `create_physical_runtime` unchanged, reads the scene asset through the registry's rights-checked `read(..., "public_display_status")`, and the UI verifies its SHA-256 before drawing the 195 receiver samples, planting region and catalogue positions. Because this backend evaluates catalogue candidates only, the editor becomes a candidate picker: drags snap to positions and the arrow keys step between them. Search, winter cases, `compare_locations` and `compare_scenarios` then show real results. `npm run test:physical` checks all of this against the live server (19 checks).
+
 ## Tests
 
 - `npm test`: Vitest unit tests for the stale-result rules, commit/revision building, job states, formatting, API client (If-Match, ContractError, head probing, cancel), declaration hash verification and the ENU→viewer transform.

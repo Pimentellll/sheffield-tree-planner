@@ -3,10 +3,16 @@ import type { Result, TreeProfile, TreeState, Vec3 } from '../api/types'
 import type { DeclarationCheck } from '../api/session'
 import type { TransformCheck } from '../scene/transform'
 import {
-  CURRENTNESS_LABEL, EDIT_LIMIT_M, EXECUTION_MODE_LABEL, clampPosition, describeJob, formatPence, formatValue,
+  CURRENTNESS_LABEL, EDIT_LIMIT_M, samePosition, EXECUTION_MODE_LABEL, clampPosition, describeJob, formatPence, formatValue,
   primaryMetric, unitLabel, type Currentness,
 } from '../planning/evaluation'
 import type { RunRecord, Workspace } from '../planning/useWorkspace'
+
+function describeAttenuation(a: unknown): string {
+  const v = a as { mode?: string; transmission?: number | null } | null
+  if (!v?.mode) return 'not stated'
+  return v.mode === 'opaque' ? 'opaque (assumed)' : v.mode === 'fixed_crossing' ? `fixed crossing, transmission ${v.transmission ?? '—'} (assumed)` : v.mode
+}
 
 const short = (value: string, n = 10) => (value.length > n + 1 ? `${value.slice(0, n)}…` : value)
 
@@ -68,15 +74,33 @@ function NumberField({ label, value, onCommit, disabled }: { label: string; valu
 export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; profile: TreeProfile | null; state: TreeState | null; caseState: string | null }) {
   const { draftPosition: draft, committedPosition: committed, positionDirty: draftDirty } = ws
   const editable = ws.connection.status === 'connected' && Boolean(draft)
+  const catalogue = ws.site?.candidate_catalogue ?? []
   return (
     <div className="detail-section">
       <span className="section-kicker">PROPOSED TREE</span>
       <h3 className="section-title">{ws.placementId ?? 'No placement'} {draftDirty && <span className="tag tag-warning">UNSAVED MOVE</span>}</h3>
-      <div className="field-grid">
-        <NumberField label="East" value={draft?.[0] ?? 0} disabled={!editable} onCommit={v => draft && ws.setDraftPosition(clampPosition([v, draft[1], draft[2]]))} />
-        <NumberField label="North" value={draft?.[1] ?? 0} disabled={!editable} onCommit={v => draft && ws.setDraftPosition(clampPosition([draft[0], v, draft[2]]))} />
-      </div>
-      <p className="fine-print">Drag the tree in the view, or focus the view and use arrow keys (0.1 m; Shift 1 m). Ground height is fixed at {draft?.[2] ?? 0} m for this synthetic site.</p>
+      {catalogue.length > 0 ? (
+        <fieldset className="candidate-list" aria-label="Catalogue position for the proposed tree">
+          {catalogue.map(c => {
+            const checked = Boolean(draft && samePosition(c.position_enu_m as Vec3, draft))
+            return (
+              <label key={c.candidate_id} className={`case-option${checked ? ' active' : ''}`}>
+                <input type="radio" name="candidate" value={c.candidate_id} checked={checked} disabled={!editable} onChange={() => ws.setDraftPosition(c.position_enu_m as Vec3)} />
+                <span><strong>{c.candidate_id}</strong> · E {c.position_enu_m[0]}, N {c.position_enu_m[1]} · {c.plantability_status}</span>
+              </label>
+            )
+          })}
+          <p className="fine-print">This site has a candidate catalogue, so the backend evaluates catalogue positions only. Drag snaps to the nearest position; arrow keys step to the next one in that direction.</p>
+        </fieldset>
+      ) : (
+        <>
+          <div className="field-grid">
+            <NumberField label="East" value={draft?.[0] ?? 0} disabled={!editable} onCommit={v => draft && ws.setDraftPosition(clampPosition([v, draft[1], draft[2]]))} />
+            <NumberField label="North" value={draft?.[1] ?? 0} disabled={!editable} onCommit={v => draft && ws.setDraftPosition(clampPosition([draft[0], v, draft[2]]))} />
+          </div>
+          <p className="fine-print">Drag the tree in the view, or focus the view and use arrow keys (0.1 m; Shift 1 m). Ground height is fixed at {draft?.[2] ?? 0} m for this synthetic site.</p>
+        </>
+      )}
       {committed && draftDirty && (
         <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={ws.revertDraft}>Revert draft</button></p>
       )}
@@ -86,6 +110,7 @@ export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; p
           <Row label="State" value={`${caseState} · ${state.horizon_years} y · ${state.leaf_state}`} />
           <Row label="Crown" value={`radii ${state.crown_radii_m.join(' / ')} m at ${state.crown_center_height_m} m`} />
           <Row label="Trunk (derived)" value={`${state.trunk_height_m} m high · r ${state.trunk_radius_m} m`} />
+          <Row label="Crown light" value={describeAttenuation(state.attenuation)} />
           <Row label="Upfront cost" value={`${formatPence(profile.cost_pence)} · ${profile.cost_scope}`} warn />
         </>
       )}

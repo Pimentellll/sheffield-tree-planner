@@ -3,7 +3,7 @@ import { ApiError, CanopyClient, TERMINAL_JOB_STATES } from '../api/client'
 import { loadDevSession, verifyDeclaration, type DeclarationCheck, type DevSession } from '../api/session'
 import type { Health, Job, JobRequest, Layout, Result, Scenario, ScenarioRef, SiteBundle, TreeProfile, Vec3 } from '../api/types'
 import {
-  buildCommit, classifyResult, diffInputs, evaluateRequest, refOf, requirementsOf, sameRequirements, samePosition,
+  buildCommit, candidateAt, classifyResult, diffInputs, evaluateRequest, refOf, requirementsOf, sameRequirements, samePosition,
   validateRequirements, type Currentness, type FieldChange, type Requirements,
 } from './evaluation'
 
@@ -124,12 +124,12 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const draftChanges = useMemo(() => {
     if (!scenario || !layout || !placement || !draftPosition || !draftDirty || requirementErrors.length) return []
     try {
-      return buildCommit(scenario, layout, placement.placement_id, draftPosition, Date.now(), draftRequirements ?? undefined).changes
+      return buildCommit(scenario, layout, placement.placement_id, draftPosition, Date.now(), draftRequirements ?? undefined, candidateAt(site?.candidate_catalogue ?? [], draftPosition)).changes
         .filter(c => c.path !== 'search.deadline_utc')
     } catch {
       return []
     }
-  }, [scenario, layout, placement, draftPosition, draftRequirements, draftDirty, requirementErrors])
+  }, [scenario, layout, placement, draftPosition, draftRequirements, draftDirty, requirementErrors, site])
 
   /** Re-read the backend's evaluation selection for the head revision. */
   const refreshSelection = useCallback(async (head: Scenario) => {
@@ -284,7 +284,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
       let target = head
       if (draftDirty || Date.parse(head.input.search.deadline_utc) <= Date.now()) {
         setBusy('committing')
-        const plan = buildCommit(head, layout, placement.placement_id, draftPosition, Date.now(), draftRequirements ?? undefined)
+        const plan = buildCommit(head, layout, placement.placement_id, draftPosition, Date.now(), draftRequirements ?? undefined, candidateAt(site?.candidate_catalogue ?? [], draftPosition))
         const storedLayout = plan.layout ? await client.registerLayout(plan.layout) : null
         target = await client.replaceScenario(head.scenario_id, plan.input, plan.ifMatch)
         await adoptHead(target)
@@ -295,7 +295,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     } catch (err) {
       await handleFailure(err)
     }
-  }, [client, draftPosition, draftRequirements, draftDirty, layout, placement, requirementErrors, adoptHead, submit, handleFailure])
+  }, [client, draftPosition, draftRequirements, draftDirty, layout, placement, requirementErrors, adoptHead, submit, handleFailure, site])
 
   const cancel = useCallback(async () => {
     const id = activeJobId.current

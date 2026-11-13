@@ -19,6 +19,21 @@ export interface SyntheticDeclaration {
   readonly evidence: string
 }
 
+/** Ben's takeover-v1 physical scene (`canopy-physical-scene/1`), drawn as declared. */
+export interface PhysicalScene {
+  readonly format_version: 'canopy-physical-scene/1'
+  readonly spatial_spacing_m: number
+  readonly flat_ground_z_m: number
+  readonly samples: ReadonlyArray<{ readonly sample_id: string; readonly position_enu_m: Vec3; readonly normal_enu: Vec3; readonly area_m2: number; readonly target_id: string }>
+  readonly triangles: ReadonlyArray<{ readonly triangle_id: string; readonly vertices_enu_m: readonly [Vec3, Vec3, Vec3] }>
+  readonly existing_trees: readonly unknown[]
+  readonly regions: Readonly<Record<string, ReadonlyArray<readonly [number, number]>>>
+}
+
+export type SceneData =
+  | { readonly kind: 'reference'; readonly declaration: SyntheticDeclaration }
+  | { readonly kind: 'physical'; readonly scene: PhysicalScene }
+
 export interface DevSession {
   readonly kind: 'canopy-dev-session'
   readonly label: string
@@ -30,7 +45,7 @@ export interface DevSession {
 }
 
 export type DeclarationCheck =
-  | { readonly status: 'verified'; readonly declaration: SyntheticDeclaration; readonly sha256: string }
+  | { readonly status: 'verified'; readonly scene: SceneData; readonly sha256: string }
   | { readonly status: 'mismatch' | 'missing' | 'invalid'; readonly reason: string }
 
 export function decodeBase64(value: string): Uint8Array {
@@ -48,13 +63,31 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 const isVec3 = (value: unknown): value is Vec3 =>
   Array.isArray(value) && value.length === 3 && value.every(x => typeof x === 'number' && Number.isFinite(x))
 
-function parseDeclaration(bytes: Uint8Array): SyntheticDeclaration | null {
+function parsePhysical(value: unknown): PhysicalScene | null {
+  const p = value as PhysicalScene
+  if (typeof p !== 'object' || p === null || p.format_version !== 'canopy-physical-scene/1') return null
+  if (!Array.isArray(p.samples) || !p.samples.every(x => isVec3(x?.position_enu_m) && typeof x.area_m2 === 'number' && x.area_m2 > 0)) return null
+  if (!Array.isArray(p.triangles) || !p.triangles.every(t => Array.isArray(t?.vertices_enu_m) && t.vertices_enu_m.length === 3 && t.vertices_enu_m.every(isVec3))) return null
+  const regions = p.regions ?? {}
+  if (typeof regions !== 'object' || !Object.values(regions).every(r => Array.isArray(r) && r.every(pt => Array.isArray(pt) && pt.length >= 2 && pt.every(n => typeof n === 'number')))) return null
+  if (typeof p.flat_ground_z_m !== 'number' || !Array.isArray(p.existing_trees)) return null
+  return { ...p, regions }
+}
+
+function parseScene(bytes: Uint8Array): SceneData | null {
   let value: unknown
   try {
     value = JSON.parse(new TextDecoder().decode(bytes))
   } catch {
     return null
   }
+  const physical = parsePhysical(value)
+  if (physical) return { kind: 'physical', scene: physical }
+  const declaration = parseDeclaration(value)
+  return declaration ? { kind: 'reference', declaration } : null
+}
+
+function parseDeclaration(value: unknown): SyntheticDeclaration | null {
   const d = value as SyntheticDeclaration
   if (
     typeof d !== 'object' || d === null || !isVec3(d.receiver_point) || !isVec3(d.receiver_normal) ||
@@ -77,9 +110,9 @@ export async function verifyDeclaration(session: DevSession, site: SiteBundle): 
   }
   const digest = await sha256Hex(bytes)
   if (digest !== asset.sha256) return { status: 'mismatch', reason: `Declaration SHA-256 ${digest.slice(0, 12)}… differs from registered ${asset.sha256.slice(0, 12)}…` }
-  const declaration = parseDeclaration(bytes)
-  if (!declaration) return { status: 'invalid', reason: 'Declaration is not a recognised synthetic scene' }
-  return { status: 'verified', declaration, sha256: digest }
+  const scene = parseScene(bytes)
+  if (!scene) return { status: 'invalid', reason: 'Scene bytes are not a recognised scene format' }
+  return { status: 'verified', scene, sha256: digest }
 }
 
 /** The dev launcher serves its session at this path through the Vite dev server. */

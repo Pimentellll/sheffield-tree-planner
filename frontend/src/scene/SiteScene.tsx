@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import type { SyntheticDeclaration } from '../api/session'
+import type { SceneData } from '../api/session'
 import type { TreeState, Vec3 } from '../api/types'
 import { clampPosition, nudge } from '../planning/evaluation'
 import { enuToViewer, viewerToEnu } from './transform'
@@ -9,8 +9,14 @@ import { enuToViewer, viewerToEnu } from './transform'
 type SceneState = 'loading' | 'ready' | 'error'
 type CameraAction = 'left' | 'right' | 'zoomIn' | 'zoomOut' | 'reset' | 'tree'
 
+export interface CandidateMarker { readonly id: string; readonly position: Vec3; readonly selected: boolean }
+
 export interface SiteSceneProps {
-  readonly declaration: SyntheticDeclaration | null
+  readonly scene: SceneData | null
+  /** Catalogue positions; when present, editing moves the tree between candidates only. */
+  readonly candidates?: readonly CandidateMarker[]
+  /** Keyboard step in candidate mode: direction in ENU (east, north). */
+  readonly onStep?: (east: number, north: number) => void
   readonly treeState: TreeState | null
   readonly committed: Vec3 | null
   readonly draft: Vec3 | null
@@ -64,7 +70,7 @@ function disposeObject(object: THREE.Object3D) {
   })
 }
 
-export default function SiteScene({ declaration, treeState, committed, draft, editable, onDraftChange, siteLabel, overlays = [] }: SiteSceneProps) {
+export default function SiteScene({ scene, candidates = [], onStep, treeState, committed, draft, editable, onDraftChange, siteLabel, overlays = [] }: SiteSceneProps) {
   const mountRef = useRef<HTMLDivElement>(null)
   const northRef = useRef<HTMLSpanElement>(null)
   const world = useRef<{
@@ -210,44 +216,86 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
     }
   }, [])
 
-  // Declared synthetic inputs: target receiver sample, declared sun direction, obstacles.
+  // Verified scene inputs only: reference declaration (receiver, sun direction, obstacles) or
+  // physical scene (receiver samples, static triangles, planting regions), plus catalogue candidates.
+  const candidateKey = JSON.stringify(candidates)
   useEffect(() => {
     const w = world.current
     if (!w) return
     w.staticGroup.children.slice().forEach(child => { w.staticGroup.remove(child); disposeObject(child) })
-    if (!declaration) return
-    const radius = Math.sqrt(declaration.receiver_area_m2 / Math.PI)
-    const receiver = new THREE.Mesh(
-      new THREE.CircleGeometry(radius, 48),
-      new THREE.MeshBasicMaterial({ color: '#62afc2', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
-    )
-    receiver.rotation.x = -Math.PI / 2
-    receiver.position.copy(toV(declaration.receiver_point)).add(new THREE.Vector3(0, 0.01, 0))
-    const edge = new THREE.Mesh(new THREE.RingGeometry(radius * 0.97, radius, 48), new THREE.MeshBasicMaterial({ color: '#a6dce7', side: THREE.DoubleSide }))
-    edge.rotation.x = -Math.PI / 2
-    edge.position.copy(receiver.position).add(new THREE.Vector3(0, 0.002, 0))
-    const point = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshBasicMaterial({ color: '#e6f6fa' }))
-    point.position.copy(toV(declaration.receiver_point))
-    w.staticGroup.add(receiver, edge, point)
-    if (declaration.above_horizon) {
-      const start = toV(declaration.receiver_point)
-      const end = start.clone().add(toV(declaration.sun_direction).normalize().multiplyScalar(7))
-      const ray = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints([start, end]),
-        new THREE.LineDashedMaterial({ color: '#f1d27a', dashSize: 0.25, gapSize: 0.15 }),
+    if (scene?.kind === 'reference') {
+      const declaration = scene.declaration
+      const radius = Math.sqrt(declaration.receiver_area_m2 / Math.PI)
+      const receiver = new THREE.Mesh(
+        new THREE.CircleGeometry(radius, 48),
+        new THREE.MeshBasicMaterial({ color: '#62afc2', transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }),
       )
-      ray.computeLineDistances()
-      const sun = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), new THREE.MeshBasicMaterial({ color: '#f1d27a' }))
-      sun.position.copy(end)
-      w.staticGroup.add(ray, sun)
+      receiver.rotation.x = -Math.PI / 2
+      receiver.position.copy(toV(declaration.receiver_point)).add(new THREE.Vector3(0, 0.01, 0))
+      const edge = new THREE.Mesh(new THREE.RingGeometry(radius * 0.97, radius, 48), new THREE.MeshBasicMaterial({ color: '#a6dce7', side: THREE.DoubleSide }))
+      edge.rotation.x = -Math.PI / 2
+      edge.position.copy(receiver.position).add(new THREE.Vector3(0, 0.002, 0))
+      const point = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), new THREE.MeshBasicMaterial({ color: '#e6f6fa' }))
+      point.position.copy(toV(declaration.receiver_point))
+      w.staticGroup.add(receiver, edge, point)
+      if (declaration.above_horizon) {
+        const start = toV(declaration.receiver_point)
+        const end = start.clone().add(toV(declaration.sun_direction).normalize().multiplyScalar(7))
+        const ray = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([start, end]),
+          new THREE.LineDashedMaterial({ color: '#f1d27a', dashSize: 0.25, gapSize: 0.15 }),
+        )
+        ray.computeLineDistances()
+        const sun = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), new THREE.MeshBasicMaterial({ color: '#f1d27a' }))
+        sun.position.copy(end)
+        w.staticGroup.add(ray, sun)
+      }
+      declaration.obstacle_ellipsoids.forEach(([centre, radii]) => {
+        const obstacle = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ color: '#7d8a7f', roughness: 1 }))
+        obstacle.scale.set(radii[0], radii[2], radii[1])
+        obstacle.position.copy(toV(centre))
+        w.staticGroup.add(obstacle)
+      })
+    } else if (scene?.kind === 'physical') {
+      const p = scene.scene
+      // Receiver samples: one tile per sample, sized to its represented area, on its own normal plane (flat here).
+      const tileMaterial = new THREE.MeshBasicMaterial({ color: '#62afc2', transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false })
+      const tiles = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), tileMaterial, p.samples.length)
+      const m = new THREE.Matrix4()
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0))
+      p.samples.forEach((sample, i) => {
+        const side = Math.sqrt(sample.area_m2) * 0.92
+        m.compose(toV(sample.position_enu_m).add(new THREE.Vector3(0, 0.01, 0)), q, new THREE.Vector3(side, side, 1))
+        tiles.setMatrixAt(i, m)
+      })
+      w.staticGroup.add(tiles)
+      if (p.triangles.length) {
+        const positions = new Float32Array(p.triangles.flatMap(t => t.vertices_enu_m.flatMap(v => toV(v).toArray())))
+        const g = new THREE.BufferGeometry()
+        g.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+        g.computeVertexNormals()
+        w.staticGroup.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#8b968c', roughness: 1, side: THREE.DoubleSide })))
+      }
+      Object.values(p.regions).forEach(polygon => {
+        const pts = polygon.map(([e, n]) => toV([e, n, p.flat_ground_z_m]).add(new THREE.Vector3(0, 0.02, 0)))
+        const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: '#b7e879', dashSize: 0.4, gapSize: 0.25 }))
+        line.computeLineDistances()
+        w.staticGroup.add(line)
+      })
     }
-    declaration.obstacle_ellipsoids.forEach(([centre, radii]) => {
-      const obstacle = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshStandardMaterial({ color: '#7d8a7f', roughness: 1 }))
-      obstacle.scale.set(radii[0], radii[2], radii[1])
-      obstacle.position.copy(toV(centre))
-      w.staticGroup.add(obstacle)
-    })
-  }, [declaration, state])
+    for (const c of candidates) {
+      const marker = new THREE.Mesh(
+        new THREE.RingGeometry(0.22, 0.34, 32),
+        new THREE.MeshBasicMaterial({ color: c.selected ? '#b7e879' : '#f1f5ee', side: THREE.DoubleSide }),
+      )
+      marker.rotation.x = -Math.PI / 2
+      marker.position.copy(toV(c.position)).add(new THREE.Vector3(0, 0.03, 0))
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.08, 16), new THREE.MeshBasicMaterial({ color: c.selected ? '#b7e879' : '#f1f5ee', side: THREE.DoubleSide }))
+      dot.rotation.x = -Math.PI / 2
+      dot.position.copy(marker.position)
+      w.staticGroup.add(marker, dot)
+    }
+  }, [scene, candidateKey, state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Alternative layouts from a stored search result: a ring per placement; the highlighted one also gets crowns.
   const overlayKey = JSON.stringify(overlays)
@@ -300,7 +348,9 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
   const frameAll = () => {
     const w = world.current
     if (!w) return
-    const points = [declaration ? toV(declaration.receiver_point) : new THREE.Vector3(), ...(draft ? [toV(draft)] : [])]
+    const sceneVolume = scene?.kind === 'reference' ? [toV(scene.declaration.receiver_point)]
+      : scene?.kind === 'physical' ? scene.scene.samples.map(x => toV(x.position_enu_m)) : [new THREE.Vector3()]
+    const points = [...sceneVolume, ...candidates.map(c => toV(c.position)), ...(draft ? [toV(draft)] : [])]
     const box = new THREE.Box3().setFromPoints(points)
     const centre = box.getCenter(new THREE.Vector3()).add(new THREE.Vector3(0, 0.5, 0))
     const span = box.getSize(new THREE.Vector3()).length()
@@ -311,10 +361,10 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
   }
   const framed = useRef(false)
   useEffect(() => {
-    if (state !== 'ready' || framed.current || !draft || !declaration) return
+    if (state !== 'ready' || framed.current || !draft || !scene) return
     framed.current = true
     frameAll()
-  }, [state, draft, declaration]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, draft, scene]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const moveCamera = (action: CameraAction) => {
     const w = world.current
@@ -347,7 +397,8 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
     const move = moves[event.key]
     if (!move) return
     event.preventDefault()
-    onDraftChange(nudge(draft, move[0], move[1]))
+    if (onStep) onStep(Math.sign(move[0]), Math.sign(move[1]))
+    else onDraftChange(nudge(draft, move[0], move[1]))
   }
 
   return (
@@ -355,14 +406,14 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
       className={`scene-wrap${dragging ? ' dragging' : ''}`}
       tabIndex={0}
       role="group"
-      aria-label={`3D site view. ${editable ? 'Arrow keys move the proposed tree 0.1 m (Shift: 1 m); up is north.' : 'Editing unavailable.'}`}
+      aria-label={`3D site view. ${!editable ? 'Editing unavailable.' : onStep ? 'Arrow keys move the proposed tree to the nearest catalogue position in that direction; up is north.' : 'Arrow keys move the proposed tree 0.1 m (Shift: 1 m); up is north.'}`}
       onKeyDown={onKeyDown}
     >
       <div className="scene-canvas" ref={mountRef} />
       <div className="scene-topline"><span className="pill pill-lime">{siteLabel}</span><span className="scene-scale">ENU metres · grid 1 m</span></div>
       {state === 'loading' && <div className="scene-message" role="status">Loading scene…</div>}
       {state === 'error' && <div className="scene-message" role="alert">3D view unavailable on this device. Use the position fields to edit the proposed tree.</div>}
-      {state === 'ready' && !declaration && <div className="scene-message" role="status">No verified site geometry to draw yet.</div>}
+      {state === 'ready' && !scene && <div className="scene-message" role="status">No verified site geometry to draw yet.</div>}
       <div className="north-indicator" aria-label="North direction in the current camera view"><span ref={northRef}>↑</span> N</div>
       <div className="scene-toolbar" aria-label="Camera controls">
         <button type="button" onClick={() => moveCamera('left')} aria-label="Orbit camera left">↶</button>
@@ -373,9 +424,11 @@ export default function SiteScene({ declaration, treeState, committed, draft, ed
         <button type="button" onClick={() => moveCamera('reset')}>Reset view</button>
       </div>
       <p className="sr-only">
-        {declaration
-          ? `Target receiver sample at east ${declaration.receiver_point[0]} m, north ${declaration.receiver_point[1]} m representing ${declaration.receiver_area_m2} square metres. ${draft ? `Proposed tree at east ${draft[0]} m, north ${draft[1]} m.` : ''} A dashed line shows the declared sun direction used by the evaluator; it is an input, not a result.`
-          : 'No verified site geometry is available.'}
+        {scene?.kind === 'reference'
+          ? `Target receiver sample at east ${scene.declaration.receiver_point[0]} m, north ${scene.declaration.receiver_point[1]} m representing ${scene.declaration.receiver_area_m2} square metres. ${draft ? `Proposed tree at east ${draft[0]} m, north ${draft[1]} m.` : ''} A dashed line shows the declared sun direction used by the evaluator; it is an input, not a result.`
+          : scene?.kind === 'physical'
+            ? `${scene.scene.samples.length} receiver samples, ${scene.scene.triangles.length} static triangles, ${Object.keys(scene.scene.regions).length} planting region(s) and ${candidates.length} catalogue positions. ${draft ? `Proposed tree at east ${draft[0]} m, north ${draft[1]} m.` : ''}`
+            : 'No verified site geometry is available.'}
       </p>
     </div>
   )

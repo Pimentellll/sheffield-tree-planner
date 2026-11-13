@@ -2,6 +2,11 @@
 
 What the live demo can truthfully show **today**, in order, with what to say and what not to claim. Every number on screen comes from a backend run that you can open in the evidence chain. Follows docs/VALIDATION.md §4 as far as the implemented system allows.
 
+## Which backend
+
+- **Physical runtime (recommended when Ben's `STP-arnav-logic-takeover` work is in your checkout):** real sun positions for each case, multi-tree search within budget, winter check, server-side location and scenario comparisons. From that checkout's environment: `python frontend/scripts/serve_physical.py --workspace ../canopy-physical-$(date +%H%M) --winter`. The tree moves between the three catalogue positions only. Rehearse with `npm run test:physical` (19 checks; every number is compared with the backend's stored record).
+- **Reference runtime (fallback):** the one-tree, chosen-sun evaluator below. The script table that follows was written for it. With the physical runtime the numbers differ, and Search, the winter panel and the backend comparisons show real results instead of "unavailable".
+
 ## Before you present
 
 1. Fresh backend workspace each time (the browser checks assume revision 1):

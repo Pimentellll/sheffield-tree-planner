@@ -180,6 +180,7 @@ const isoZ = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z'
  */
 export function buildCommit(
   scenario: Scenario, layout: Layout, placementId: string, position: Vec3, nowMs: number, requirements?: Requirements,
+  candidate?: { readonly candidate_id: string; readonly location_id: string } | null,
 ): CommitPlan {
   const ref = scenario.input.proposed_layout_ref
   if (!ref || ref.layout_id !== layout.layout_id || ref.revision !== layout.revision) {
@@ -188,8 +189,9 @@ export function buildCommit(
   const placement = layout.placements.find(p => p.placement_id === placementId)
   if (!placement) throw new Error(`Unknown placement ${placementId}`)
   const moved = !samePosition(placement.position_enu_m as Vec3, roundPosition(position))
+  const ids = candidate ? { candidate_id: candidate.candidate_id, location_id: candidate.location_id } : {}
   const nextLayout: Layout | null = moved
-    ? { ...layout, revision: layout.revision + 1, placements: layout.placements.map(p => (p.placement_id === placementId ? { ...p, position_enu_m: roundPosition(position) } : p)) }
+    ? { ...layout, revision: layout.revision + 1, placements: layout.placements.map(p => (p.placement_id === placementId ? { ...p, ...ids, position_enu_m: roundPosition(position) } : p)) }
     : null
   const deadline = Date.parse(scenario.input.search.deadline_utc)
   const deadlineRenewedTo = deadline - nowMs > DEADLINE_MARGIN_MS ? null : isoZ(nowMs + DEADLINE_RENEWAL_MS)
@@ -217,3 +219,37 @@ export function evaluateRequest(scenario: Scenario, requestId: string): JobReque
 }
 
 export const refOf = (s: Scenario): ScenarioRef => ({ scenario_id: s.scenario_id, revision: s.revision, scope: s.scope })
+
+export interface CatalogueCandidate { readonly candidate_id: string; readonly location_id: string; readonly position_enu_m: readonly number[]; readonly profile_id: string }
+
+/** The catalogue candidate exactly at a position, if any. */
+export function candidateAt(catalogue: readonly CatalogueCandidate[], p: readonly number[] | null): CatalogueCandidate | null {
+  if (!p) return null
+  return catalogue.find(c => samePosition(c.position_enu_m as Vec3, p as Vec3)) ?? null
+}
+
+/** Nearest catalogue candidate to a free position (for snapping drags). */
+export function nearestCandidate(catalogue: readonly CatalogueCandidate[], p: readonly number[]): CatalogueCandidate | null {
+  let best: CatalogueCandidate | null = null
+  let bestD = Infinity
+  for (const c of catalogue) {
+    const d = Math.hypot(c.position_enu_m[0] - p[0], c.position_enu_m[1] - p[1])
+    if (d < bestD) { best = c; bestD = d }
+  }
+  return best
+}
+
+/** Nearest candidate strictly in the given ENU direction (within 60 degrees), for keyboard stepping. */
+export function stepCandidate(catalogue: readonly CatalogueCandidate[], from: readonly number[], east: number, north: number): CatalogueCandidate | null {
+  let best: CatalogueCandidate | null = null
+  let bestD = Infinity
+  for (const c of catalogue) {
+    const dx = c.position_enu_m[0] - from[0]
+    const dy = c.position_enu_m[1] - from[1]
+    const d = Math.hypot(dx, dy)
+    if (d < 1e-9) continue
+    if ((dx * east + dy * north) / d < 0.5) continue
+    if (d < bestD) { best = c; bestD = d }
+  }
+  return best
+}

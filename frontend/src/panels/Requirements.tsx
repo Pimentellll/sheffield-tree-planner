@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { JobRequest, Scenario } from '../api/types'
 import { describeValue, formatPence, parsePounds, poundsText } from '../planning/evaluation'
 import type { Workspace } from '../planning/useWorkspace'
 
@@ -95,12 +96,26 @@ export function RequirementsPanel({ ws }: { ws: Workspace }) {
   )
 }
 
+/** Server-side fixed-layout comparison of the accepted head and a hypothetical proposal; never accepts it. */
+const compareScenariosRequest = (proposal: Scenario) => (head: Scenario, requestId: string): JobRequest => ({
+  request_id: requestId,
+  operation: 'compare_scenarios',
+  scenario_ref: { scenario_id: head.scenario_id, revision: head.revision, scope: head.scope },
+  arguments: {
+    base_scenario_ref: { scenario_id: head.scenario_id, revision: head.revision, scope: head.scope },
+    alternative_scenario_ref: { scenario_id: proposal.scenario_id, revision: proposal.revision, scope: proposal.scope },
+    layout_refs: [head.input.proposed_layout_ref!],
+    mode: 'fixed_layout',
+  },
+})
+
 /** Human decision on a hypothetical scenario prepared elsewhere (e.g. by the planning agent). */
 export function ProposalReviewPanel({ ws }: { ws: Workspace }) {
   const [id, setId] = useState('')
   const [revision, setRevision] = useState('1')
   if (ws.connection.status !== 'connected') return null
   const review = ws.review
+  const compareAvailable = ws.connection.health.available_operations.includes('compare_scenarios')
   return (
     <div className="detail-section">
       <span className="section-kicker">PROPOSAL REVIEW</span>
@@ -123,6 +138,7 @@ export function ProposalReviewPanel({ ws }: { ws: Workspace }) {
           {!review.baseIsHead && <p className="fine-print text-warning">Its base is not the current accepted revision ({ws.scenario?.revision}), so the backend will refuse acceptance. Ask for a proposal based on the current revision.</p>}
           <div className="button-row">
             <button type="button" className="primary-action" disabled={!review.baseIsHead || ws.busy !== null || ws.draftDirty} onClick={() => void ws.acceptProposal()}>Accept proposal &amp; recompute</button>
+            <button type="button" className="secondary-action" disabled={!compareAvailable || ws.busy !== null} onClick={() => void ws.submit(compareScenariosRequest(review.proposal))}>Compare with accepted on the backend</button>
             <button type="button" className="secondary-action" onClick={ws.dismissProposal}>Reject (dismiss)</button>
           </div>
           {ws.draftDirty && <p className="fine-print">Discard or accept your own draft first.</p>}

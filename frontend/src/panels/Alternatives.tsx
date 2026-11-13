@@ -64,7 +64,8 @@ function SearchResultView({ ws, record, selectedLayoutId, onSelectLayout }: { ws
                   <button type="button" className="text-action" aria-pressed={selectedLayoutId === row.layoutId} onClick={() => onSelectLayout(selectedLayoutId === row.layoutId ? null : row.layoutId)}>
                     {ROLE_LABEL[row.role]}{row.selected ? ' ★' : ''}
                   </button>
-                  <small>{row.layoutId}@{row.revision}</small>
+                  <small title={`${row.layoutId}@${row.revision}`}>{row.layoutId.length > 18 ? `…${row.layoutId.slice(-14)}` : row.layoutId}@{row.revision}</small>
+                  <small>{row.placements.map(p => `E ${p.position_enu_m[0]}, N ${p.position_enu_m[1]}`).join(' · ')}</small>
                 </th>
                 <td>{row.metric ? <><strong>{formatValue(row.metric.value)}</strong> {unitLabel(row.metric.unit)}</> : <em>no metric</em>}</td>
                 <td>{spendText(row, formatPence)}<small>{row.treeCount} tree{row.treeCount === 1 ? '' : 's'}{row.maxTreeCount !== null ? ` of max ${row.maxTreeCount}` : ''}</small></td>

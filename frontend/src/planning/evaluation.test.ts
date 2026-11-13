@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Job, Layout, Result, Scenario } from '../api/types'
 import {
-  DEADLINE_MARGIN_MS, diffInputs, parsePounds, requirementsOf, sameRequirements, validateRequirements, buildCommit, clampPosition, classifyResult, describeJob, evaluateRequest, formatPence, formatValue,
+  DEADLINE_MARGIN_MS, candidateAt, nearestCandidate, stepCandidate, diffInputs, parsePounds, requirementsOf, sameRequirements, validateRequirements, buildCommit, clampPosition, classifyResult, describeJob, evaluateRequest, formatPence, formatValue,
   nudge, primaryMetric, samePosition, unitLabel,
 } from './evaluation'
 
@@ -166,5 +166,33 @@ describe('requirements drafts (STP-021)', () => {
     expect(diffInputs({ a: { b: 1, c: [1, 2] }, d: 'x' }, { a: { b: 2, c: [1, 2] }, d: 'x', e: null })).toEqual([
       { path: 'a.b', before: 1, after: 2 }, { path: 'e', before: undefined, after: null },
     ])
+  })
+})
+
+describe('catalogue candidates (physical runtime)', () => {
+  // Labelled synthetic catalogue in the same shape as SiteBundle.candidate_catalogue.
+  const cat = [
+    { candidate_id: 'c1', location_id: 'l1', position_enu_m: [0, 0, 0], profile_id: 'p' },
+    { candidate_id: 'c2', location_id: 'l2', position_enu_m: [-2, 0, 0], profile_id: 'p' },
+    { candidate_id: 'c3', location_id: 'l3', position_enu_m: [2, 0, 0], profile_id: 'p' },
+  ]
+  it('finds the candidate at an exact position only', () => {
+    expect(candidateAt(cat, [2, 0, 0])?.candidate_id).toBe('c3')
+    expect(candidateAt(cat, [2.1, 0, 0])).toBeNull()
+  })
+  it('snaps a free drag to the nearest candidate', () => {
+    expect(nearestCandidate(cat, [1.4, 0.3, 0])?.candidate_id).toBe('c3')
+    expect(nearestCandidate([], [0, 0, 0])).toBeNull()
+  })
+  it('steps to the nearest candidate in a direction and stops at the edge', () => {
+    expect(stepCandidate(cat, [0, 0, 0], 1, 0)?.candidate_id).toBe('c3')
+    expect(stepCandidate(cat, [0, 0, 0], -1, 0)?.candidate_id).toBe('c2')
+    expect(stepCandidate(cat, [2, 0, 0], 1, 0)).toBeNull()
+    expect(stepCandidate(cat, [0, 0, 0], 0, 1)).toBeNull()
+  })
+  it('commits candidate and location identity with a moved placement', () => {
+    const s0 = scenario('2026-11-13T12:00:00Z')
+    const plan = buildCommit(s0, layout, 'tree-1', [2, 0, 0], Date.parse('2026-11-13T09:00:00Z'), undefined, { candidate_id: 'c3', location_id: 'l3' })
+    expect(plan.layout?.placements[0]).toMatchObject({ candidate_id: 'c3', location_id: 'l3', position_enu_m: [2, 0, 0] })
   })
 })

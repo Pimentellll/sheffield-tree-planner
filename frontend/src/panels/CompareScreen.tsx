@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { JobRequest, Result, Scenario, TreeState, Vec3 } from '../api/types'
-import type { SyntheticDeclaration } from '../api/session'
+import type { SceneData } from '../api/session'
+import type { CandidateMarker } from '../scene/SiteScene'
 import SiteScene from '../scene/SiteScene'
 import {
   CASE_ROLE_LABEL, SUPPORTED_METRICS, compareRuns, deltaRows, timeBins, winterView,
@@ -18,7 +19,7 @@ const runLabel = (r: Stored) => {
 }
 const signed = (v: number) => (v > 0 ? `+${formatValue(v)}` : v < 0 ? `−${formatValue(-v)}` : '0')
 
-export default function CompareScreen({ ws, declaration, treeState }: { ws: Workspace; declaration: SyntheticDeclaration | null; treeState: TreeState | null }) {
+export default function CompareScreen({ ws, scene, candidates, treeState }: { ws: Workspace; scene: SceneData | null; candidates: readonly CandidateMarker[]; treeState: TreeState | null }) {
   if (ws.connection.status !== 'connected' || !ws.scenario) {
     return <section className="future-screen"><h1>Compare<span className="heading-dot">.</span></h1><p>Connect the local backend to compare stored runs.</p></section>
   }
@@ -27,7 +28,7 @@ export default function CompareScreen({ ws, declaration, treeState }: { ws: Work
       <div className="page-heading"><div><h1>Compare &amp; evidence<span className="heading-dot">.</span></h1><p>Analysis cases, controlled comparisons of stored runs, and the evidence behind every number.</p></div><span className="pill pill-muted">STP-025</span></div>
       <div className="notice" role="note"><span className="notice-icon" aria-hidden="true">ⓘ</span><div><strong>Scope of what is computed</strong><p>This system computes direct geometric shade metrics only ({SUPPORTED_METRICS.join(', ')}). It does not compute temperature, air quality, CO₂, flood or energy-bill savings, and none are shown.</p></div></div>
       <div className="compare-grid">
-        <RunComparison ws={ws} declaration={declaration} treeState={treeState} />
+        <RunComparison ws={ws} scene={scene} candidates={candidates} treeState={treeState} />
         <div className="compare-side">
           <CasesPanel ws={ws} />
           <WinterPanel ws={ws} />
@@ -70,7 +71,7 @@ function CasesPanel({ ws }: { ws: Workspace }) {
             <ul className="bin-list" aria-label="Time bins">
               {timeBins(current, scenario.input.display_time_zone).map(b => <li key={b.utc}><code>{b.utc}</code> UTC · {b.local} ({b.zone}) · {b.durationH} h</li>)}
             </ul>
-            <p className="fine-print">These are the analysis bins the evaluator integrates. The 3D view's sun line shows the declared direction for this bin; there is no view-only time slider, so nothing on screen implies a different time was analysed.</p>
+            <p className="fine-print">These are the analysis bins the evaluator integrates. The 3D view does not animate the sun and there is no view-only time slider, so nothing on screen implies a different time was analysed.</p>
             <span className="fine-label">Latest evaluation for this case</span>
             {!latest ? <p className="fine-print">No stored evaluation yet.</p> : metrics.length === 0 && missing.length === 0
               ? <p className="fine-print">The latest run (rev {latest.scenario_revision}) has no metric for this case.</p>
@@ -109,7 +110,7 @@ function WinterPanel({ ws }: { ws: Workspace }) {
 }
 
 /** Side-by-side comparison of two stored evaluate runs; differences are arithmetic on returned values only. */
-function RunComparison({ ws, declaration, treeState }: { ws: Workspace; declaration: SyntheticDeclaration | null; treeState: TreeState | null }) {
+function RunComparison({ ws, scene, candidates, treeState }: { ws: Workspace; scene: SceneData | null; candidates: readonly CandidateMarker[]; treeState: TreeState | null }) {
   const runs = stored(ws, 'evaluate_layout')
   const [baseId, setBaseId] = useState<string | null>(null)
   const [altId, setAltId] = useState<string | null>(null)
@@ -124,7 +125,7 @@ function RunComparison({ ws, declaration, treeState }: { ws: Workspace; declarat
         <div className="detail-section compare-empty"><p>At least two stored evaluations are needed. Evaluate, move the tree, then evaluate again in the Planning studio.</p></div>
       ) : (
         <>
-          <SiteScene declaration={declaration} treeState={treeState} committed={at(base)} draft={at(alt)} editable={false} onDraftChange={() => {}} siteLabel="BASE (GHOST) VS ALTERNATIVE" />
+          <SiteScene scene={scene} candidates={candidates.map(c => ({ ...c, selected: false }))} treeState={treeState} committed={at(base)} draft={at(alt)} editable={false} onDraftChange={() => {}} siteLabel="BASE (GHOST) VS ALTERNATIVE" />
           <div className="detail-section cmp-body">
             <div className="field-grid">
               <label className="select-field"><span>Base</span>
@@ -199,11 +200,23 @@ function BackendComparison({ ws }: { ws: Workspace }) {
           onClick={() => ws.draftPosition && ws.placementId && void ws.submit(compareLocationRequest(ws.draftPosition, ws.placementId))}>
           Compare draft position on the backend
         </button>
+        {ws.activeJob && ws.activeJob.operation.startsWith('compare') && (
+          <p className="fine-print" role="status" data-testid="compare-job">Job {ws.activeJob.job_id.slice(0, 8)}… {ws.activeJob.operation}: <strong>{ws.activeJob.status}</strong>{ws.activeJob.error ? ` — ${ws.activeJob.error.code}: ${ws.activeJob.error.message}` : ''}</p>
+        )}
+        {record?.result && <p className="fine-print">Run {record.result.run_id.slice(0, 12)}… · {record.result.operation} · scenario rev {record.result.scenario_revision} · {CURRENTNESS_LABEL[ws.currentness(record.result)].label}</p>}
+        {ws.error && <p className="error-box" role="alert">{ws.error}</p>}
         {!available && <p className="fine-print text-warning" data-testid="compare-unavailable">No compare_locations provider is registered on this backend, so no server comparison can run. The stored-run comparison is the only comparison shown.</p>}
         {record?.result?.comparison && (
           <ul className="bin-list">
             <li>Mode: {record.result.comparison.mode} · changed: {record.result.comparison.changed_inputs.join(', ') || 'none listed'}</li>
-            {rows.map((r, i) => <li key={i} className={r.resolved ? undefined : 'text-warning'}>{r.base ? `${formatValue(r.base.value)} → ${r.alternative ? formatValue(r.alternative.value) : '?'}` : 'unresolved metric'} · Δ {signed(r.delta.value)} {unitLabel(r.delta.unit)}{r.resolved ? '' : ' (metric instance not found in result)'}</li>)}
+            {rows.map((r, i) => (
+              <li key={i} className={r.resolved ? undefined : 'text-warning'} data-testid="backend-delta">
+                <strong>{r.base ? `${r.base.metric_id.replace(/_/g, ' ')} · ${r.base.case_id}${r.base.target_id ? ` · ${r.base.target_id}` : ''}` : 'unresolved metric'}</strong>{' '}
+                {r.base ? `${formatValue(r.base.value)} → ${r.alternative ? formatValue(r.alternative.value) : '?'}` : ''} · Δ {signed(r.delta.value)} {unitLabel(r.delta.unit)}
+                {r.base?.layout_id ? <small className="delta-layout"> layout {r.base.layout_id.length > 18 ? `…${r.base.layout_id.slice(-12)}` : r.base.layout_id}</small> : null}
+                {r.resolved ? '' : ' (metric instance not found in result)'}
+              </li>
+            ))}
           </ul>
         )}
       </div>
@@ -251,7 +264,7 @@ function EvidencePanel({ ws }: { ws: Workspace }) {
             </li>
           ))}
         </ol>
-        {results.length > 0 && <p className="fine-print">Uncertainty: the reference evaluator reports no uncertainty range; values are exact for its declared synthetic inputs and assumptions only.</p>}
+        {results.length > 0 && <p className="fine-print">Uncertainty: the evaluator reports no uncertainty range. Values are exact only for its declared synthetic inputs and the assumptions listed with each result.</p>}
       </div>
     </section>
   )

@@ -10,6 +10,7 @@ import ReportScreen from './panels/ReportScreen'
 import OverviewScreen from './panels/OverviewScreen'
 import { layoutRows } from './planning/alternatives'
 import type { Vec3 } from './api/types'
+import { nearestCandidate, samePosition, stepCandidate } from './planning/evaluation'
 
 type Screen = 'overview' | 'studio' | 'compare' | 'report'
 const screens: { id: Screen; number: string; label: string }[] = [
@@ -28,7 +29,22 @@ function App() {
   const treeState = ws.profile && primaryCase ? ws.profile.states[primaryCase.profile_state] ?? null : null
   const connected = ws.connection.status === 'connected'
   const synthetic = ws.site?.site_kind === 'synthetic_test'
-  const declaration = ws.declaration?.status === 'verified' ? ws.declaration.declaration : null
+  const scene = ws.declaration?.status === 'verified' ? ws.declaration.scene : null
+  const catalogue = ws.site?.candidate_catalogue ?? []
+  const candidateMode = catalogue.length > 0
+  const candidates = useMemo(() => catalogue.map(c => ({ id: c.candidate_id, position: c.position_enu_m as Vec3, selected: Boolean(ws.draftPosition && samePosition(c.position_enu_m as Vec3, ws.draftPosition)) })), [catalogue, ws.draftPosition])
+  // With a candidate catalogue the backend evaluates catalogue positions only, so moves snap to candidates.
+  const moveTree = (p: Vec3) => {
+    if (!candidateMode) { ws.setDraftPosition(p); return }
+    const c = nearestCandidate(catalogue, p)
+    if (c) ws.setDraftPosition(c.position_enu_m as Vec3)
+  }
+  const stepTree = (east: number, north: number) => {
+    if (!ws.draftPosition) return
+    const c = stepCandidate(catalogue, ws.draftPosition, east, north)
+    if (c) ws.setDraftPosition(c.position_enu_m as Vec3)
+  }
+  const ops = ws.connection.status === 'connected' ? ws.connection.health.available_operations : []
   const [selectedLayoutId, setSelectedLayoutId] = useState<string | null>(null)
   const searchRecord = ws.runs.find(r => r.result?.operation === 'search_layouts') ?? null
   const overlays = useMemo(() => (searchRecord?.result ? layoutRows(searchRecord.result, searchRecord.inputScenario) : [])
@@ -52,12 +68,14 @@ function App() {
         <div className="page-content">
           <div className="eyebrow">WORKSPACE / {selected.number} / {selected.label.toUpperCase()}</div>
           {screen === 'studio' ? <>
-            <div className="page-heading"><div><h1>Planting studio<span className="heading-dot">.</span></h1><p>Place one tree, evaluate it on the local engine, and see exactly which run the number came from.</p></div><span className="pill pill-muted">M2 VERTICAL SLICE</span></div>
-            {(synthetic || !connected) && <div className="notice" role="status"><span className="notice-icon" aria-hidden="true">ⓘ</span><div><strong>{connected ? 'Synthetic reference site' : 'Not connected to an evaluator'}</strong><p>{connected ? 'This site is an explicit synthetic test declaration, not Sheffield. Results are real computations of that synthetic geometry with a chosen sun direction; feasibility and constraints are not evaluated.' : 'Start the local backend (see frontend/README.md). No numbers are shown without a backend run.'}</p></div></div>}
+            <div className="page-heading"><div><h1>Planting studio<span className="heading-dot">.</span></h1><p>Place a tree, evaluate it on the local engine, search for options, and see exactly which run every number came from.</p></div><span className="pill pill-muted">M2 VERTICAL SLICE</span></div>
+            {(synthetic || !connected) && <div className="notice" role="status" data-testid="site-notice"><span className="notice-icon" aria-hidden="true">ⓘ</span><div><strong>{connected ? 'Synthetic test site: not Sheffield' : 'Not connected to an evaluator'}</strong><p>{connected
+              ? `Every number is a live computation by the local backend on this authored synthetic geometry and the assumptions listed with each result. It is not a surveyed site or a forecast of real benefit. Available here: ${ops.join(', ') || 'no operations'}. Each result states which constraints were evaluated and which remain unknown.`
+              : 'Start the local backend (see frontend/README.md). No numbers are shown without a backend run.'}</p></div></div>}
             <div className="studio-grid">
               <section className="site-panel" aria-labelledby="site-heading"><div className="panel-head"><div><span className="section-kicker">ACTIVE SITE</span><h2 id="site-heading">{ws.site?.name ?? 'No site loaded'}</h2></div><span className="tiny-tag">{synthetic ? 'SYNTHETIC TEST' : ws.site ? ws.site.site_kind.toUpperCase() : 'OFFLINE'}</span></div>
-                <SiteScene declaration={declaration} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={ws.setDraftPosition} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} />
-                <div className="map-legend"><span><i className="legend-dot proposed" /> Proposed tree</span>{ws.draftDirty && <span><i className="legend-dot ghost" /> Last evaluated position</span>}<span><i className="legend-dot target" /> Target receiver (represented area)</span><span><i className="legend-line sun" /> Declared sun direction (input, view only)</span>{overlays.length > 0 && <span><i className="legend-dot option" /> Search option placements</span>}<span>Drag tree to move · drag elsewhere to orbit · scroll to zoom</span></div>
+                <SiteScene scene={scene} candidates={candidates} onStep={candidateMode ? stepTree : undefined} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={moveTree} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} />
+                <div className="map-legend"><span><i className="legend-dot proposed" /> Proposed tree</span>{ws.draftDirty && <span><i className="legend-dot ghost" /> Last evaluated position</span>}{scene?.kind === 'reference' && <><span><i className="legend-dot target" /> Target receiver (represented area)</span><span><i className="legend-line sun" /> Declared sun direction (input, view only)</span></>}{scene?.kind === 'physical' && <><span><i className="legend-dot target" /> Receiver samples ({scene.scene.samples.length})</span><span><i className="legend-line region" /> Planting region</span></>}{candidateMode && <span><i className="legend-dot candidate" /> Catalogue positions ({catalogue.length})</span>}{overlays.length > 0 && <span><i className="legend-dot option" /> Search option placements</span>}<span>{candidateMode ? 'Drag tree to snap between catalogue positions' : 'Drag tree to move'} · drag elsewhere to orbit · scroll to zoom</span></div>
               </section>
               <aside className="detail-panel" aria-label="Planning controls and evidence">
                 <ResultCard ws={ws} />
@@ -70,7 +88,7 @@ function App() {
                 <SiteStatus ws={ws} transform={transform} />
               </aside>
             </div>
-          </> : screen === 'compare' ? <CompareScreen ws={ws} declaration={declaration} treeState={treeState} /> : screen === 'report' ? <ReportScreen ws={ws} /> : screen === 'overview' ? <OverviewScreen ws={ws} /> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
+          </> : screen === 'compare' ? <CompareScreen ws={ws} scene={scene} candidates={candidates} treeState={treeState} /> : screen === 'report' ? <ReportScreen ws={ws} /> : screen === 'overview' ? <OverviewScreen ws={ws} /> : <section className="future-screen"><span className="section-kicker">{selected.number} / {selected.label.toUpperCase()}</span><h1>{screen === 'overview' ? 'Sheffield city overview' : 'Impact & investment report'}<span className="heading-dot">.</span></h1><p>{screen === 'overview' ? 'Citywide layers and an audited Sheffield site are awaiting source and rights checks.' : 'A source checked report will be available once validated results and export rights exist.'}</p><div className="future-card"><span className="future-glyph" aria-hidden="true">↗</span><strong>Evidence required</strong><span>No illustrative metrics are shown as planning outcomes.</span></div><button type="button" className="text-action" onClick={() => setScreen('studio')}>Return to planning studio →</button></section>}
         </div>
       </main>
     </div>

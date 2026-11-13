@@ -86,10 +86,10 @@ async function online() {
 
     // Camera keyboard alternative still changes the canvas.
     const canvas = page.locator('.scene-canvas canvas')
-    const before = hash(await canvas.screenshot())
+    const before = hash(await canvas.evaluate(el => el.toDataURL('image/png')))
     await page.getByRole('button', { name: 'Orbit camera left' }).click()
     await page.waitForTimeout(400)
-    check('camera orbit control changes the view', before !== hash(await canvas.screenshot()))
+    check('camera orbit control changes the view', before !== hash(await canvas.evaluate(el => el.toDataURL('image/png'))))
     await page.getByRole('button', { name: 'Reset view' }).click()
 
     // 1. Positive evaluation at the seeded position.
@@ -108,10 +108,10 @@ async function online() {
     const stale = await page.locator('.currentness strong').textContent()
     check('unsaved move marks the result stale immediately', /STALE/.test(stale), stale)
     check('stale number is visibly struck through', await page.locator('.metric-stale').count() === 1)
-    const beforeFind = hash(await canvas.screenshot())
+    const beforeFind = hash(await canvas.evaluate(el => el.toDataURL('image/png')))
     await page.getByRole('button', { name: 'Find tree' }).click()
     await page.waitForTimeout(400)
-    check('Find tree recentres the camera on the moved tree', beforeFind !== hash(await canvas.screenshot()))
+    check('Find tree recentres the camera on the moved tree', beforeFind !== hash(await canvas.evaluate(el => el.toDataURL('image/png'))))
     await shot(page, '03-edit-stale')
 
     // 3. Save + evaluate: valid zero, and the old result is superseded.
@@ -370,7 +370,7 @@ async function offlineCheck() {
   const { browser, page, errors } = await launch(1440, 900)
   try {
     await page.goto(url)
-    await page.getByText('Backend not connected').waitFor({ timeout: 20000 })
+    await page.getByTestId('backend-status').filter({ hasText: 'Backend not connected' }).waitFor({ timeout: 20000 })
     check('offline state is explicit', true)
     check('no metric is shown without a backend', await metric(page).count() === 0)
     check('evaluate is disabled offline', await page.getByRole('button', { name: /Evaluate planting/ }).isDisabled())

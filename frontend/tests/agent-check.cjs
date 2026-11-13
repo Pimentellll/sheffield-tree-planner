@@ -52,7 +52,7 @@ const short = (v, n = 12) => (v.length > n + 1 ? `${v.slice(0, n)}…` : v)
     } else {
       check('server reports a listed, reachable model', status.configured && status.reachable && status.model_listed, status.model)
       await panel.getByLabel('Goal for the planning agent').fill(goal)
-      if (process.env.CANOPY_AGENT_SCOPE === 'evaluate') await panel.getByLabel('TOOLS').selectOption('evaluate')
+      await panel.getByLabel('TOOLS').selectOption(process.env.CANOPY_AGENT_SCOPE === 'all' ? 'all' : 'evaluate')
       const started = page.waitForResponse(r => r.url().endsWith('/api/v1/agent/runs') && r.request().method() === 'POST')
       await ask.click()
       const runId = (await (await started).json()).run_id
@@ -66,7 +66,7 @@ const short = (v, n = 12) => (v.length > n + 1 ? `${v.slice(0, n)}…` : v)
       check('one tool row per server-recorded tool call', toolRows === server.tool_calls.length, `${toolRows} rows; ${server.tool_calls.map(c => `${c.operation}:${c.executed ? c.job_status : 'not executed'}`).join(', ')}`)
       for (const id of server.computed_run_ids) {
         const stored = await get(`/results/${id}`)
-        check(`computed run ${short(id)} is a stored live backend Result for this task`, stored.status === 200 && stored.body.provenance.execution_mode === 'live' && stored.body.input_snapshot_ref.scenario_id === server.scenario_ref.scenario_id, stored.body.operation)
+        check(`computed run ${short(id)} is a stored live backend Result for this task`, stored.status === 200 && stored.body.provenance.execution_mode === 'live' && stored.body.input_snapshot_ref.scenario_id === server.scenario_ref.scenario_id && stored.body.input_snapshot_ref.revision === server.scenario_ref.revision, stored.body.operation)
       }
       if (server.status === 'completed') {
         const evText = await page.getByTestId('agent-evidence').innerText()
@@ -76,9 +76,9 @@ const short = (v, n = 12) => (v.length > n + 1 ? `${v.slice(0, n)}…` : v)
         await page.getByTestId('agent-summary').locator('summary').click()
         const summary = await page.getByTestId('agent-summary').locator('ul').innerText()
         check('summary on screen is the backend-generated summary', server.authoritative_summary.split('\n').every(line => summary.includes(line)))
-        const stored = (await get(`/results/${server.cited_run_ids[0]}`)).body
+        const stored = (await get(`/results/${server.cited_run_ids[0] ?? server.computed_run_ids[0]}`)).body
         const shade = stored.metrics.find(m => m.metric_id === 'additional_shade')
-        check('summary metric equals the stored Result', Boolean(shade) && summary.includes(`${shade.value} ${shade.unit}`), shade ? `${shade.value} ${shade.unit}` : 'none')
+        check('summary metric equals the stored Result', Boolean(shade) && summary.includes(`${Number(shade.value.toPrecision(6))} ${shade.unit}`), shade ? `${shade.value} ${shade.unit}` : 'none')
         // Bring the agent's runs into the studio: it must show the backend-selected current evaluation.
         await page.getByRole('button', { name: 'Show agent results in the studio' }).click()
         await page.getByText('Local backend connected').waitFor({ timeout: 20000 })

@@ -244,6 +244,24 @@ def test_repair_exhausted_with_invented_evidence_fails_without_citations(served)
     assert run["untrusted_model_narrative"] is None
 
 
+def test_job_id_citation_is_not_reported_as_a_cited_run(served):
+    """The loop accepts a job ID as evidence; that must not show every result as 'cited'."""
+    runtime, api, client = served
+
+    def script(body, n):
+        if n == 1:
+            return call("evaluate_layout", evaluate_args(runtime))
+        job_id = json.loads(body["messages"][-1]["content"])["job"]["job_id"]
+        return final(json.dumps({"narrative": "x", "evidence_ids": [job_id]}))
+
+    configure(runtime, api, ScriptedModel(script))
+    run = wait(client, start(client, runtime).json()["run_id"])
+    assert run["status"] == "completed" and run["format_repairs_used"] == 0
+    assert run["cited_run_ids"] == [] and len(run["computed_run_ids"]) == 1
+    assert run["evidence_ids"] == [run["tool_calls"][0]["job_id"]]
+    assert run["evidence_verified"] is True  # a job of this task, but no run was cited
+
+
 def test_malformed_tool_arguments_are_not_repaired(served):
     runtime, api, client = served
     configure(runtime, api, ScriptedModel(lambda b, n: call("evaluate_layout", "{bad json")))

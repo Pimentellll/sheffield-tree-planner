@@ -18,3 +18,23 @@ Observation fields are `user_actions` (timestamped, with scripted/human origin),
 `physical_adapter:physical_factory` supplies a deterministic scripted fixed workflow against `create_physical_runtime` and the actual `AgentDispatcher`; this is reported as scripted, not a human run. It uses the same accepted synthetic scenario, scene, operation schemas, numeric/search settings and backend source/dependency manifest per ordinary task. The failure task applies a labelled byte change to its fresh synthetic registered scene to exercise the actual source-integrity failure path; no old result is supplied. Random scenario/job/source identifiers, the source-derived candidate fingerprint, and seed-time deadline are excluded from the normalized configuration identity and documented in each receipt. The manual arm is blocked because no captured UI/action adapter is available. The adaptive arm is blocked because the prior authorized loopback check to `http://127.0.0.1:8001/v1` timed out; no model call, provider startup, or configuration occurs here. Neither blocked arm is written as a failed run.
 
 The task pack includes synthetic counterfactual and feasibility/search strata. Actual execution must wait for the physical runtime and search source to be frozen and imported. A reachable authorized loopback model provider is separately required for a genuine adaptive run; the runner never starts or configures one.
+
+## Agent-eval ladder (separate identity; not B11)
+
+`agent_eval.py` is a minimal harness for comparing local models on the **deployed** agent path (`AgentRunManager` → `AgentLoop` → `HTTPDispatcher` → real loopback API → CPU runtime). Its schemas are `canopy-agent-eval-*/1` and its task pack `agent_eval_tasks.json` is a labelled synthetic development ladder. It does not read, alter or retune the frozen B11 holdout/rubric above, and its results are not B11/V11 evidence. Changing a task changes the pack `identity`.
+
+```bash
+.venv/bin/python backend/tests/benchmarks/agent_eval.py \
+  --model-base http://127.0.0.1:8000/v1 --model tree-planner-local --enable-thinking false \
+  --repeats 5 --output <new-directory> --label "<machine, runtime, model revision>"
+```
+
+Each run uses a fresh runtime and writes `record.json` (every model exchange and timed domain call, the run record, and stored results/jobs re-read from the job store) and `score.json`. `score_case` is a pure function of the record, so receipts can be re-scored without new inference. Scored per run:
+
+- **Tool correctness:** each model tool call is re-validated here against the backend argument models and the host-pinned context (registered, schema-valid, in-context), plus required, irrelevant and repeated operations.
+- **Evidence integrity:** cited runs must be stored, live, for this exact scenario revision, computed in this run and currently selected; a non-completed run must present no evidence.
+- **Task success:** cited evidence for every required operation, or, for a fault case, a fail-closed end state after the model's own tool call actually hit the injected fault.
+- **Failure handling:** terminal class (`evidence`, `safe_failure`, `unsafe`) and reason class. `format_repairs_used` shows whether the first final answer was accepted, which is what the raw B11-style loop would have done.
+- **Latency:** total, per model turn (with token usage where the server reports it) and per tool phase, from transport timestamps.
+
+Model prose is never scored. The three cases are `protocol-evaluate-proposal` (one tool exposed), `selection-search-options` (all agent tools exposed; the search run must be cited) and `failure-changed-source` (a labelled byte change to the registered scene during the model's first turn). `test_agent_eval.py` validates the harness with a labelled synthetic protocol fixture; that is not model evidence. A laptop/Ollama receipt is development evidence only and says nothing about Nemotron or the Spark.

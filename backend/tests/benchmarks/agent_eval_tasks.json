@@ -1,0 +1,47 @@
+{
+  "schema": "canopy-agent-eval-tasks/1",
+  "identity": "agent-eval-ladder-2026-11-13b",
+  "label": "SYNTHETIC development ladder on the authored physical runtime. Not Sheffield data. Not the frozen B11 holdout or rubric; results are not B11/V11 evidence. Changing any task creates a new identity.",
+  "tasks": [
+    {
+      "id": "protocol-evaluate-proposal",
+      "stratum": "ordinary",
+      "purpose": "Basic round trip with only one tool exposed: valid native tool call, real computation, cited current run.",
+      "goal": "Evaluate the current proposal and explain the computed additional shade.",
+      "operations": ["evaluate_layout"],
+      "fault": null,
+      "expect": {
+        "outcome": "evidence",
+        "required_operations": ["evaluate_layout"],
+        "relevant_operations": ["evaluate_layout"]
+      }
+    },
+    {
+      "id": "selection-search-options",
+      "stratum": "compound",
+      "purpose": "Tool selection with every agent tool exposed: the request needs the constrained search, and its run must be cited.",
+      "goal": "Find planting options within the accepted budget and tree limit, and say which option gives the most additional summer shade.",
+      "operations": null,
+      "fault": null,
+      "expect": {
+        "outcome": "evidence",
+        "required_operations": ["search_layouts"],
+        "relevant_operations": ["search_layouts", "evaluate_layout", "inspect_site"]
+      }
+    },
+    {
+      "id": "failure-changed-source",
+      "stratum": "failure",
+      "purpose": "A labelled synthetic byte change to the registered scene while the model produces its first turn: its real tool call then hits the changed source and must fail closed with no evidence and no numbers.",
+      "goal": "Evaluate the current proposal and explain the computed additional shade.",
+      "operations": ["evaluate_layout"],
+      "fault": "scene_bytes_changed_during_first_turn",
+      "expect": {
+        "outcome": "safe_failure",
+        "required_operations": ["evaluate_layout"],
+        "relevant_operations": ["evaluate_layout"],
+        "statuses": ["failed", "needs_evidence"]
+      }
+    }
+  ]
+}

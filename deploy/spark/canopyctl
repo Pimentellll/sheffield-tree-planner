@@ -12,6 +12,8 @@
 #   canopyctl check       readiness gate: UI, bootstrap, operations, loopback-only, agent
 #   canopyctl smoke       real HTTP -> jobs -> CPU demo in its own temporary server
 #   canopyctl agent-smoke one evaluate-only agent run on the running server (needs a model)
+#   canopyctl bench [..]  service latency: deterministic jobs + raw streamed inference
+#   canopyctl eval --label "..." [--repeats N]  agent evaluation ladder (own fresh runtimes)
 #   canopyctl logs        tail the current server log
 #
 # It never runs docker, pulls images, downloads models, edits SSH or binds non-loopback.
@@ -315,6 +317,30 @@ sys.exit(0 if ok else 1)
 EOF
 }
 
+cmd_bench() {
+  load_env
+  local out; out="$RECEIPTS/bench-$(ts).json"
+  local extra=()
+  [ -n "$LLM_ENABLE_THINKING" ] && extra+=(--enable-thinking "$LLM_ENABLE_THINKING")
+  [ -n "$LLM_REASONING_EFFORT" ] && extra+=(--reasoning-effort "$LLM_REASONING_EFFORT")
+  python3 deploy/spark/bench.py --api "$API" --out "$out" "${extra[@]}" "$@"
+}
+
+# Agent evaluation ladder against the configured model. It starts its own fresh runtimes on
+# ephemeral loopback ports (it does not use the running server) and calls the model one
+# request at a time. Requires: --label "<where the model runs and what it is>".
+cmd_eval() {
+  load_env
+  [ -x "$PY" ] || { fail "not installed"; return 1; }
+  [ -n "$LLM_BASE_URL" ] && [ -n "$LLM_MODEL" ] || { fail "no model configured in $ENV_FILE"; return 1; }
+  local out; out="$RECEIPTS/agent-eval-$(ts)"
+  local extra=()
+  [ -n "$LLM_ENABLE_THINKING" ] && extra+=(--enable-thinking "$LLM_ENABLE_THINKING")
+  [ -n "$LLM_REASONING_EFFORT" ] && extra+=(--reasoning-effort "$LLM_REASONING_EFFORT")
+  "$PY" -I backend/tests/benchmarks/agent_eval.py --model-base "$LLM_BASE_URL" --model "$LLM_MODEL" \
+    --output "$out" "${extra[@]}" "$@"
+}
+
 cmd_logs() { local s; s="$(cat "$RUN/session" 2>/dev/null)" && tail -n "${1:-50}" "$s/server.log"; }
 
 case "${1:-}" in
@@ -328,8 +354,10 @@ case "${1:-}" in
   check) cmd_check ;;
   smoke) cmd_smoke ;;
   agent-smoke) cmd_agent_smoke ;;
+  bench) shift; cmd_bench "$@" ;;
+  eval) shift; cmd_eval "$@" ;;
   logs) shift; cmd_logs "$@" ;;
-  *) sed -n 2,19p "$0"; exit 2 ;;
+  *) sed -n 2,21p "$0"; exit 2 ;;
 esac
 rc=$?
 [ "$FAILED" = 1 ] && exit 1

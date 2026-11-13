@@ -17,7 +17,7 @@ export function AgentPanel({ ws }: { ws: Workspace }) {
   const [status, setStatus] = useState<AgentStatus | null>(null)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [goal, setGoal] = useState(DEFAULT_GOAL)
-  const [scope, setScope] = useState<'all' | 'evaluate'>('all')
+  const [scope, setScope] = useState<'all' | 'evaluate'>('evaluate')
   const [run, setRun] = useState<AgentRun | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
@@ -93,8 +93,8 @@ export function AgentPanel({ ws }: { ws: Workspace }) {
         <label className="select-field agent-goal">
           TOOLS
           <select value={scope} disabled={running} onChange={e => setScope(e.target.value as 'all' | 'evaluate')}>
+            <option value="evaluate">Evaluate only (most reliable)</option>
             <option value="all">All server tools{status ? ` (${status.allowed_operations.length})` : ''}</option>
-            <option value="evaluate">Evaluate only</option>
           </select>
         </label>
         <button type="submit" className="secondary-action" disabled={blocked || Boolean(invalid)}>

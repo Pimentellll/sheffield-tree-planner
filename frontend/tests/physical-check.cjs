@@ -88,10 +88,10 @@ const shot = (page, name) => page.screenshot({ path: join(evidenceDir, `${name}.
     const values = s.layouts.map(l => s.metrics.find(x => x.layout_id === l.layout.layout_id && x.metric_id === 'additional_shade' && x.case_id === primary)).filter(Boolean).map(x => fmt(x.value))
     check('each layout\'s shade on screen equals its stored metric', values.every(v => panel.includes(`${v} m²·h`)), values.join(', '))
     const canvas = page.locator('.site-panel .scene-canvas canvas').first()
-    const before = hash(await canvas.screenshot())
+    const before = hash(await canvas.evaluate(el => el.toDataURL('image/png')))
     await page.locator('.layout-table tbody tr').last().getByRole('button').first().click()
     await page.waitForTimeout(400)
-    check('selecting a layout highlights its placements in the 3D view', before !== hash(await canvas.screenshot()))
+    check('selecting a layout highlights its placements in the 3D view', before !== hash(await canvas.evaluate(el => el.toDataURL('image/png'))))
     await shot(page, '02-search')
 
     // Move to candidate-3 by keyboard, accept and recompute.

@@ -6,7 +6,7 @@
 
 ## 0. Method, evidence grades and bounded stopping rule
 
-Inspected the complete pushed Git tree (187 files, 13 Nov), especially \`agents/__init__.py\`, \`agents/http.py\`, \`api/app.py\`, \`api/service.py\`, \`jobs/__init__.py\`, opt-in real-agent tests, \`benchmarks/runner.py\`, the frontend client/workspace/evidence screens, \`deploy/spark/*\`, canonical docs and open issues. Code observations below are **source inspection**, not executed tests. Recorded Spark baseline and model smoke are **issue-reported** evidence at [#54](https://github.com/Pimentellll/sheffield-tree-planner/issues/54), not personally reproduced. All genuine inference acceptance must occur on DGX.
+Enumerated the complete pushed Git tree (187 files, 13 Nov) and inspected critical implementation paths, especially \`agents/__init__.py\`, \`agents/http.py\`, \`api/app.py\`, \`api/service.py\`, \`jobs/__init__.py\`, opt-in real-agent tests, \`benchmarks/runner.py\`, the frontend client/workspace/evidence screens, \`deploy/spark/*\`, canonical docs and open issues. Code observations below are **source inspection**, not executed tests. Recorded Spark baseline and model smoke are **issue-reported** evidence at [#54](https://github.com/Pimentellll/sheffield-tree-planner/issues/54), not personally reproduced. All genuine inference acceptance must occur on DGX.
 
 Walk the following chain repeatedly, asking at each interface: **trusted input? typed contract? identity/fingerprint? hard bounds? error/cancellation? stale result? rights? evidence? user-visible truthful state? repeatable test?**
 
@@ -50,7 +50,7 @@ A pass stops only when every **P0** row below has a named owner, proposed change
 | R23 **P1** | Fixed five cases alone do not establish agent superiority | Preserve B11 manual/fixed/adaptive matched-evidence benchmark as separate P1 after event mandatory probe | Same task/tools/time budget; reviewers independent; no causal advantage claim from five cases |
 | R24 **P1** | More agents or world-scale front-end expansion could disrupt P0 release | Keep one bounded investigator, six registered operations, server-side policy, deterministic fallback. No user-defined Python/SQL/URLs or free-form tool selectors | Prompt injection, off-task instruction and unsupported benefit attempts produce refusal or typed block |
 
-**Evidence certainty:** R01–R05, R07–R09, R13, R16, R19–R21, R23–R24 are source/docs-supported. R06 is a **plausible fault matching the reported local reproduction**, not a measured DGX fault. R10–R12, R14–R15, R17–R18, R22 are under-specified integration/acceptance boundaries, not verified exploits.
+**Evidence certainty:** R01–R05, R07–R09, R13, R16, R19–R21, R23–R25 are source/docs-supported. R06 is a **plausible fault matching the reported local reproduction**, not a measured DGX fault. R10–R12, R14–R15, R17–R18, R22 are under-specified integration/acceptance boundaries, not verified exploits.
 
 ## 3. Runtime seam: additive contract proposal, not an implemented endpoint
 
@@ -134,3 +134,26 @@ Per case collect: fixed prompt hash and filled host-context hash; accepted scena
 ## 8. Event-day ownership update (~13:07 UTC)
 
 Ben's new [#68](https://github.com/Pimentellll/sheffield-tree-planner/issues/68) assigns **Arnav** the small, standalone model-observation helper in `backend/src/tree_planner/agents/observation_views.py` and matching tests, with Ben owning the integration call site in `agents/__init__.py` and Spark. Do not edit each other's exclusive files. The separately assigned [#69](https://github.com/Pimentellll/sheffield-tree-planner/issues/69) covers Arnav's **later P2 recorded-tree inventory importer**, not a P0 agent dependency. Actual on-device evaluation remains #55, only in Ben's authorised window.
+
+
+## 9. Critical late-cycle transport finding: native Ollama messages are not OpenAI wire messages (R25 P0)
+
+**Verified against primary Ollama documentation on 13 Nov:** [Native chat endpoint](https://docs.ollama.com/api/chat) and [Tool calling examples](https://docs.ollama.com/capabilities/tool-calling). This is a **source-shape incompatibility requiring an adapter test**, not proof that Ben's unpublished native adapter is broken.
+
+- Ollama POST \`/api/chat\` accepts \`tools\`, \`messages\`, \`stream:false\`, runtime \`options\` (including context configuration supported by the chosen model), and \`think\`. It returns a top-level \`message\` and \`done\` / \`done_reason\`, \`prompt_eval_count\` / \`eval_count\`, nanosecond durations. The existing \`LocalClient\` expects OpenAI \`choices[].message\`, \`choices[].finish_reason\`, \`usage.prompt_tokens\` if tracked. No field-name equality should be assumed.
+- Official Ollama tool call samples give \`function.arguments\` as a **JSON object**, not a JSON string; they use \`function.index\` and **show no OpenAI \`id\`**. Existing \`AgentLoop\` requires \`call.id\` as a string and \`parse_arguments()\` requires JSON text. Naively passing native \`message\` into this loop would reject real tool calls.
+- Ollama tool replies use \`{role:"tool", tool_name:<registered tool>, content:<text>}\`, whereas the existing internal loop uses OpenAI-style \`{role:"tool", tool_call_id:<id>, content:<text>}\`. Follow-up conversation conversion must preserve the association of each (possibly parallel) tool request and observation across turns.
+- The response lacks a directly equivalent \`finish_reason:"tool_calls"\` guarantee. Use validated presence of \`message.tool_calls\`, \`done:true\` and an explicit allowlist of \`done_reason\` states; reject incomplete/length/truncated and malformed returns, rather than inferring success from HTTP 200. Confirm the actual loaded model/provider response in a private DGX receipt.
+- Native \`prompt_eval_count\` is the model-server-reported prompt token count per request. Record it and bound it with reserved output budget; do not confuse it with \`eval_count\` (generated tokens) or use bytes/characters as exact token counts.
+
+### Required small adapter design (Ben #54/#62/#73)
+
+Maintain a single internal strict \`AgentLoop\` protocol and add **explicit bidirectional normalisation** in the native \`/api/chat\` client:
+
+1. **Request:** Convert internal assistant tool-call messages + tool observations to valid native Ollama chat history, mapping one internal tool call to its named tool result. Any missing/ambiguous association is a protocol error; no silently dropped tool context. Preserve original tool name; never use model text as an endpoint or arbitrary tool name.
+2. **Response:** Validate top-level \`done\` / \`done_reason\`, assistant role and one supported message shape. Convert native object arguments to **canonical JSON text** using \`json.dumps(allow_nan=False)\`, then rely on the existing \`parse_arguments\` and Pydantic validation. Reject unsupported content/unknown operations/duplicate argument keys/nonfinite numbers at the appropriate boundary. Native object arguments are not a bypass to looser validation.
+3. **Identity:** If native tool calls do not provide IDs, derive **opaque host-side IDs unique within the agent session**, preserve map to function.index/order and tool_name; document they are host-assigned transport correlation identifiers, **not model-provided authority**. Do not silently reuse IDs or apply a tool observation to another call.
+4. **Usage:** Save actual \`prompt_eval_count\`, \`eval_count\`, configured \`options.num_ctx\`, \`num_predict\`, loaded-model context from \`/api/ps\` or equivalent, model tag and precise release SHA. Fail closed when the configured cap cannot be established. Respect original 8,192 request requirement, including reserved output budget, and do not infer that successful generation proves an untruncated prompt.
+5. **Negative tests:** native single tool, parallel tool indices/association, missing id, object arguments, unknown name, malformed args/float NaN, absent/missing usage, \`done:false\`, context overage, reply history across two model turns, tool-result order swapped and error/no-tool abstention. Confirm no double-dispatch under an ambiguous HTTP response.
+
+**Dependency:** This is **part of Ben's existing native client #54 and #73**; do not open a competing adapter PR or replace the active worktree. It is the *last additional P0 interface category surfaced by the late-cycle API shape check*. Its implementation and actual device proof remain unverified until Ben integrates it.

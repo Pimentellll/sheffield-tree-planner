@@ -92,6 +92,8 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
   const world = useRef<{
     scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; renderer: THREE.WebGLRenderer
     staticGroup: THREE.Group; overlayGroup: THREE.Group; draftTree: THREE.Group | null; ghostTree: THREE.Group | null
+    /** Request one render on the next frame (the scene renders on demand, not every frame). */
+    invalidate: () => void
   } | null>(null)
   const latest = useRef({ draft, editable, onDraftChange })
   latest.current = { draft, editable, onDraftChange }
@@ -109,7 +111,8 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       setState('error')
       return
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    // Full-bleed canvas: cap the pixel ratio so high-DPI and GPU-less (software WebGL) machines stay responsive.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.setClearColor(C.background)
     mount.appendChild(renderer.domElement)
@@ -132,6 +135,11 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       if (northRef.current) northRef.current.style.transform = `rotate(${angle}deg)`
     }
     controls.addEventListener('change', updateNorth)
+    // Render on demand: only after a camera change, a resize or a scene edit. An idle full-bleed
+    // canvas otherwise re-renders every frame and starves the main thread without a GPU.
+    let dirty = true
+    const invalidate = () => { dirty = true }
+    controls.addEventListener('change', invalidate)
 
     scene.add(new THREE.HemisphereLight(C.skyLight, C.groundLight, 2.0))
     const light = new THREE.DirectionalLight(C.sunLight, 1.6)
@@ -152,7 +160,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
     const overlayGroup = new THREE.Group()
     scene.add(staticGroup, overlayGroup)
 
-    world.current = { scene, camera, controls, renderer, staticGroup, overlayGroup, draftTree: null, ghostTree: null }
+    world.current = { scene, camera, controls, renderer, staticGroup, overlayGroup, draftTree: null, ghostTree: null, invalidate }
 
     // Pointer editing: drag the proposed tree across the ground plane (u = 0).
     const raycaster = new THREE.Raycaster()
@@ -204,13 +212,16 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       updateNorth()
+      invalidate()
     })
     observer.observe(mount)
 
     let frame = 0
     const animate = () => {
       frame = requestAnimationFrame(animate)
-      controls.update()
+      controls.update() // dispatches 'change' (and so invalidates) while the camera is moving or damping
+      if (!dirty) return
+      dirty = false
       renderer.render(scene, camera)
     }
     animate()
@@ -224,6 +235,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       renderer.domElement.removeEventListener('pointerup', onUp)
       renderer.domElement.removeEventListener('pointercancel', onUp)
       controls.removeEventListener('change', updateNorth)
+      controls.removeEventListener('change', invalidate)
       controls.dispose()
       disposeObject(scene)
       world.current = null
@@ -311,6 +323,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       dot.position.copy(marker.position)
       w.staticGroup.add(marker, dot)
     }
+    w.invalidate()
   }, [scene, candidateKey, state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Alternative layouts from a stored search result: a ring per placement; the highlighted one also gets crowns.
@@ -337,6 +350,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
         }
       }
     }
+    w.invalidate()
   }, [overlayKey, treeState, state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Proposed tree (draft) and, when moved, a ghost at the last committed position.
@@ -347,6 +361,7 @@ export default function SiteScene({ scene, candidates = [], onStep, treeState, c
       const old = w[key]
       if (old) { w.scene.remove(old); disposeObject(old); w[key] = null }
     }
+    w.invalidate()
     if (!treeState || !draft) return
     const tree = buildTree(treeState, false)
     tree.position.copy(toV(draft))

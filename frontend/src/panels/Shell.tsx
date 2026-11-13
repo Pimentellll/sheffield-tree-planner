@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 import type { SceneData } from '../api/session'
-import { agentPanelState, evidenceChain } from '../planning/agentEvidence'
+import { evidenceChain } from '../planning/agentEvidence'
 import { dataPillLabel, draftBannerText, headerStatus, latestEvaluation, layoutsFeasible, provenanceItems, provenanceStatus, scenarioSummary } from '../planning/shell'
+import type { AgentRunController } from '../planning/useAgentRun'
 import type { Workspace } from '../planning/useWorkspace'
 import { FOCUS_TARGET, focusAfterRender } from './focus'
+import { AgentRunPanel } from './vision/AgentRunPanel'
 
 /** Vision v2 application shell: navigation rail, context header and the Studio's floating panels. */
 
@@ -136,26 +138,18 @@ export function MapKey({ scene, dirty, locationCount, optionCount, candidateMode
   )
 }
 
-/** Planning agent (#74): a truthful unavailable state until the agent-run API (#73) exists. */
-export function AgentPanel({ ws }: { ws: Workspace }) {
-  const health = ws.connection.status === 'connected' ? ws.connection.health : null
-  const state = agentPanelState(health)
+/**
+ * Planning agent (#74). The bar keeps its place and labels; its body is the agent-run panel, whose
+ * default transport reports "not connected" until the agent-run API (#73) exists.
+ *
+ * `controller` lets the host keep the run alive across the editor opening and screen changes: call
+ * `useAgentRun` where the studio stays mounted and pass it here. Without it the panel owns the run,
+ * which is forgotten when the bar unmounts (see the lifetime limit in AgentRunPanel.tsx).
+ */
+export function AgentPanel({ ws, controller }: { ws: Workspace; controller?: AgentRunController }) {
   return (
     <section className="agent-bar glass-light" aria-labelledby="agent-title" data-testid="agent-panel">
-      <div className="agent-head">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>
-        <h2 id="agent-title">Planning agent</h2>
-        <span className="status-pill sp-muted"><i aria-hidden="true" />NOT CONNECTED</span>
-      </div>
-      <p className="caption">{state.reason}</p>
-      <p className="caption mono" data-testid="backend-operations">Backend operations: {health ? (health.available_operations.join(', ') || 'none') : 'unknown while offline'}</p>
-      <form className="agent-form" onSubmit={e => e.preventDefault()}>
-        <input aria-label="Question for the planning agent (unavailable)" placeholder="Available once the agent service is connected" disabled />
-        <button type="submit" disabled aria-label="Send question (unavailable)">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-        </button>
-      </form>
-      <p className="caption">{!health ? 'Start the local backend to plan manually; the agent is not needed for that.' : state.manualEvaluateAvailable ? 'Manual planning works without it: use Evaluate planting.' : 'This backend offers no evaluate_layout operation.'}</p>
+      <AgentRunPanel ws={ws} controller={controller} headingId="agent-title" />
     </section>
   )
 }

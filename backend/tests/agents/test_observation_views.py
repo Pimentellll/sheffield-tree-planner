@@ -1,7 +1,11 @@
 """Model-facing observation views (#68).
 
 Every successful observation here is produced at test time by the real synthetic physical
-runtime (real jobs, real Results), in the exact shape AgentLoop sends to the model. Inputs
+runtime (real jobs, real Results), built the same way AgentLoop._dispatch builds its
+async observation. One test drives AgentLoop itself. The compare_scenarios observation is
+produced through the job API: AgentLoop cannot currently complete compare_scenarios
+against this runtime (it submits under the hypothetical scenario, which the runtime
+rejects), so that case checks the view's handling of two-scenario Results only. Inputs
 derived from them for edge cases (failed, superseded, missing metric, non-ASCII text,
 scaled-up search) are labelled SYNTHETIC where they are built and are passed as NOT
 validated at delivery. No successful runtime result is hand-authored and nothing here is
@@ -270,16 +274,20 @@ def test_full_view_keeps_every_value_and_identity(real, name):
     v = view(observation)
     job, result = v["job"], v["result"]
     assert v["level"] == "full"
-    assert (job["job_id"], job["status"], job["state"]) == (
+    assert (job["job_id"], job["status"], job["result_attached"]) == (
         full_job["job_id"],
         "completed",
-        "completed_with_result",
+        True,
     )
+    assert "state" not in job
     assert job["scenario_ref"] == full_result["input_snapshot_ref"] == result["scenario_ref"]
     assert job["input_fingerprint"] == result["input_fingerprint"] == full_job["input_fingerprint"]
     for key in ("run_id", "source_job_id", "operation", "analytical_outcome", "arguments"):
         assert result[key] == full_result[key], key
-    assert result["execution_mode"] == full_result["provenance"]["execution_mode"]
+    assert "execution_mode" not in result  # current mode lives on job.delivery only
+    assert job["delivery"]["execution_mode"] == full_job["delivery"]["execution_mode"]
+    source_mode = full_result["provenance"]["execution_mode"]
+    assert result["provenance"]["source_execution_mode"] == source_mode
     assert result["source_ids"] == full_result["source_ids"]
     assert result["limitations"] == full_result["limitations"]
     assert result["assumptions"] == full_result["assumptions"]
@@ -333,8 +341,10 @@ def test_comparison_deltas_resolve_to_the_recorded_metrics(real, name):
             a["layout_id"],
             b["layout_id"],
         )
-        for field in ("quantity_kind", "weighting", "area_basis", "aggregation_basis"):
-            assert shown[field] == a[field], field
+        for field in ("quantity_kind", "weighting", "area_basis"):
+            assert shown[field] == a[field] == b[field], field
+        assert shown["base_aggregation_basis"] == a["aggregation_basis"]
+        assert shown["alternative_aggregation_basis"] == b["aggregation_basis"]
         assert (shown["base_scenario_ref"] or default) == a["scenario_ref"]
         assert (shown["alternative_scenario_ref"] or default) == b["scenario_ref"]
 
@@ -543,7 +553,8 @@ def test_pending_and_cancelled_jobs_are_reported_without_results(tmp_path):
     pending_observation = {"job": queued.model_dump(mode="json")}
     pending = view(pending_observation)
     assert pending["level"] == JOB_ONLY_LEVEL
-    assert pending["job"]["state"] == "pending" and pending["job"]["run_id"] is None
+    assert pending["job"]["status"] == queued.status and pending["job"]["run_id"] is None
+    assert pending["job"]["result_attached"] is False
     assert "result" not in pending
     assert_omissions_reference_the_record(pending, pending_observation)
 
@@ -551,7 +562,7 @@ def test_pending_and_cancelled_jobs_are_reported_without_results(tmp_path):
     cancelled_job = service.jobs.get_job(queued.job_id)
     assert cancelled_job.status == "cancelled"
     cancelled = view({"job": cancelled_job.model_dump(mode="json")})
-    assert cancelled["job"]["state"] == "cancelled" and cancelled["job"]["cancel_requested"]
+    assert cancelled["job"]["status"] == "cancelled" and cancelled["job"]["cancel_requested"]
     assert cancelled["job"]["error"]["code"] == "CANCELLED"
     assert cancelled["job"]["run_id"] is None
 
@@ -585,20 +596,52 @@ def test_failed_and_superseded_jobs_keep_their_status(real, tmp_path):
         },
     )
     shown = view(failed)["job"]
-    assert shown["state"] == "failed" and shown["error"]["code"] == "NUMERICAL_FAILURE"
+    assert shown["status"] == "failed" and shown["error"]["code"] == "NUMERICAL_FAILURE"
     assert shown["error"]["retryable"] is False and shown["run_id"] is None
     assert shown["error"]["details"] == {"stage": "synthetic"}
 
     revision = real["evaluate"]["job"]["scenario_revision"] + 1
     superseded = synthetic_job_state(real["evaluate"], superseded_by_revision=revision)
     shown = view(superseded)["job"]
-    assert shown["state"] == "superseded" and shown["superseded_by_revision"] == revision
+    # Supersession is an orthogonal marker (CONTRACTS, BUILD D04), never a state.
+    assert shown["status"] == "completed" and shown["result_attached"] is False
+    assert shown["superseded_by_revision"] == revision and "state" not in shown
+
+    # JobStore.activate marks a queued/running job superseded too; it must not read as current.
+    queued_superseded = synthetic_job_state(queued, superseded_by_revision=revision)
+    shown = view(queued_superseded)["job"]
+    assert shown["status"] == job.status and shown["superseded_by_revision"] == revision
+
+    # The model is told to cite job_id, never a superseded job's run_id (AgentLoop rejects it).
+    authority = view(superseded)["authority"]
+    assert "Cite job.job_id" in authority and "superseded_by_revision" in authority
 
     # The loop never attaches a Result to a superseded Job; such input is refused.
     with_result = {"job": superseded["job"], "result": real["evaluate"]["result"]}
     for validated in (True, False):
         with pytest.raises(ObservationViewError):
             view(with_result, validated=validated)
+
+
+def test_a_cached_delivery_never_looks_live(real):
+    data = copy.deepcopy(real["evaluate"])
+    # SYNTHETIC: the same real Job/Result, delivered from cache instead of live.
+    data["job"]["delivery"]["execution_mode"] = "cached"
+    Job.model_validate(data["job"])
+    v = view(data, validated=False)
+    assert v["job"]["delivery"]["execution_mode"] == "cached"
+    assert v["result"]["provenance"]["source_execution_mode"] == "live"
+    assert "execution_mode" not in v["result"]
+
+
+def test_job_progress_is_shown_as_recorded(tmp_path):
+    runtime, service = _runtime(tmp_path / "runtime")
+    layout_ref, _, _ = _context(service, runtime)
+    job = _submit(runtime, service, "evaluate_layout", {"layout_ref": layout_ref})
+    progress = {"completed": 2, "total": 5, "phase": "synthetic-phase", "unit": "bins"}
+    # SYNTHETIC: progress values on a real queued Job.
+    observation = synthetic_job_state({"job": job.model_dump(mode="json")}, progress=progress)
+    assert view(observation)["job"]["progress"] == progress
 
 
 def test_currentness_is_reported_as_supplied_and_never_invented(real):

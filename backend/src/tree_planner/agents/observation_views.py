@@ -12,11 +12,17 @@ This module builds a smaller *view* of that same observation for the model only.
 * The full Job/Result is never modified. The host keeps it as the only authority for
   ``_conclusion``, evidence checks, scoring, storage and UI. The view says so.
 * Nothing is invented. Values are copied from the validated record or computed
-  deterministically from it (``state``, ``status_counts``, pass counts, delta rows
+  deterministically from it (``result_attached``, ``status_counts``, pass counts, delta rows
   resolved through the record's own metric instances). ``currentness`` is the *caller's*
-  assertion and is labelled as such. Every field left out is listed in ``omitted`` with
-  its count, its path in the full record and the existing ``run_id``/``job_id`` that holds
-  it. No storage reference, pagination tool, metric or status is created.
+  assertion and is labelled as such. The current delivery mode is
+  ``job.delivery.execution_mode``; ``result.provenance.source_execution_mode`` is only the
+  original computation's mode, so a cache hit never looks live. Supersession stays the
+  separate ``superseded_by_revision`` marker beside the contract ``status``; no derived
+  state is shown. The model is told to cite ``job_id``, because AgentLoop does not accept
+  a superseded job's ``run_id`` as evidence. Fields left out are listed
+  in ``omitted`` with a count, their path in the full record and the existing
+  ``run_id``/``job_id`` that holds them; entries for fields that only repeat values already
+  shown say so. No storage reference, pagination tool, metric or status is created.
 * Size is measured in UTF-8 bytes of the same serialization the loop uses. Bytes are not
   tokens: fitting a byte budget does not prove a token limit (for example the 8,192-token
   rule), which stays with the native runtime and its reported usage.
@@ -26,9 +32,9 @@ This module builds a smaller *view* of that same observation for the model only.
   have produced (a Result attached to a non-completed or superseded Job), raise
   :class:`ObservationViewError` instead of being made plausible.
 
-A Result-bearing view is much smaller than the full record. A Job-only view (pending,
-failed, cancelled, superseded) can be a few hundred bytes larger than the raw Job dump,
-because it adds the authority notice and omission list; it has a single level.
+A Result-bearing view is much smaller than the full record. A Job-only view (queued,
+running, failed, cancelled, or superseded) can be a few hundred bytes larger than the raw
+Job dump, because it adds the authority notice and omission list; it has a single level.
 
 Proposed call site (not wired here; ``agents/__init__.py`` is owned by the integrator).
 In ``AgentLoop.continue_run``, where the tool message content is built from the value
@@ -42,7 +48,8 @@ In ``AgentLoop.continue_run``, where the tool message content is built from the 
                 result_validated_at_delivery="result" in observation,
             )
         except ObservationViewError as exc:
-            # Make the refusal explicit and keep its byte detail in Outcome.reason.
+            # Fail-closed: this ends the whole run (byte detail kept in Outcome.reason).
+            # The alternative, a typed refusal message to the model, is Ben's decision.
             raise ProtocolError(f"observation view refused: {exc}") from exc
     content = json.dumps(observation, ensure_ascii=False, allow_nan=False)
 
@@ -66,8 +73,10 @@ LEVELS = ("full", "reduced", "essential")
 JOB_ONLY_LEVEL = "job_only"
 
 AUTHORITY = (
-    "Model-facing view. The host keeps the full Job/Result as the only authority; cite the "
-    "run_id or job_id shown here. Items listed in 'omitted' exist only in that full record."
+    "Model-facing view. The host keeps the full Job/Result as the only authority. Cite "
+    "job.job_id as evidence; never cite the run_id of a job whose superseded_by_revision is "
+    "set. Items listed in 'omitted' exist only in the full record named by their "
+    "'authoritative' ID."
 )
 CONVENTIONS = (
     "Rows follow their 'columns'. A row without a trailing scenario_ref, or a delta with a "
@@ -110,7 +119,8 @@ _DELTA_COLUMNS = [
     "quantity_kind",
     "weighting",
     "area_basis",
-    "aggregation_basis",
+    "base_aggregation_basis",
+    "alternative_aggregation_basis",
     "base_layout_id",
     "base_scenario_ref",
     "alternative_layout_id",
@@ -247,24 +257,14 @@ def _job_ref(job: Job) -> ScenarioRef:
     return ScenarioRef(scenario_id=job.scenario_id, revision=job.scenario_revision, scope=job.scope)
 
 
-def _job_state(job: Job, has_result: bool) -> str:
-    if job.status in ("queued", "running"):
-        return "pending"
-    if job.status == "completed" and job.superseded_by_revision is not None:
-        return "superseded"
-    if job.status == "completed" and has_result:
-        return "completed_with_result"
-    if job.status == "completed":
-        return "completed_result_not_attached"
-    return job.status  # failed | cancelled
-
-
 def _job_view(job: Job, has_result: bool) -> dict:
+    # Only the contract's own status and the orthogonal superseded_by_revision marker are
+    # shown (CONTRACTS, BUILD D04); no derived state that could hide supersession.
     view = {
         "job_id": job.job_id,
         "operation": job.operation,
         "status": job.status,
-        "state": _job_state(job, has_result),
+        "result_attached": has_result,
         "scenario_ref": _ref(_job_ref(job)),
         "input_fingerprint": job.input_fingerprint,
         "view_slot": job.view_slot,
@@ -319,6 +319,14 @@ def _build(job: Job, result: Result | None, level: str, validated: bool) -> dict
         "schema, request and timing bookkeeping",
         {"job_id": job.job_id},
     )
+    if job.delivery is not None:
+        _add(
+            omitted,
+            "job.delivery job_id/run_id/scenario/input_fingerprint/view_slot/selection_seq",
+            8,
+            "delivery identity fields that repeat the job identity shown above",
+            {"job_id": job.job_id},
+        )
     if result is not None:
         view["conventions"] = CONVENTIONS
         view["result"] = _result_view(result, level, validated, omitted)
@@ -367,8 +375,10 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         "scenario_ref": _ref(default),
         "input_fingerprint": result.input_fingerprint,
         "currentness": "validated_at_delivery" if validated else "not_validated_by_caller",
-        "execution_mode": p.execution_mode,
+        # The current delivery mode is job.delivery.execution_mode (CONTRACTS: a cache hit
+        # must not look live); this is only the source computation's original mode.
         "provenance": {
+            "source_execution_mode": p.execution_mode,
             "tool_version": p.tool_version,
             "evaluator_version": p.evaluator_version,
             "search_version": p.search_version,
@@ -382,6 +392,7 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         view["finite_model_proof"] = result.finite_model_proof.model_dump(mode="json")
     provenance_bookkeeping = [
         result.schema_version,
+        *(e.layout.schema_version for e in result.layouts),
         p.schema_version,
         p.created_at_utc,
         p.compute_started_at_utc,
@@ -392,7 +403,8 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
     ]
     _add(
         omitted,
-        "result.schema_version, result.provenance schema/timestamps/devices/timings_s",
+        "result.schema_version, layouts[].layout.schema_version, "
+        "result.provenance schema/timestamps/devices/timings_s",
         sum(value is not None for value in provenance_bookkeeping),
         "schema and compute bookkeeping",
         holder,
@@ -536,9 +548,12 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
             b = by_instance.get(d.alternative_metric_instance_id)
             if a is None or b is None:
                 raise ObservationViewError("comparison delta references a missing metric")
+            # The contract makes both sides agree on metric, case, target, horizon, quantity
+            # kind, weighting and area basis; aggregation basis is not forced, so show both.
             deltas.append(
                 [a.metric_id, a.case_id, a.target_id, a.horizon_years]
-                + [a.quantity_kind, a.weighting, a.area_basis, a.aggregation_basis]
+                + [a.quantity_kind, a.weighting, a.area_basis]
+                + [a.aggregation_basis, b.aggregation_basis]
                 + [a.layout_id, ref_or_none(a.scenario_ref)]
                 + [b.layout_id, ref_or_none(b.scenario_ref)]
                 + [a.value, b.value, d.value, d.unit]
@@ -548,6 +563,14 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
             "changed_inputs": list(result.comparison.changed_inputs),
             "deltas": {"columns": list(_DELTA_COLUMNS), "rows": deltas},
         }
+        _add(
+            omitted,
+            "result.comparison.deltas[] base/alternative_metric_instance_id, mode, changed_inputs",
+            len(result.comparison.deltas),
+            "instance IDs (resolved into each row) and per-delta mode/changed_inputs, which the "
+            "contract requires to equal the comparison-level values shown",
+            holder,
+        )
 
     if level == "full":
         view["assumptions"] = list(result.assumptions)

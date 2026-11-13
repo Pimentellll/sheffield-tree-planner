@@ -38,6 +38,10 @@ async function head() {
   return (await backend('GET', `/scenarios/${id}?revision=${rev}`)).json
 }
 const currentLabel = page => page.locator('.currentness strong').textContent()
+// After "Completed" the workspace still fetches the Result, its scenario snapshot and the backend selection before the
+// card can say CURRENT. Wait (bounded) for that state; the caller's assertion still decides pass or fail.
+const waitCurrentAt = (page, revision) => page.waitForFunction(rev => /CURRENT\b/.test(document.querySelector('.currentness strong')?.textContent ?? '') &&
+  (document.querySelector('.result-section')?.textContent ?? '').includes(`${rev} (accepted)`), revision, { timeout: 15000 }).catch(() => {})
 const evidenceDir = join(__dirname, '..', 'artifacts')
 mkdirSync(evidenceDir, { recursive: true })
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
@@ -234,6 +238,7 @@ async function requirementsFlow(page) {
     accepted.revision === before.revision + 1 && accepted.input.constraints.budget_pence === 8000 && accepted.input.constraints.max_tree_count === 1 &&
     JSON.stringify(accepted.input.proposed_layout_ref) === JSON.stringify(before.input.proposed_layout_ref),
     `rev ${accepted.revision}, budget ${accepted.input.constraints.budget_pence}, max ${accepted.input.constraints.max_tree_count}`)
+  await waitCurrentAt(page, accepted.revision)
   check('acceptance triggers a real recomputation that is CURRENT', /CURRENT\b/.test(await currentLabel(page)) &&
     (await page.locator('.result-section').innerText()).includes(`${accepted.revision} (accepted)`))
   await shot(page, '08-requirements-accepted')
@@ -277,6 +282,7 @@ async function requirementsFlow(page) {
   await page.waitForTimeout(400)
   const afterAccept = await head()
   check('human acceptance of the proposal creates the next accepted revision', afterAccept.revision === base.revision + 1 && afterAccept.input.constraints.budget_pence === 5000)
+  await waitCurrentAt(page, afterAccept.revision)
   check('accepted proposal is recomputed and CURRENT', /CURRENT\b/.test(await currentLabel(page)))
   // A second acceptance of the same proposal is refused by the backend.
   let refused = false

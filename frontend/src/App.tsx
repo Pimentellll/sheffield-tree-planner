@@ -86,6 +86,10 @@ function App() {
             <div className="studio-right">
               <aside className="detail-panel" aria-label="Planning controls and evidence">
                 <ResultCard ws={ws} />
+                <div className="detail-section card-actions">
+                  <button type="button" className="secondary-action" onClick={() => setScreen('compare')}>Compare runs</button>
+                  <button type="button" className="dark-action" onClick={() => setScreen('report')}>Open review pack</button>
+                </div>
                 <EvaluationControls ws={ws} />
                 <EvidenceChainDetails ws={ws} />
                 <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
@@ -94,10 +98,6 @@ function App() {
                 <ProposalReviewPanel ws={ws} />
                 <RunHistory ws={ws} />
                 <SiteStatus ws={ws} transform={transform} />
-                <div className="detail-section card-actions">
-                  <button type="button" className="secondary-action" onClick={() => setScreen('compare')}>Compare runs</button>
-                  <button type="button" className="dark-action" onClick={() => setScreen('report')}>Open review pack</button>
-                </div>
               </aside>
               <ProvenanceStrip ws={ws} />
             </div>

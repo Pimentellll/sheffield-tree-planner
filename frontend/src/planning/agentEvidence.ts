@@ -139,6 +139,8 @@ export function linkageProblems(job: ChainJob, result: ChainResult): string[] {
     problems.push(`Result ${result.run_id} was computed from a different scenario revision than job ${job.job_id} requested.`)
   }
   if (result.operation !== job.operation) problems.push(`Result operation ${result.operation} differs from job operation ${job.operation}.`)
+  // Latent coupling: the backend stamps every fresh delivery "live" regardless of the Result's provenance
+  // (jobs/__init__.py ~682; only cache hits are "cached", ~784), so a future recorded/fixture evaluator would be refused here.
   if (d.execution_mode === 'live' && (result.provenance.execution_mode !== 'live' || d.source_job_id !== job.job_id)) {
     problems.push(`The delivery for job ${job.job_id} says live, but Result ${result.run_id} is a ${result.provenance.execution_mode} computation by job ${d.source_job_id}.`)
   }

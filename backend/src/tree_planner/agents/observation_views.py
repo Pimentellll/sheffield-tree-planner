@@ -18,19 +18,32 @@ This module builds a smaller *view* of that same observation for the model only.
   ``job.delivery.execution_mode``; ``result.provenance.source_execution_mode`` is only the
   original computation's mode, so a cache hit never looks live. Supersession stays the
   separate ``superseded_by_revision`` marker beside the contract ``status``; no derived
-  state is shown. The model is told to cite ``job_id``, because AgentLoop does not accept
-  a superseded job's ``run_id`` as evidence. Fields left out are listed
-  in ``omitted`` with a count, their path in the full record and the existing
-  ``run_id``/``job_id`` that holds them; entries for fields that only repeat values already
-  shown say so. No storage reference, pagination tool, metric or status is created.
+  state is shown.
+* The citation instruction (``AUTHORITY``) restates what ``AgentLoop`` already accepts and
+  what the agent evaluation protocol scores; it adds no convention. The loop accepts the
+  ``job_id`` of any job in the *current* scenario and the ``run_id`` of a Result that is
+  still the current selection of its slot. A later job in the same ``view_slot`` (higher
+  ``selection_seq``) makes the earlier ``run_id`` stale without setting
+  ``superseded_by_revision``, and after ``prepare_scenario`` only the hypothetical
+  scenario's IDs are accepted. The protocol scores the current ``run_id``. So the model is
+  told: per slot, the latest view in the current scenario; its ``job_id``, plus its
+  ``run_id`` when a Result is shown.
+* Fields left out are listed in ``omitted`` with a count and its ``unit`` (``records`` or
+  ``field_values``), their path in the full record and the existing ``run_id``/``job_id``
+  that holds them; entries for fields that only repeat values already shown say so, and
+  an item that carries no ``scenario_ref`` belongs to ``result.scenario_ref`` (stated in
+  ``CONVENTIONS``). No storage reference, pagination tool, metric or status is created.
 * Size is measured in UTF-8 bytes of the same serialization the loop uses. Bytes are not
   tokens: fitting a byte budget does not prove a token limit (for example the 8,192-token
   rule), which stays with the native runtime and its reported usage.
 * If even the smallest view does not fit, :class:`ObservationBudgetError` is raised with
   that smallest size. A view is never string-truncated and never broken JSON.
 * Shapes that are not the current async observation contract, or that the loop could not
-  have produced (a Result attached to a non-completed or superseded Job), raise
-  :class:`ObservationViewError` instead of being made plausible.
+  have produced (a Result attached to a non-completed or superseded Job, or a Job-only
+  observation claimed as validated), raise :class:`ObservationViewError` instead of being
+  made plausible. A completed, non-superseded Job without a Result, which the loop never
+  produces, is accepted only with ``result_validated_at_delivery=False`` and is shown as
+  ``result_attached: false``.
 
 A Result-bearing view is much smaller than the full record. A Job-only view (queued,
 running, failed, cancelled, or superseded) can be a few hundred bytes larger than the raw
@@ -72,18 +85,25 @@ VIEW_SCHEMA = "canopy-observation-view/1"
 LEVELS = ("full", "reduced", "essential")
 JOB_ONLY_LEVEL = "job_only"
 
+# Restates AgentLoop's accepted evidence IDs (agents/__init__.py final-answer check) and
+# the protocol's run_id scoring; see the module docstring. Not a new convention.
 AUTHORITY = (
-    "Model-facing view. The host keeps the full Job/Result as the only authority. Cite "
-    "job.job_id as evidence; never cite the run_id of a job whose superseded_by_revision is "
-    "set. Items listed in 'omitted' exist only in the full record named by their "
-    "'authoritative' ID."
+    "The host keeps the full Job/Result as the only authority. Evidence: per job.view_slot, "
+    "use only the latest view (highest job.selection_seq) whose job.scenario_ref is the "
+    "current scenario (the accepted one, or the last prepare_scenario result). Cite its "
+    "job.job_id, plus its result.run_id if a result is shown. No such view: evidence_ids "
+    "is []. 'omitted' items exist only in the record named by 'authoritative'."
 )
 CONVENTIONS = (
-    "Rows follow their 'columns'. A row without a trailing scenario_ref, or a delta with a "
-    "null scenario_ref, belongs to result.scenario_ref. target_id null is the aggregate over "
-    "targets. A metric listed in missing_metrics was not computed; one counted in 'omitted' "
-    "was computed but is not shown; one in neither was not produced for that case/layout "
-    "(not applicable or unsupported). None of these means zero."
+    "Rows follow their 'columns'. Any row, layouts[] item or missing_metrics[] item without "
+    "a scenario_ref, and any delta with a null scenario_ref, belongs to result.scenario_ref. "
+    "target_id null is the aggregate over targets. A metric listed in missing_metrics was "
+    "not computed; one counted in 'omitted' was computed but is not shown; for layouts "
+    "whose metrics are all shown, one in neither was not produced for that case/layout. "
+    "At level essential, target rows are left out wherever the same quantity's aggregate "
+    "row is shown. None of these means zero. job.delivery.execution_mode is how this Result was "
+    "delivered now (cached = cache hit); provenance.source_execution_mode is only the "
+    "original computation's mode."
 )
 
 _METRIC_COLUMNS = [
@@ -291,13 +311,21 @@ def _job_view(job: Job, has_result: bool) -> dict:
     return view
 
 
-def _omitted(path: str, count: int, reason: str, holder: dict) -> dict:
-    return {"path": path, "count": count, "reason": reason, "authoritative": holder}
+RECORDS = "records"  # whole list items, table rows or mapping entries
+# Individual non-null field values inside shown records; inside a bookkeeping group, each
+# entry of a small map (provenance timings_s) counts as one value.
+FIELD_VALUES = "field_values"
 
 
-def _add(omitted: list, path: str, count: int, reason: str, holder: dict) -> None:
+def _omitted(path: str, count: int, unit: str, reason: str, holder: dict) -> dict:
+    return {"path": path, "count": count, "unit": unit, "reason": reason, "authoritative": holder}
+
+
+def _add(omitted: list, path: str, count: int, unit: str, reason: str, holder: dict) -> None:
+    if unit not in (RECORDS, FIELD_VALUES):
+        raise ValueError(f"unknown omission unit {unit!r}")
     if count:
-        omitted.append(_omitted(path, count, reason, holder))
+        omitted.append(_omitted(path, count, unit, reason, holder))
 
 
 def _build(job: Job, result: Result | None, level: str, validated: bool) -> dict:
@@ -316,14 +344,17 @@ def _build(job: Job, result: Result | None, level: str, validated: bool) -> dict
         omitted,
         "job.schema_version, job.request_id, job timestamps, job.delivery.delivered_at_utc",
         sum(value is not None for value in bookkeeping),
+        FIELD_VALUES,
         "schema, request and timing bookkeeping",
         {"job_id": job.job_id},
     )
     if job.delivery is not None:
         _add(
             omitted,
-            "job.delivery job_id/run_id/scenario/input_fingerprint/view_slot/selection_seq",
+            "job.delivery job_id/run_id/scenario_id/scenario_revision/scope/"
+            "input_fingerprint/view_slot/selection_seq",
             8,
+            FIELD_VALUES,
             "delivery identity fields that repeat the job identity shown above",
             {"job_id": job.job_id},
         )
@@ -406,7 +437,16 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         "result.schema_version, layouts[].layout.schema_version, "
         "result.provenance schema/timestamps/devices/timings_s",
         sum(value is not None for value in provenance_bookkeeping),
+        FIELD_VALUES,
         "schema and compute bookkeeping",
+        holder,
+    )
+    _add(
+        omitted,
+        "result.scenario_id, result.scenario_revision, result.scope",
+        3,
+        FIELD_VALUES,
+        "repeat result.scenario_ref shown above",
         holder,
     )
 
@@ -446,6 +486,7 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         omitted,
         "result.layouts[].layout.placements (layouts not in focus)",
         hidden_placements,
+        RECORDS,
         "placement detail of layouts that are not selected",
         holder,
     )
@@ -477,6 +518,7 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         omitted,
         "result.metrics[].metric_instance_id (shown rows)",
         len(rows),
+        FIELD_VALUES,
         "instance identifiers; comparison deltas below are resolved to metric fields",
         holder,
     )
@@ -484,6 +526,7 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         omitted,
         "result.metrics (layouts not in focus)",
         dropped_non_focus,
+        RECORDS,
         "computed metrics of layouts that are not selected"
         + (" (target-level rows only)" if level == "reduced" else ""),
         holder,
@@ -492,6 +535,7 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         omitted,
         "result.metrics (target-level rows of focus layouts)",
         dropped_target,
+        RECORDS,
         "per-target breakdown; the aggregate row for the same quantity is shown",
         holder,
     )
@@ -537,6 +581,7 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         omitted,
         "result.constraints (status pass)",
         sum(pass_counts.values()),
+        RECORDS,
         "passed constraint records; counts per layout are shown",
         holder,
     )
@@ -566,7 +611,8 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
         _add(
             omitted,
             "result.comparison.deltas[] base/alternative_metric_instance_id, mode, changed_inputs",
-            len(result.comparison.deltas),
+            4 * len(result.comparison.deltas),
+            FIELD_VALUES,
             "instance IDs (resolved into each row) and per-delta mode/changed_inputs, which the "
             "contract requires to equal the comparison-level values shown",
             holder,
@@ -580,6 +626,7 @@ def _result_view(result: Result, level: str, validated: bool, omitted: list) -> 
             omitted,
             "result.assumptions, result.provenance.source_hashes",
             len(result.assumptions) + len(p.source_hashes),
+            RECORDS,
             "declared assumptions and source file hashes",
             holder,
         )

@@ -2,14 +2,17 @@
 
 Every successful observation here is produced at test time by the real synthetic physical
 runtime (real jobs, real Results), built the same way AgentLoop._dispatch builds its
-async observation. One test drives AgentLoop itself. The compare_scenarios observation is
+async observation. Several tests drive the unchanged AgentLoop with a scripted (SYNTHETIC)
+client, including the citation rule in AUTHORITY. The compare_scenarios observation is
 produced through the job API: AgentLoop cannot currently complete compare_scenarios
 against this runtime (it submits under the hypothetical scenario, which the runtime
-rejects), so that case checks the view's handling of two-scenario Results only. Inputs
-derived from them for edge cases (failed, superseded, missing metric, non-ASCII text,
-scaled-up search) are labelled SYNTHETIC where they are built and are passed as NOT
-validated at delivery. No successful runtime result is hand-authored and nothing here is
-model evidence.
+rejects), so that case checks the view's handling of two-scenario Results only, in the
+one orientation the runtime produces. Inputs derived from real records for edge cases are
+labelled SYNTHETIC inline where they are built (failed Job, superseded Jobs including a
+queued one, cached delivery with source_job_id == job_id, progress on a queued Job,
+missing metric, relabelled target-row quantity, non-ASCII text, scaled-up search,
+aggregation-basis labels) and are passed as NOT validated at delivery. No successful
+runtime result is hand-authored and nothing here is model evidence.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ import pytest
 
 from tree_planner.agents import AgentLoop
 from tree_planner.agents.observation_views import (
+    AUTHORITY,
+    CONVENTIONS,
     JOB_ONLY_LEVEL,
     LEVELS,
     VIEW_SCHEMA,
@@ -34,7 +39,7 @@ from tree_planner.agents.observation_views import (
     view_sizes,
 )
 from tree_planner.api.service import AgentDispatcher
-from tree_planner.contracts import Job, JobRequest, Result, ScenarioInput
+from tree_planner.contracts import Job, JobRequest, Result, ScenarioInput, Selection
 from tree_planner.evaluators.physical_runtime import create_physical_runtime
 
 BIG = 10_000_000
@@ -154,6 +159,7 @@ def assert_omissions_reference_the_record(v, observation):
     for entry in v["omitted"]:
         assert entry["authoritative"] in holders, entry
         assert type(entry["count"]) is int and entry["count"] > 0, entry
+        assert entry["unit"] in {"records", "field_values"}, entry
 
 
 # --------------------------------------------------------------------------- SYNTHETIC derivations
@@ -192,6 +198,115 @@ def synthetic_job_state(observation, **changes):
     return {"job": job}
 
 
+# --------------------------------------------------------------------------- AgentLoop glue
+
+
+class PumpingDispatcher:
+    """Test glue: the in-process task-pinned dispatcher plus a synchronous job pump."""
+
+    def __init__(self, runtime, service):
+        self.runtime = runtime
+        self.inner = AgentDispatcher(service, accepted_ref=runtime.scenario_ref)
+
+    def dispatch(self, envelope):
+        value = self.inner.dispatch(envelope)
+        self.runtime.app.state.run_one()
+        return value
+
+    def poll(self, job_id):
+        return self.inner.poll(job_id)
+
+    def result(self, run_id):
+        return self.inner.result(run_id)
+
+    def selection(self, ref, slot):
+        return self.inner.selection(ref, slot)
+
+
+class StepClient:
+    """SYNTHETIC protocol fixture: scripted tool calls, then a scripted final answer.
+
+    ``final_ids(messages)`` chooses evidence_ids from the loop's own messages."""
+
+    def __init__(self, steps, final_ids):
+        self.steps, self.final_ids = steps, final_ids
+
+    def complete(self, messages, tools, *, timeout_s=None):
+        done = sum(m["role"] == "tool" for m in messages)
+        if done < len(self.steps):
+            name, arguments = self.steps[done]
+            call = {
+                "id": f"call-{done + 1}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(arguments)},
+            }
+            return {"role": "assistant", "content": None, "tool_calls": [call]}
+        final = {"narrative": "synthetic", "evidence_ids": self.final_ids(messages)}
+        return {"role": "assistant", "content": json.dumps(final)}
+
+
+def _run_loop(runtime, service, steps, final_ids, operations):
+    accepted = service.scenarios.get_scenario(runtime.scenario_ref)
+    loop = AgentLoop(
+        StepClient(steps, final_ids),
+        PumpingDispatcher(runtime, service),
+        accepted,
+        set(operations),
+        deadline=time.monotonic() + 120,
+        stop=threading.Event(),
+        poll_interval_s=0.01,
+    )
+    return loop, loop.run("Synthetic scripted task.")
+
+
+def tool_observations(messages):
+    return [json.loads(m["content"]) for m in messages if m["role"] == "tool"]
+
+
+def cite_by_authority(messages, current_ref):
+    """Apply AUTHORITY literally to compacted views of the loop's own tool messages: per
+    view_slot the latest view (highest selection_seq) in the current scenario; its job_id,
+    plus its run_id when a result is shown."""
+    latest = {}
+    for observation in tool_observations(messages):
+        if "job" not in observation:
+            continue
+        v = view(observation)
+        assert v["authority"] == AUTHORITY
+        job = v["job"]
+        if job["scenario_ref"] != current_ref:
+            continue
+        slot = job["view_slot"]
+        if slot not in latest or job["selection_seq"] > latest[slot]["job"]["selection_seq"]:
+            latest[slot] = v
+    ids = []
+    for v in latest.values():
+        ids.append(v["job"]["job_id"])
+        if "result" in v:
+            ids.append(v["result"]["run_id"])
+    return ids
+
+
+def _reselection_steps(service, runtime):
+    """evaluate, then two compare_locations in the same 'comparison' slot."""
+    layout_ref, placement, catalogue = _context(service, runtime)
+    other = next(
+        c
+        for c in catalogue
+        if tuple(c.position_enu_m) != tuple(placement.position_enu_m)
+        and c.plantability_status != "excluded"
+    )
+    move = {"layout_ref": layout_ref, "placement_id": placement.placement_id}
+    return [
+        ("evaluate_layout", {"layout_ref": layout_ref}),
+        ("compare_locations", {**move, "alternative_position_enu_m": list(other.position_enu_m)}),
+        (
+            "compare_locations",
+            {**move, "alternative_position_enu_m": list(placement.position_enu_m)},
+        ),
+    ]
+
+
 # --------------------------------------------------------------------------- shape and content
 
 
@@ -200,26 +315,6 @@ def test_view_consumes_the_actual_agent_loop_observation(tmp_path):
     runtime, service = _runtime(tmp_path / "runtime")
     layout_ref, _, _ = _context(service, runtime)
     accepted = service.scenarios.get_scenario(runtime.scenario_ref)
-
-    class PumpingDispatcher:
-        """Test glue: the in-process task-pinned dispatcher plus a synchronous job pump."""
-
-        def __init__(self):
-            self.inner = AgentDispatcher(service, accepted_ref=runtime.scenario_ref)
-
-        def dispatch(self, envelope):
-            value = self.inner.dispatch(envelope)
-            runtime.app.state.run_one()
-            return value
-
-        def poll(self, job_id):
-            return self.inner.poll(job_id)
-
-        def result(self, run_id):
-            return self.inner.result(run_id)
-
-        def selection(self, ref, slot):
-            return self.inner.selection(ref, slot)
 
     class ScriptedClient:
         """SYNTHETIC protocol fixture: scripted assistant turns, not inference."""
@@ -245,7 +340,7 @@ def test_view_consumes_the_actual_agent_loop_observation(tmp_path):
 
     loop = AgentLoop(
         ScriptedClient(),
-        PumpingDispatcher(),
+        PumpingDispatcher(runtime, service),
         accepted,
         {"evaluate_layout"},
         deadline=time.monotonic() + 60,
@@ -265,6 +360,101 @@ def test_view_consumes_the_actual_agent_loop_observation(tmp_path):
     assert compact["result"]["run_id"] == loop.results[0].run_id
     assert compact["result"]["currentness"] == "validated_at_delivery"
     assert loop.results[0].model_dump(mode="json") == observation["result"]
+
+
+# --------------------------------------------------------------------------- citation rule
+
+
+def test_authority_citations_are_accepted_after_a_same_slot_reselection(tmp_path):
+    """The IDs AUTHORITY tells the model to cite are exactly ones the unchanged AgentLoop
+    accepts, including after a second job in the same view_slot made the first run stale."""
+    runtime, service = _runtime(tmp_path / "runtime")
+    current = runtime.scenario_ref.model_dump(mode="json")
+    loop, outcome = _run_loop(
+        runtime,
+        service,
+        _reselection_steps(service, runtime),
+        lambda messages: cite_by_authority(messages, current),
+        {"evaluate_layout", "compare_locations"},
+    )
+    assert outcome.status == "completed", outcome
+    evaluate, first, second = tool_observations(loop.messages)
+    first_job, second_job = view(first)["job"], view(second)["job"]
+    assert first_job["view_slot"] == second_job["view_slot"] == "comparison"
+    assert second_job["selection_seq"] > first_job["selection_seq"]
+    # The replaced comparison still looks current in its own view: superseded_by_revision
+    # cannot flag a same-slot reselection, which is why AUTHORITY uses selection_seq.
+    assert first_job["superseded_by_revision"] is None and first_job["result_attached"] is True
+    assert list(outcome.evidence_ids) == [
+        evaluate["job"]["job_id"],
+        evaluate["result"]["run_id"],
+        second["job"]["job_id"],
+        second["result"]["run_id"],
+    ]
+    # The protocol (C1) and the live test score the current run_id; it is cited.
+    assert {r.run_id for r in outcome.results} == {
+        evaluate["result"]["run_id"],
+        second["result"]["run_id"],
+    } <= set(outcome.evidence_ids)
+
+
+@pytest.mark.parametrize(
+    "choose,status",
+    [
+        (lambda e, f, s: [f["result"]["run_id"]], "failed"),
+        (lambda e, f, s: [s["job"]["job_id"], s["result"]["run_id"], f["result"]["run_id"]], "failed"),
+        (lambda e, f, s: [], "failed"),
+        # The loop also accepts a replaced job_id; AUTHORITY leaves it out because the
+        # protocol scores the current run_id.
+        (lambda e, f, s: [f["job"]["job_id"]], "completed"),
+    ],
+    ids=["stale-run-id", "current-plus-stale-run-id", "nothing-while-evidence-exists", "replaced-job-id"],
+)
+def test_citations_outside_authority_show_why_the_rule_is_needed(tmp_path, choose, status):
+    runtime, service = _runtime(tmp_path / "runtime")
+    loop, outcome = _run_loop(
+        runtime,
+        service,
+        _reselection_steps(service, runtime),
+        lambda messages: choose(*tool_observations(messages)),
+        {"evaluate_layout", "compare_locations"},
+    )
+    assert outcome.status == status, outcome
+    if status == "failed":
+        assert outcome.reason == "ProtocolError: unknown or malformed evidence IDs"
+
+
+def test_a_reselection_outside_the_loop_is_invisible_to_the_view(tmp_path):
+    """Residual risk, recorded: another client submitting the same slot during the session
+    makes the in-view run_id stale, and nothing in the model's view can show it."""
+    runtime, service = _runtime(tmp_path / "runtime")
+    layout_ref, _, _ = _context(service, runtime)
+    current = runtime.scenario_ref.model_dump(mode="json")
+    outside = {}
+
+    def final_ids(messages):
+        chosen = cite_by_authority(messages, current)
+        # SYNTHETIC: a second evaluate_layout submitted outside the loop before it answers.
+        outside["job"] = _submit(runtime, service, "evaluate_layout", {"layout_ref": layout_ref})
+        return chosen
+
+    loop, outcome = _run_loop(
+        runtime,
+        service,
+        [("evaluate_layout", {"layout_ref": layout_ref})],
+        final_ids,
+        {"evaluate_layout"},
+    )
+    selection = Selection.model_validate(
+        AgentDispatcher(service, accepted_ref=runtime.scenario_ref).selection(
+            runtime.scenario_ref, "evaluation"
+        )
+    )
+    assert selection.accepted_job_id == outside["job"].job_id
+    (evaluate,) = tool_observations(loop.messages)
+    assert outcome.evidence_ids == () and outcome.status == "failed", outcome
+    assert outcome.reason == "ProtocolError: unknown or malformed evidence IDs"
+    assert view(evaluate)["job"]["superseded_by_revision"] is None
 
 
 @pytest.mark.parametrize("name", REAL)
@@ -292,6 +482,21 @@ def test_full_view_keeps_every_value_and_identity(real, name):
     assert result["limitations"] == full_result["limitations"]
     assert result["assumptions"] == full_result["assumptions"]
     assert result["provenance"]["source_hashes"] == full_result["provenance"]["source_hashes"]
+    for k in ("tool_version", "evaluator_version", "search_version", "solar_version", "seed"):
+        assert result["provenance"][k] == full_result["provenance"][k], k
+    for k in ("view_slot", "selection_seq", "run_id", "cancel_requested", "superseded_by_revision"):
+        assert job[k] == full_job[k], k
+    assert job["delivery"]["source_job_id"] == full_job["delivery"]["source_job_id"]
+    # Result scenario fields repeat result.scenario_ref; the omission says so.
+    repeat = {o["path"]: o for o in v["omitted"]}[
+        "result.scenario_id, result.scenario_revision, result.scope"
+    ]
+    assert (repeat["count"], repeat["unit"]) == (3, "field_values")
+    assert (full_result["scenario_id"], full_result["scenario_revision"], full_result["scope"]) == (
+        result["scenario_ref"]["scenario_id"],
+        result["scenario_ref"]["revision"],
+        result["scenario_ref"]["scope"],
+    )
 
     default = full_result["input_snapshot_ref"]
 
@@ -349,6 +554,24 @@ def test_comparison_deltas_resolve_to_the_recorded_metrics(real, name):
         assert (shown["alternative_scenario_ref"] or default) == b["scenario_ref"]
 
 
+@pytest.mark.parametrize("name", ["compare", "compare_scenarios"])
+def test_delta_aggregation_basis_is_shown_per_side(real, name):
+    data = copy.deepcopy(real[name])
+    result = data["result"]
+    # SYNTHETIC: distinct aggregation_basis labels on the two sides of one real delta (the
+    # runtime leaves aggregation_basis null, which would make this check vacuous).
+    by_id = {m["metric_instance_id"]: m for m in result["metrics"]}
+    first = result["comparison"]["deltas"][0]
+    by_id[first["base_metric_instance_id"]]["aggregation_basis"] = "synthetic-basis-base"
+    by_id[first["alternative_metric_instance_id"]]["aggregation_basis"] = "synthetic-basis-alt"
+    Result.model_validate(result)
+    shown = rows(view(data, validated=False)["result"]["comparison"]["deltas"])[0]
+    assert (shown["base_aggregation_basis"], shown["alternative_aggregation_basis"]) == (
+        "synthetic-basis-base",
+        "synthetic-basis-alt",
+    )
+
+
 def test_two_scenario_comparison_keeps_each_side_scenario_identity(real):
     observation = real["compare_scenarios"]
     full = observation["result"]
@@ -360,9 +583,9 @@ def test_two_scenario_comparison_keeps_each_side_scenario_identity(real):
     }
     assert others  # the real result spans the accepted and the hypothetical scenario
     for level in LEVELS:
-        result = view(observation, view_sizes(observation, result_validated_at_delivery=True)[level])[
-            "result"
-        ]
+        v = view(observation, view_sizes(observation, result_validated_at_delivery=True)[level])
+        assert v["level"] == level
+        result = v["result"]
         deltas = rows(result["comparison"]["deltas"])
         assert all(d["alternative_scenario_ref"] is not None for d in deltas)
         assert all(d["base_scenario_ref"] is None for d in deltas)
@@ -512,6 +735,7 @@ def test_every_view_is_whole_finite_json_within_budget(real):
         sizes = view_sizes(real[name], result_validated_at_delivery=True)
         for level in LEVELS:
             v = view(real[name], sizes[level])
+            assert v["level"] == level, (name, level)
             text = json.dumps(v, ensure_ascii=False, allow_nan=False)
             assert json.loads(text) == v
             assert len(text.encode("utf-8")) == observation_bytes(v) <= sizes[level]
@@ -536,7 +760,7 @@ def test_reports_real_byte_sizes(real, capsys):
     report = {name: view_sizes(real[name], result_validated_at_delivery=True) for name in REAL}
     for name, sizes in report.items():
         assert sizes["full"] < sizes["observation"], name
-        assert sizes["essential"] <= sizes["reduced"] <= sizes["full"], name
+        assert sizes["essential"] < sizes["reduced"] < sizes["full"], name
     with capsys.disabled():
         print("\nobservation view UTF-8 bytes (real synthetic-runtime observations):")
         for name, sizes in report.items():
@@ -564,7 +788,7 @@ def test_pending_and_cancelled_jobs_are_reported_without_results(tmp_path):
     cancelled = view({"job": cancelled_job.model_dump(mode="json")})
     assert cancelled["job"]["status"] == "cancelled" and cancelled["job"]["cancel_requested"]
     assert cancelled["job"]["error"]["code"] == "CANCELLED"
-    assert cancelled["job"]["run_id"] is None
+    assert cancelled["job"]["run_id"] is None and cancelled["job"]["result_attached"] is False
 
 
 def test_job_only_views_have_one_level_and_refuse_with_their_size(real):
@@ -583,6 +807,7 @@ def test_failed_and_superseded_jobs_keep_their_status(real, tmp_path):
     layout_ref, _, _ = _context(service, runtime)
     job = _submit(runtime, service, "evaluate_layout", {"layout_ref": layout_ref})
     queued = {"job": job.model_dump(mode="json")}
+    # SYNTHETIC: a real queued Job dump relabelled as failed.
     failed = synthetic_job_state(
         queued,
         status="failed",
@@ -599,22 +824,29 @@ def test_failed_and_superseded_jobs_keep_their_status(real, tmp_path):
     assert shown["status"] == "failed" and shown["error"]["code"] == "NUMERICAL_FAILURE"
     assert shown["error"]["retryable"] is False and shown["run_id"] is None
     assert shown["error"]["details"] == {"stage": "synthetic"}
+    assert shown["result_attached"] is False and "state" not in shown
 
     revision = real["evaluate"]["job"]["scenario_revision"] + 1
+    # SYNTHETIC: a real completed Job dump marked superseded by a later revision.
     superseded = synthetic_job_state(real["evaluate"], superseded_by_revision=revision)
     shown = view(superseded)["job"]
     # Supersession is an orthogonal marker (CONTRACTS, BUILD D04), never a state.
     assert shown["status"] == "completed" and shown["result_attached"] is False
     assert shown["superseded_by_revision"] == revision and "state" not in shown
 
-    # JobStore.activate marks a queued/running job superseded too; it must not read as current.
+    # JobStore.activate marks queued/running jobs superseded too; the view keeps the
+    # contract status unchanged and shows the marker beside it.
+    # SYNTHETIC: a real queued Job dump marked superseded.
     queued_superseded = synthetic_job_state(queued, superseded_by_revision=revision)
     shown = view(queued_superseded)["job"]
     assert shown["status"] == job.status and shown["superseded_by_revision"] == revision
+    assert shown["result_attached"] is False and "state" not in shown
 
-    # The model is told to cite job_id, never a superseded job's run_id (AgentLoop rejects it).
+    # The citation rule restates AgentLoop's accepted IDs (tested through AgentLoop above).
     authority = view(superseded)["authority"]
-    assert "Cite job.job_id" in authority and "superseded_by_revision" in authority
+    for phrase in ("job.view_slot", "job.selection_seq", "job.scenario_ref",
+                   "prepare_scenario", "job.job_id", "result.run_id", "evidence_ids"):
+        assert phrase in authority, phrase
 
     # The loop never attaches a Result to a superseded Job; such input is refused.
     with_result = {"job": superseded["job"], "result": real["evaluate"]["result"]}
@@ -630,8 +862,11 @@ def test_a_cached_delivery_never_looks_live(real):
     Job.model_validate(data["job"])
     v = view(data, validated=False)
     assert v["job"]["delivery"]["execution_mode"] == "cached"
-    assert v["result"]["provenance"]["source_execution_mode"] == "live"
+    recorded = real["evaluate"]["result"]["provenance"]["execution_mode"]
+    assert v["result"]["provenance"]["source_execution_mode"] == recorded
     assert "execution_mode" not in v["result"]
+    # The model-facing conventions say which field carries the current delivery mode.
+    assert "job.delivery.execution_mode" in v["conventions"] == CONVENTIONS
 
 
 def test_job_progress_is_shown_as_recorded(tmp_path):

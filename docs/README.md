@@ -17,16 +17,43 @@ Read only what your task needs:
 - [NUMERICS.md](NUMERICS.md): shading equations, optimisation and modelling limits. Arnav's technical reference; Ben and Alex need the units/conventions.
 - [BUILD.md](BUILD.md): ordered work items, proposed owners, dependencies, decisions and the next integration gate. **Only task-status home.**
 - [Site desk audit](site-audit/STP-005-desk-audit.md): Alex’s sources, candidate coverage and pending asset/context controls; not an accepted site.
+- [Recorded street-tree inventory](site-audit/source-inventory/README.md): source, rights and output schema for the #69 importer. No real sample has been acquired yet; a council record is not a verified current tree, species or planting permission.
 - [Architecture design](ARCHITECTURE_DESIGN.md) and [audit](ARCHITECTURE_AUDIT.md): preserved design references, not new completion or owner-approval evidence.
 - [UI reference](UI_DESIGN_REFERENCE.md) and [pre-implementation baseline](PRE_IMPLEMENTATION_READINESS.md): historical visual and analysis inputs; BUILD supersedes their old status and merge sequencing.
-- [Product Vision v2](design/product-vision-v2/README.md): the newer visual direction as eight design artboards, with its implementation brief. Design reference only; every figure and picture in it is an example, not a result.
+- [Product Vision v2](design/product-vision-v2/README.md): the newer visual direction as eight design artboards, with its [implementation brief](design/product-vision-v2/IMPLEMENTATION_HANDOFF.md) (an assignment brief, not a record of completed work). Design reference only; every figure and picture in it is an example, not a result.
 - [VALIDATION.md](VALIDATION.md): test specifications, acceptance matrix, runtime evidence and demo/recovery runbook.
+- [Reference runtime](REFERENCE_RUNTIME.md) and [physical runtime](PHYSICAL_RUNTIME.md): how to run the synthetic reference runtime and the opt-in local synthetic numerical runtime. Authored synthetic geometry only; no surveyed Sheffield geometry, human acceptance, model advantage or Spark execution is established.
 - [DGX_SPARK.md](DGX_SPARK.md): event SSH/tunnels, pinned local-inference candidate, executable readiness diagnostic and full-application deployment gates. Prepared locally, not a claimed Spark run.
 - [AGENTS.md](../AGENTS.md): project-specific boundaries for coding assistants, not personal agent configuration.
 - [SOURCES.md](SOURCES.md): researched sources and the status of the advance-development report.
 - [Agentic architecture and feature review](references/AGENTIC_FEATURE_REVIEW.md): comparable projects, source-backed design choices, captured team links and the expanded parallel-build target. Recommendations, not implementation proof; source maintenance remains in SOURCES.
 - [Comprehensive research dossier](references/DEEP_RESEARCH_DOSSIER.md): the fourteen-part research synthesis, 170 annotated source records, concrete benchmark and B01–B12 recommendations. Cutoff 11 November 2026; research proposals, not accepted contract changes or application/Spark proof. Its source numbers are independent of SOURCES.md.
 - [Research handoff](references/RESEARCH_HANDOFF.md): optional detailed background, alternatives and earlier independent reviews. Historical snapshot.
+
+## Event-day science and claims
+
+Prepared on 13 November 2026 for the NVIDIA Hack for Impact event. None of these documents is a test result or acceptance evidence; each states its own status.
+
+- [Event-day execution board](EVENT_DAY_EXECUTION_2026-11-13.md): schedule, owners and organiser guidance for the day. Older schedule rows are historical or provisional where superseded, and issue status requires evidence.
+- [Event-day issue index](EVENT_DAY_ISSUE_INDEX_2026-11-13.md): maps event-day tasks to GitHub issues and owners. An index, not a claim that every issue is implemented.
+- [Content and Claude Code handoffs](EVENT_DAY_CONTENT_AND_CLAUDE_HANDOFFS_2026-11-13.md): preparation pack (research synthesis, video plan, delegation prompts) written without model tests. Its form copy (§2) and probe definitions (§4) are superseded by the brief and the protocol below.
+- [Science package overview](event-day/science/README.md): what this folder holds and the findings that need team attention. Documentation prepared; nothing in the folder is a test result.
+- [Five-case agent evaluation protocol](event-day/science/AGENT_EVALUATION_PROTOCOL.md), with the frozen prompts in [five_case_prompts.json](event-day/science/five_case_prompts.json): the NVIDIA-required model inputs and how to score them. Specified, not executed; runs only on the DGX Spark.
+- [Scientific acceptance checklist](event-day/science/SCIENTIFIC_ACCEPTANCE.md): checks to work through on the Spark release. A row is `verified` only with an observed artefact on the release SHA.
+- [Evidence and claims ledger](event-day/science/EVIDENCE_AND_CLAIMS_LEDGER.md): which statements the video, form, README and Q&A may make, may make only as plans, or must not make. It contains no CANOPY measured or computed result.
+- [Judging and submission brief](event-day/science/JUDGING_AND_SUBMISSION_BRIEF.md): prepared form and video copy. Bracketed values are filled only from verified evidence.
+- [Engineering fix plans](event-day/science/ENGINEERING_FIX_PLANS.md): FIX-1..4 for Ben from the science review. Plans only; nothing in it has been run.
+- [Impact and feasibility research](event-day/science/IMPACT_AND_FEASIBILITY_RESEARCH.md): targeted research for judging, with each statement labelled source-supported, repository-observed or inference.
+
+## Implementation proposals and audits
+
+Proposals for review. BUILD and the GitHub issues remain the only status home; none of these documents assigns a writer or records completed work.
+
+- [Nemotron agent runtime audit](implementation/NEMOTRON_AGENT_RUNTIME_AUDIT_20261113.md): agent runtime, agent-run API, worker recovery and release-boundary audit. Proposed design and test gates, not implemented or device-verified.
+- [Agent evidence frontend handoff](implementation/AGENT_EVIDENCE_FRONTEND_HANDOFF_20261113.md): proposed agent-evidence UI, browser integration and acceptance for #74, consuming the agent-run API proposed for #73.
+- [3D city and tree pipeline](implementation/3D_CITY_AND_TREE_PIPELINE.md): 3D city, tree inventory and scientific-scene specification. Implementation proposal for review, not a claim of real-site readiness.
+- [3D product and agent UX](implementation/3D_AGENT_PRODUCT_UX.md): map-first product experience, agent investigation and evidence UI. Proposed implementation contract, not acceptance of real Sheffield geometry, model performance or environmental benefits.
+- [3D implementation sequencing](implementation/3D_IMPLEMENTATION_TRACKER.md): proposed order and integration of the 3D and agent-UI PRs. Proposed work, not feature-completion evidence; despite the file name, not a tracker.
 
 ## Development before the event
 

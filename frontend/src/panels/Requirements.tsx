@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { JobRequest, Scenario } from '../api/types'
 import { describeValue, formatPence, parsePounds, poundsText } from '../planning/evaluation'
 import type { Workspace } from '../planning/useWorkspace'
+import { FOCUS_TARGET, focusAfterRender } from './focus'
 
 /** Budget, tree-count and exclusion edits stay a draft until a human accepts them. */
 export function RequirementsPanel({ ws }: { ws: Workspace }) {
@@ -83,14 +84,14 @@ export function RequirementsPanel({ ws }: { ws: Workspace }) {
         </ul>
       </details>
       {ws.draftDirty && (
-        <div className="draft-box" data-testid="draft-changes">
+        <div className="draft-box" data-testid="draft-changes" id={FOCUS_TARGET.draftChanges} tabIndex={-1}>
           <strong>Unaccepted changes</strong>
           {ws.draftChanges.length > 0
             ? <ul>{ws.draftChanges.map(c => <li key={c.path}><code>{c.path}</code>: {describeValue(c.before)} → {describeValue(c.after)}</li>)}</ul>
             : <p className="fine-print">Fix the highlighted fields to see the change set.</p>}
           {ws.requirementErrors.length > 0 && <p className="fine-print text-warning">{ws.requirementErrors.join(' ')}</p>}
           <p className="fine-print">Nothing is saved or computed yet. "Accept changes &amp; evaluate" saves these edits as a new accepted revision and then evaluates the current layout; earlier results become superseded.</p>
-          <button type="button" className="text-action" onClick={ws.revertDraft}>Discard draft</button>
+          <button type="button" className="text-action" onClick={() => { ws.revertDraft(); focusAfterRender(FOCUS_TARGET.editorToggle) }}>Discard draft</button>
         </div>
       )}
     </div>

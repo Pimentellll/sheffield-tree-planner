@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import type { Result, TreeProfile, TreeState, Vec3 } from '../api/types'
+import type { Job, Result, Scenario, TreeProfile, TreeState, Vec3 } from '../api/types'
 import type { DeclarationCheck } from '../api/session'
 import type { TransformCheck } from '../scene/transform'
 import {
   CURRENTNESS_LABEL, EDIT_LIMIT_M, samePosition, EXECUTION_MODE_LABEL, clampPosition, describeJob, formatPence, formatValue,
-  primaryMetric, unitLabel, type Currentness,
+  primaryMetric, progressView, unitLabel, type Currentness, type ProgressView,
 } from '../planning/evaluation'
 import type { RunRecord, Workspace } from '../planning/useWorkspace'
+import { latestEvaluation, metricTitle, MODE_BADGE, resultSummary } from '../planning/shell'
+import { FOCUS_TARGET, focusAfterRender } from './focus'
 
 function describeAttenuation(a: unknown): string {
   const v = a as { mode?: string; transmission?: number | null } | null
@@ -103,7 +105,7 @@ export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; p
         </>
       )}
       {committed && draftDirty && (
-        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={ws.revertDraft}>Revert draft</button></p>
+        <p className="fine-print">Last evaluated position: E {committed[0]} m, N {committed[1]} m. <button type="button" className="text-action" onClick={() => { ws.revertDraft(); focusAfterRender(FOCUS_TARGET.editorToggle) }}>Revert draft</button></p>
       )}
       {profile && state && (
         <>
@@ -122,7 +124,9 @@ export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; p
 export function EvaluationControls({ ws }: { ws: Workspace }) {
   const job = ws.activeJob
   const described = job ? describeJob(job) : null
-  const running = job ? job.status === 'queued' || job.status === 'running' : false
+  const lost = Boolean(job && ws.jobStatusLost && (job.status === 'queued' || job.status === 'running'))
+  const running = !lost && (job ? job.status === 'queued' || job.status === 'running' : false)
+  const progress: ProgressView = job && !lost ? progressView(job) : { kind: 'none' }
   const label = ws.busy === 'committing' ? 'Accepting revision…' : ws.busy === 'submitting' ? 'Submitting…' : ws.draftDirty ? 'Accept changes & evaluate' : 'Evaluate planting'
   return (
     <div className="detail-section">
@@ -135,22 +139,33 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
           {job?.cancel_requested ? 'Cancel requested' : 'Cancel job'}
         </button>
       )}
+      {ws.draftDirty && ws.requirementErrors.length > 0 && (
+        <p className="fine-print text-warning" data-testid="draft-errors">Cannot accept the draft yet: {ws.requirementErrors.join(' ')}</p>
+      )}
       {ws.connection.status === 'connected' && !ws.connection.health.available_operations.includes('evaluate_layout') && (
         <p className="fine-print text-warning">This backend has no evaluate_layout provider, so no result can be computed.</p>
       )}
       <div role="status" aria-live="polite">
-        {job && described && (
+        {job && lost && (
+          <div className="job-status tone-warning" data-testid="job-status-unknown">
+            <strong>Status unknown</strong>
+            <span>Job {short(job.job_id, 8)} · scenario rev {job.scenario_revision}</span>
+            <span>Contact was lost while following this job. It may still be running on the backend; no result is assumed.</span>
+            <button type="button" className="secondary-action" onClick={() => void ws.recheckJob()}>Re-check job status</button>
+          </div>
+        )}
+        {job && described && !lost && (
           <div className={`job-status tone-${described.tone}`}>
             <strong>{described.label}</strong>
             <span>Job {short(job.job_id, 8)} · scenario rev {job.scenario_revision}</span>
             <span>{described.detail}</span>
-            {job.progress && job.progress.total > 0 && (
-              <progress max={job.progress.total} value={job.progress.completed} aria-label="Job progress" />
+            {progress.kind === 'counts' && (
+              <progress max={progress.total} value={progress.completed} aria-label="Job progress" />
             )}
-            {running && !(job.progress && job.progress.total > 0) && (
+            {progress.kind === 'indeterminate' && (
               <>
                 <progress aria-label="Job in progress; the backend reports no progress counts" data-testid="indeterminate-progress" />
-                <span className="caption">The backend reports no progress counts, so no percentage or phase is estimated.</span>
+                <span className="caption">{progress.caption}</span>
               </>
             )}
           </div>
@@ -166,28 +181,27 @@ const CURRENTNESS_TONE: Record<Currentness, string> = { current: 'tone-success',
 
 export function ResultCard({ ws }: { ws: Workspace }) {
   const evaluations = ws.runs.filter(r => r.job.operation === 'evaluate_layout')
-  const record = evaluations.find(r => r.result) ?? null
+  // The backend-selected run wins over arrival order (a late older job must not displace it).
+  const record = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
   const latestFailure = evaluations[0] && !evaluations[0].result ? evaluations[0] : null
   const primaryCase = ws.scenario?.input.objective.primary_case_id ?? null
   if (!record?.result) {
     return (
-      <div className="detail-section result-section">
-        <span className="section-kicker">CURRENT RESULT</span>
-        <div className="empty-visual" aria-hidden="true"><span>—</span></div>
-        <h3>{latestFailure ? `No result: job ${latestFailure.job.status}` : 'No calculation yet'}</h3>
+      <section className="detail-section result-section result-card" aria-labelledby="result-title">
+        <div className="card-title-row"><h2 id="result-title" className="kicker">LAYOUT RESULT</h2></div>
+        <h3 className="empty-title">{latestFailure ? `No result: job ${latestFailure.job.status}` : 'No calculation yet'}</h3>
         <p className="fine-print">{latestFailure ? describeJob(latestFailure.job).detail : 'Run an evaluation to compute the additional shade on the target from the backend evaluator.'}</p>
-      </div>
+      </section>
     )
   }
   const result = record.result
   const currentness = ws.currentness(result)
   const failureNewer = latestFailure !== null && evaluations.indexOf(latestFailure) < evaluations.indexOf(record)
   return (
-    <div className={`detail-section result-section result-${currentness}`}>
-      <span className="section-kicker">{currentness === 'current' ? 'CURRENT RESULT' : 'LAST RESULT — NOT CURRENT'}</span>
-      <ResultBody result={result} currentness={currentness} primaryCase={primaryCase} />
+    <section className={`detail-section result-section result-card result-${currentness}`} aria-labelledby="result-title">
+      <ResultBody result={result} inputScenario={record.inputScenario} delivery={record.job.delivery} currentness={currentness} primaryCase={primaryCase} />
       {failureNewer && latestFailure && <p className="error-box">A later job {latestFailure.job.status}: {describeJob(latestFailure.job).detail}</p>}
-    </div>
+    </section>
   )
 }
 
@@ -198,43 +212,89 @@ function constraintSummary(result: Result) {
   return (['fail', 'unknown', 'pass'] as const).filter(k => counts[k]).map(k => `${counts[k]} ${k}`).join(' · ')
 }
 
-function ResultBody({ result, currentness, primaryCase }: { result: Result; currentness: Currentness; primaryCase: string | null }) {
+function ResultBody({ result, inputScenario, delivery, currentness, primaryCase }: {
+  result: Result; inputScenario: Scenario | null; delivery: Job['delivery']; currentness: Currentness; primaryCase: string | null
+}) {
   const metric = primaryMetric(result, primaryCase)
   const layout = result.layouts[0]
   const zero = metric?.value === 0
+  // How THIS job was delivered (a cache hit is cached even if the stored run was originally live).
+  const delivered = delivery?.execution_mode ?? result.provenance.execution_mode
+  const original = result.provenance.execution_mode
+  const summary = resultSummary(result, inputScenario, metric)
+  const weighted = result.metrics.find(m => m.metric_id === 'weighted_shade_utility' && (!metric || m.case_id === metric.case_id)) ?? null
+  const largest = Math.max(...summary.targets.map(t => t.value), 0)
   return (
     <>
-      <div className={`currentness ${CURRENTNESS_TONE[currentness]}`}>
-        <strong>{CURRENTNESS_LABEL[currentness].label}</strong>
-        <span>{CURRENTNESS_LABEL[currentness].detail}</span>
-      </div>
-      {metric ? (
-        <div className={`metric${currentness !== 'current' ? ' metric-stale' : ''}`}>
-          <span className="metric-value" data-testid="metric-value">{formatValue(metric.value)}</span>
-          <span className="metric-unit">{unitLabel(metric.unit)}</span>
-          <span className="metric-label">{metric.metric_id.replace(/_/g, ' ')} · {metric.quantity_kind} · case {metric.case_id} · {metric.horizon_years} y{metric.target_id ? ` · target ${metric.target_id}` : ''}</span>
-          {zero && <span className="metric-note">Valid zero: the evaluator found no additional shade on the target for this placement and time bin.</span>}
+      <div className="card-title-row">
+        <h2 id="result-title" className="kicker">LAYOUT RESULT</h2>
+        <div className={`currentness ${CURRENTNESS_TONE[currentness]}`}>
+          <strong>{CURRENTNESS_LABEL[currentness].label}</strong>
+          <span className="mono">REV {result.scenario_revision}</span>
         </div>
+      </div>
+      {currentness !== 'current' && <p className="caption currentness-detail">{CURRENTNESS_LABEL[currentness].detail}</p>}
+      {metric ? (
+        <>
+          <p className="hero-label">{metricTitle(metric.metric_id)}{metric.target_id ? ` on target ${metric.target_id}` : ''} <span className={`mode-badge${delivered === 'live' ? '' : ' mode-badge-warn'}`}>{MODE_BADGE[delivered]}</span></p>
+          <div className={`metric${currentness !== 'current' ? ' metric-stale' : ''}`}>
+            <span className="metric-value" data-testid="metric-value">{formatValue(metric.value)}</span>
+            <span className="metric-unit">{unitLabel(metric.unit)}</span>
+            <span className="metric-label">case {metric.case_id} · {metric.horizon_years} y · {metric.quantity_kind}{metric.weighting ? ` · ${metric.weighting}` : ''}</span>
+            {zero && <span className="metric-note">Valid zero: the evaluator found no additional shade on the target for this placement and time bin.</span>}
+          </div>
+        </>
       ) : (
         <p className="fine-print text-warning">The result contains no metric.</p>
       )}
       {result.missing_metrics.length > 0 && <p className="fine-print text-warning">Missing: {result.missing_metrics.map(m => `${m.metric_id} (${m.reason})`).join('; ')}</p>}
+      <div className="kpi-row">
+        <div><span className="kpi-label">Trees</span><strong className="kpi-value">{summary.treeCount ?? '—'}</strong></div>
+        <div>
+          <span className="kpi-label">Upfront cost</span>
+          <strong className="kpi-value">{summary.costPence === null ? '—' : formatPence(summary.costPence)}</strong>
+          {summary.budgetPence !== null && <span className="kpi-caption">of {formatPence(summary.budgetPence)} budget in this run's scenario</span>}
+        </div>
+        <div>
+          <span className="kpi-label">Winter sun loss</span>
+          {summary.winter
+            ? <><strong className="kpi-value">{formatValue(summary.winter.value)} <small>{unitLabel(summary.winter.unit)}</small></strong>
+              <span className="kpi-caption">{summary.winter.limit !== null ? `limit ≤ ${summary.winter.limit} m²·h · ` : ''}{summary.winter.status ? `backend: ${summary.winter.status}` : 'no limit check recorded'}</span></>
+            : <><strong className="kpi-value kpi-none">—</strong><span className="kpi-caption">not evaluated in this run</span></>}
+        </div>
+      </div>
+      {summary.targets.length > 0 && (
+        <div className="target-bars">
+          <span className="kpi-label">PER TARGET</span>
+          {summary.targets.map(t => (
+            <div key={t.targetId} className="target-bar">
+              <span>{t.targetId}</span>
+              <span className="bar-track" aria-hidden="true"><i style={{ width: `${largest > 0 ? (t.value / largest) * 100 : 0}%` }} /></span>
+              <span className="mono">{formatValue(t.value)}</span>
+            </div>
+          ))}
+          <span className="caption">Bar lengths are relative to the largest target, for display only.</span>
+        </div>
+      )}
       <div className="evidence-grid">
-        <Row label="Mode" value={EXECUTION_MODE_LABEL[result.provenance.execution_mode]} warn={result.provenance.execution_mode !== 'live'} />
-        <Row label="Run" value={short(result.run_id, 12)} />
+        <Row label="Mode" value={`${EXECUTION_MODE_LABEL[delivered]}${delivered !== original ? ` · originally ${EXECUTION_MODE_LABEL[original].toLowerCase()}` : ''}`} warn={delivered !== 'live'} />
         <Row label="Scenario rev" value={`${result.scenario_revision} (${result.scope})`} />
-        {layout && <Row label="Layout" value={`${layout.layout.layout_id} rev ${layout.layout.revision} · ${layout.tree_count} tree`} />}
-        {layout && <Row label="Placement" value={layout.layout.placements.map(p => `E ${p.position_enu_m[0]}, N ${p.position_enu_m[1]}`).join('; ')} />}
-        {layout && <Row label="Cost" value={`${formatPence(layout.cost_pence)} upfront`} />}
         {layout && <Row label="Feasibility" value={layout.feasibility.replace('_', ' ')} warn={layout.feasibility !== 'feasible'} />}
         <Row label="Constraints" value={constraintSummary(result)} warn={result.constraints.length === 0 || result.constraints.some(c => c.status !== 'pass')} />
-        <Row label="Evaluator" value={`${result.provenance.evaluator_version} · solar ${result.provenance.solar_version}`} />
-        <Row label="Computed" value={`${result.provenance.compute_finished_at_utc.replace('T', ' ').replace(/\.\d+/, '')}`} />
-        <Row label="Source hashes" value={`${Object.keys(result.provenance.source_hashes).length} bound`} />
-        <Row label="Fingerprint" value={short(result.input_fingerprint, 12)} />
+        {weighted && <Row label="Weighted utility" value={`${formatValue(weighted.value)} ${unitLabel(weighted.unit)} (not physical shade)`} />}
       </div>
       <details className="evidence-details">
-        <summary>Constraints, assumptions &amp; limitations ({result.constraints.length + result.assumptions.length + result.limitations.length})</summary>
+        <summary>Run evidence &amp; assumptions</summary>
+        <div className="evidence-grid">
+          <Row label="Run" value={short(result.run_id, 12)} />
+          {layout && <Row label="Layout" value={`${layout.layout.layout_id} rev ${layout.layout.revision} · ${layout.tree_count} tree`} />}
+          {layout && <Row label="Placement" value={layout.layout.placements.map(p => `E ${p.position_enu_m[0]}, N ${p.position_enu_m[1]}`).join('; ')} />}
+          <Row label="Evaluator" value={`${result.provenance.evaluator_version} · solar ${result.provenance.solar_version}`} />
+          <Row label="Computed" value={`${result.provenance.compute_finished_at_utc.replace('T', ' ').replace(/\.\d+/, '')}`} />
+          <Row label="Source hashes" value={`${Object.keys(result.provenance.source_hashes).length} bound`} />
+          <Row label="Fingerprint" value={short(result.input_fingerprint, 12)} />
+        </div>
+        <p className="fine-print">Constraints, assumptions &amp; limitations ({result.constraints.length + result.assumptions.length + result.limitations.length})</p>
         {result.constraints.length > 0 && <ul>{result.constraints.map((c, i) => <li key={`c-${i}`} className={c.status === 'pass' ? undefined : 'text-warning'}>Constraint {c.rule}: {c.status}{c.observed_value !== null ? ` (observed ${c.observed_value}${c.unit ? ` ${c.unit}` : ''}${c.limit !== null ? `, limit ${c.limit}` : ''})` : ''}</li>)}</ul>}
         <ul>{result.assumptions.map(a => <li key={`a-${a}`}>{a}</li>)}{result.limitations.map(l => <li key={`l-${l}`} className="text-warning">{l}</li>)}</ul>
       </details>

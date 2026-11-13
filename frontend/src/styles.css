@@ -49,7 +49,8 @@
 /* align-self/justify-self: the legacy .site-panel{align-self:start} would otherwise stop an absolutely positioned box stretching to its insets */
 .studio-scene{position:absolute;inset:0;align-self:stretch;justify-self:stretch;border-radius:0;box-shadow:none;background:var(--scene-bg)}
 .studio-scene .scene-wrap{height:100%;min-height:0;background:var(--scene-bg)}
-.studio .scene-topline{top:76px;left:auto;right:calc(var(--right-w) + 2 * var(--gutter) + 52px);justify-content:flex-end;gap:8px}
+/* below the camera column, clear of the scenario strip at any width */
+.studio .scene-topline{top:392px;left:auto;right:calc(var(--right-w) + 2 * var(--gutter));flex-direction:column;align-items:flex-end;gap:6px}
 .crumbs>span:first-child{max-width:240px;overflow:hidden;text-overflow:ellipsis}
 .crumbs strong,.crumbs i{flex:none}
 .studio .scene-scale{background:var(--glass-dark);color:var(--ivory)}
@@ -65,7 +66,7 @@
 .scenario-strip>span{white-space:nowrap}
 .scenario-strip b{color:var(--ivory);font-weight:600}
 .scenario-strip b.mono{font:600 12.5px var(--font-mono)}
-.scenario-strip em{font-style:normal;font-size:10px;color:var(--crumb-sep)}
+.scenario-strip em{font-style:normal;font-size:10.5px;color:var(--muted-on-dark)}
 .strip-objective{max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .strip-button{margin-left:auto;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:9px;border:1px solid var(--btn-outline-dark);background:transparent;color:var(--ivory);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap}
 .strip-button:hover{background:var(--nav-hover-bg)}
@@ -121,15 +122,12 @@
   .main-content.screen-studio .topbar.context-bar{position:static;margin:16px var(--gutter) 0;max-width:calc(100% - 2 * var(--gutter))}
   .topbar.context-bar{flex-wrap:wrap;height:auto;min-height:44px;padding:8px 14px;row-gap:6px}
   .studio-scene,.studio-left,.studio-right,.map-key,.agent-bar{position:static;width:auto;max-width:none;margin:0}
-  .studio-left{order:0;pointer-events:auto}
-  .studio-scene{order:1;border-radius:14px;overflow:hidden}
-  .studio-right{order:2}
-  .map-key{order:3}
-  .agent-bar{order:4}
+  .studio-left{pointer-events:auto}
+  .studio-scene{border-radius:14px;overflow:hidden}
   .studio-scene .scene-wrap{height:56vh;min-height:340px}
   .studio .scene-toolbar{right:12px;top:auto;bottom:12px;flex-direction:row}
   .studio .north-indicator{right:12px;top:12px}
-  .studio .scene-topline{right:auto;left:12px;bottom:auto;top:12px;justify-content:flex-start}
+  .studio .scene-topline{right:64px;left:12px;bottom:auto;top:12px;flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start}
   .studio .scene-message{inset:25%}
   .studio-right .detail-panel{overflow:visible}
   .scenario-editor{width:auto}
@@ -148,3 +146,52 @@
   .agent-head .caption{margin-left:0}
 }
 @media print{.rail,.agent-bar,.map-key,.studio-left{display:none!important}}
+/* focus: visible on the light palette (ink), lime kept on dark surfaces */
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+/* every scene is light (Studio and Compare): dark ring */
+.scene-wrap:focus-visible{outline:3px solid var(--ink);outline-offset:-3px}
+.rail :focus-visible,.glass-dark :focus-visible,.context-bar :focus-visible,.scene-toolbar :focus-visible,.dark-action:focus-visible{outline-color:var(--lime)}
+.number-field:focus-within{outline-color:var(--ink)}
+.provenance-strip b{font-weight:600;letter-spacing:.05em}
+.provenance-strip .prov-ok{color:var(--lime)}
+.provenance-strip .prov-warn{color:var(--synthetic-stripe)}
+.provenance-strip.not-current span{opacity:.75}
+/* 1101-1320 px: the floating header cannot fit beside the right panel without clipping; put it in flow and let it wrap */
+@media (min-width:1101px) and (max-width:1320px){
+  .main-content.screen-studio{display:flex;flex-direction:column;height:100vh}
+  .main-content.screen-studio .topbar.context-bar{position:static;margin:12px var(--gutter) 0;width:auto;max-width:none;height:auto;min-height:44px;flex-wrap:wrap;row-gap:6px;padding:6px 14px;overflow:visible}
+  .main-content.screen-studio .studio{flex:1 1 auto;height:auto;min-height:0}
+  .studio-left{top:var(--gutter)}
+}
+/* compact B07 result card */
+.result-card .card-title-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.result-card .card-title-row .kicker{color:var(--muted-on-light)}
+.result-card .currentness{margin:0;display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:11px;grid-template-columns:none}
+.result-card .currentness strong{font:600 10px/1 var(--font-mono);letter-spacing:.05em}
+.result-card .currentness span{font:600 10px/1 var(--font-mono);opacity:.85}
+.currentness-detail{margin:0 0 8px}
+.empty-title{font-size:15px;margin:6px 0}
+.hero-label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11.5px;color:var(--muted-on-light);margin:4px 0 2px}
+.mode-badge{font:600 9.5px/1 var(--font-mono);letter-spacing:.05em;padding:3px 6px;border-radius:4px;background:var(--ok-bg);color:var(--ok-fg);border:1px solid var(--ok-border)}
+.mode-badge-warn{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-border)}
+.result-card .metric{margin:4px 0 6px}
+.result-card .metric-label{font-family:var(--font-mono);font-size:10.5px;color:var(--faint-on-light)}
+.kpi-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;border-top:1px solid var(--rule);padding:10px 0 4px;margin-top:6px}
+.kpi-row>div{display:grid;align-content:start;gap:2px;min-width:0}
+.kpi-label{font-size:11px;color:var(--muted-on-light)}
+.kpi-value{font:600 18px/1.2 var(--font-mono);color:var(--ink)}
+.kpi-value small{font:500 11px var(--font-mono);color:var(--muted-on-light)}
+.kpi-none{color:var(--faint-on-light)}
+.kpi-caption{font-size:10.5px;color:var(--faint-on-light);line-height:1.35}
+.target-bars{display:grid;gap:5px;border-top:1px solid var(--rule);padding:10px 0 2px}
+.target-bars .kpi-label{font-weight:600;font-size:10px;letter-spacing:.1em}
+.target-bar{display:grid;grid-template-columns:110px 1fr 56px;align-items:center;gap:8px;font-size:11.5px}
+.target-bar .mono{text-align:right}
+.bar-track{height:9px;border-radius:3px;background:var(--track);overflow:hidden}
+.bar-track i{display:block;height:100%;background:var(--target)}
+.result-card .evidence-grid{border-top:1px solid var(--rule);margin-top:8px}
+.result-card .readiness-row{padding:7px 0}
+/* 1101-1320 px: the scene's duplicate synthetic pill can sit behind the open editor; the header pill and site notice still state it */
+@media (min-width:1101px) and (max-width:1320px){.studio .scene-topline .pill{display:none}}
+/* the legacy .detail-section h2 (Manrope 24px) must not restyle the card's kicker heading */
+.result-card .card-title-row h2.kicker{font:600 10px/1.2 var(--font-ui);letter-spacing:.1em;text-transform:uppercase;margin:0;color:var(--muted-on-light)}

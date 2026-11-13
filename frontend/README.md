@@ -50,6 +50,18 @@ Saving a move registers layout revision *n+1* and replaces the scenario with `If
 - Viewer transform: ENU (east, north, up) → Three (east, up, −north), row-major `[1,0,0,0, 0,0,1,0, 0,−1,0,0, 0,0,0,1]`, matching Arnav's STP-006 known points. Ben's synthetic SiteBundle sends an **identity** `analysis_to_viewer`; the UI reports that mismatch on screen and in an issue instead of silently reinterpreting it.
 - Editing: drag the tree on the ground plane, or focus the view and use the arrow keys (0.1 m, Shift 1 m; up = north), or type East/North. Positions are stored to the millimetre and limited to ±50 m. "Find tree" recentres the camera.
 
+## Third-party fonts
+
+The interface bundles three typefaces from the `@fontsource` npm packages, version 5.3.0 (Latin subsets only, unmodified):
+
+| Family | Package | Licence |
+|---|---|---|
+| Inter | `@fontsource/inter` | SIL Open Font License 1.1 |
+| Manrope | `@fontsource/manrope` | SIL Open Font License 1.1 |
+| JetBrains Mono | `@fontsource/jetbrains-mono` | SIL Open Font License 1.1 |
+
+Each package ships its licence text (`LICENSE`) in `node_modules/@fontsource/<family>/`. The OFL allows bundling and redistribution with software; the fonts must not be sold on their own, and any modified version must not use the reserved font names. See https://openfontlicense.org.
+
 ## Known limits
 
 - Live cancellation is implemented and unit-tested, but the reference evaluator finishes in tens of milliseconds, so it has not been exercised against a running job.

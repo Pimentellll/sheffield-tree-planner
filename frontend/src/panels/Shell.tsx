@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import type { SceneData } from '../api/session'
 import { agentPanelState, evidenceChain } from '../planning/agentEvidence'
-import { draftBannerText, headerStatus, latestEvaluation, provenanceItems, scenarioSummary } from '../planning/shell'
+import { dataPillLabel, draftBannerText, headerStatus, latestEvaluation, layoutsFeasible, provenanceItems, provenanceStatus, scenarioSummary } from '../planning/shell'
 import type { Workspace } from '../planning/useWorkspace'
+import { FOCUS_TARGET, focusAfterRender } from './focus'
 
 /** Vision v2 application shell: navigation rail, context header and the Studio's floating panels. */
 
@@ -50,26 +51,29 @@ const short = (value: string, n = 8) => (value.length > n + 1 ? `${value.slice(0
 /** Context header: site / scenario / revision, one status pill, the data-kind pill and the backend state. */
 export function ContextHeader({ ws, screenTitle }: { ws: Workspace; screenTitle: string }) {
   const connected = ws.connection.status === 'connected'
-  const synthetic = ws.site?.site_kind === 'synthetic_test'
-  const evaluation = latestEvaluation(ws.runs)
+  const connecting = ws.connection.status === 'connecting'
+  const evaluation = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
   const status = headerStatus({
     connected,
+    connecting,
     revision: ws.scenario?.revision ?? null,
     draftDirty: ws.draftDirty,
     activeJob: ws.activeJob,
+    jobStatusLost: ws.jobStatusLost,
     evaluationCurrentness: evaluation?.result ? ws.currentness(evaluation.result) : null,
   })
-  const dataPill = !connected ? 'OFFLINE · NO DATA' : synthetic ? 'SYNTHETIC TEST SITE · NOT SHEFFIELD' : ws.site ? `${ws.site.site_kind.toUpperCase()} · SEE PROVENANCE` : 'NO SITE'
+  const pill = dataPillLabel(connected, ws.site?.site_kind ?? null, connecting)
   return (
     <header className="topbar context-bar no-print">
       <span className="wordmark">CANOPY</span>
       <span className="bar-divider" aria-hidden="true" />
-      <nav className="crumbs" aria-label="Context">
+      {/* Not a <nav>: these are labels, not links. The full scenario id is real text for assistive technology. */}
+      <div className="crumbs" role="group" aria-label="Current site and scenario">
         <span>{ws.site?.name ?? screenTitle}</span>
-        {ws.scenario && <><i aria-hidden="true">/</i><span className="mono" title={ws.scenario.scenario_id}>{short(ws.scenario.scenario_id)}</span><i aria-hidden="true">/</i><strong>Rev {ws.scenario.revision}{ws.draftDirty ? ' + draft' : ''}</strong></>}
-      </nav>
+        {ws.scenario && <><i aria-hidden="true">/</i><span className="mono" title={ws.scenario.scenario_id}><span aria-hidden="true">{short(ws.scenario.scenario_id)}</span><span className="sr-only">Scenario {ws.scenario.scenario_id}</span></span><i aria-hidden="true">/</i><strong>Rev {ws.scenario.revision}{ws.draftDirty ? ' + draft' : ''}</strong></>}
+      </div>
       <span className={`status-pill sp-${status.tone}`} data-testid="header-status"><i aria-hidden="true" />{status.label}</span>
-      <span className={`status-pill ${connected && !synthetic ? 'sp-muted' : 'sp-synthetic'}`}><i aria-hidden="true" />{dataPill}</span>
+      <span className={`status-pill ${pill.synthetic ? 'sp-synthetic' : 'sp-muted'}`}><i aria-hidden="true" />{pill.label}</span>
       <span className="topbar-status" data-testid="backend-status"><span className={`status-dot${connected ? '' : ' warning'}`} /> {connected ? 'Local backend connected' : ws.connection.status === 'connecting' ? 'Connecting…' : 'Backend not connected'}</span>
     </header>
   )
@@ -86,7 +90,7 @@ export function ScenarioStrip({ ws, editorOpen, onToggle }: { ws: Workspace; edi
       <span className="strip-objective" title={s.objective}>Objective <b>{s.objective}</b></span>
       <span>Max trees <b className="mono">{s.maxTrees}</b></span>
       <span>Exclusions <b className="mono">{s.exclusions}</b></span>
-      <button type="button" className="strip-button" aria-expanded={editorOpen} aria-controls="scenario-editor" onClick={onToggle}>
+      <button type="button" id={FOCUS_TARGET.editorToggle} className="strip-button" aria-expanded={editorOpen} aria-controls="scenario-editor" onClick={onToggle}>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>
         {editorOpen ? 'Close editor' : 'Edit scenario'}
       </button>
@@ -95,17 +99,21 @@ export function ScenarioStrip({ ws, editorOpen, onToggle }: { ws: Workspace; edi
 }
 
 /** C02: the persistent signal that the visible result is not about the draft. */
-export function DraftBanner({ ws, onReview }: { ws: Workspace; onReview: () => void }) {
+export function DraftBanner({ ws, editorOpen, onReview }: { ws: Workspace; editorOpen: boolean; onReview: () => void }) {
   if (!ws.draftDirty || !ws.scenario) return null
-  const text = draftBannerText(ws.scenario.revision, ws.draftChanges)
+  const shown = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)?.result ?? null
+  const text = draftBannerText(ws.scenario.revision, ws.draftChanges, shown ? shown.scenario_revision : null)
   return (
     <div className="draft-banner" role="status" data-testid="draft-banner">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 4 2.5 20h19z" /><path d="M12 10v4.5M12 17.2v.3" /></svg>
-      <p><strong>{text.title}</strong> {text.detail}</p>
-      <div className="banner-actions">
-        <button type="button" className="banner-button" onClick={onReview}>Review draft</button>
-        <button type="button" className="banner-button" onClick={ws.revertDraft}>Undo edits</button>
-      </div>
+      <p><strong>{text.title}</strong> {text.detail}{ws.positionDirty && <> <span data-testid="ghost-note">The faded tree in the view marks the last evaluated position.</span></>}</p>
+      {/* With the editor open, its own "Discard draft" is the one discard control (one button, one name). */}
+      {!editorOpen && (
+        <div className="banner-actions">
+          <button type="button" className="banner-button" onClick={() => { onReview(); focusAfterRender(FOCUS_TARGET.draftChanges) }}>Review draft</button>
+          <button type="button" className="banner-button" onClick={() => { ws.revertDraft(); focusAfterRender(FOCUS_TARGET.editorToggle) }}>Discard draft</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -140,25 +148,26 @@ export function AgentPanel({ ws }: { ws: Workspace }) {
         <span className="status-pill sp-muted"><i aria-hidden="true" />NOT CONNECTED</span>
       </div>
       <p className="caption">{state.reason}</p>
-      <p className="caption mono" data-testid="backend-operations">Backend operations: {health ? (health.available_operations.join(', ') || 'none') : 'backend not connected'}</p>
+      <p className="caption mono" data-testid="backend-operations">Backend operations: {health ? (health.available_operations.join(', ') || 'none') : 'unknown while offline'}</p>
       <form className="agent-form" onSubmit={e => e.preventDefault()}>
         <input aria-label="Question for the planning agent (unavailable)" placeholder="Available once the agent service is connected" disabled />
         <button type="submit" disabled aria-label="Send question (unavailable)">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
         </button>
       </form>
-      <p className="caption">{state.manualEvaluateAvailable ? 'Manual planning works without it: use Evaluate planting.' : 'This backend offers no evaluate_layout operation.'}</p>
+      <p className="caption">{!health ? 'Start the local backend to plan manually; the agent is not needed for that.' : state.manualEvaluateAvailable ? 'Manual planning works without it: use Evaluate planting.' : 'This backend offers no evaluate_layout operation.'}</p>
     </section>
   )
 }
 
 /** Provenance of the result the card shows (C04), from the stored Result only. */
 export function ProvenanceStrip({ ws }: { ws: Workspace }) {
-  const record = latestEvaluation(ws.runs)
+  const record = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
+  const status = record?.result ? provenanceStatus(ws.currentness(record.result), record.result.scenario_revision) : null
   return (
-    <footer className="provenance-strip glass-dark mono" data-testid="provenance-strip">
-      {record?.result
-        ? provenanceItems(record.result, record.inputScenario).map(item => <span key={item}>{item}</span>)
+    <footer className={`provenance-strip glass-dark mono${status && !status.current ? ' not-current' : ''}`} data-testid="provenance-strip">
+      {record?.result && status
+        ? <><b className={status.current ? 'prov-ok' : 'prov-warn'}>{status.label}</b>{provenanceItems(record.result, record.inputScenario, record.job.delivery).map(item => <span key={item}>{item}</span>)}</>
         : <span>No stored run yet: provenance appears with the first result</span>}
     </footer>
   )
@@ -166,13 +175,15 @@ export function ProvenanceStrip({ ws }: { ws: Workspace }) {
 
 /** Job → Result evidence for the shown evaluation, with #76's linkage checks. */
 export function EvidenceChainDetails({ ws }: { ws: Workspace }) {
-  const record = latestEvaluation(ws.runs)
+  const record = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
   if (!record?.result) return null
   const chain = evidenceChain(record.job, record.result, ws.currentness(record.result))
+  // evaluate_layout reports "comparison_completed" (feasible: null), so its feasibility comes from its layouts.
+  const infeasible = chain.ok && (chain.feasible === false || (chain.feasible === null && layoutsFeasible(record.result.layouts) === false))
   return (
     <details className="detail-section evidence-details" data-testid="evidence-chain">
-      <summary>Evidence chain: job → result{chain.ok && chain.feasible === false ? ' · not feasible' : ''}</summary>
-      {chain.ok && chain.feasible === false && <p className="error-box" data-testid="chain-infeasible">The backend computed this result, but it is not a feasible planting outcome. It is evidence, not a success.</p>}
+      <summary>Evidence chain: job → result{infeasible ? ' · not feasible' : ''}</summary>
+      {infeasible && <p className="error-box" data-testid="chain-infeasible">The backend computed this result, but it is not a feasible planting outcome. It is evidence, not a success.</p>}
       {chain.ok
         ? <dl className="chain">{chain.steps.map((s, i) => <div key={`${s.kind}-${i}`} className="chain-row"><dt>{s.label}</dt><dd className={s.kind === 'limitation' || s.kind === 'missing-metric' ? 'text-warning' : undefined}>{s.value}</dd></div>)}</dl>
         : <ul className="text-warning">{chain.problems.map(p => <li key={p}>{p}</li>)}</ul>}

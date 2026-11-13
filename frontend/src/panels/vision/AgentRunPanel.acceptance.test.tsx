@@ -168,7 +168,7 @@ function liveRegion(root: HTMLElement): HTMLElement {
 }
 
 beforeEach(() => { vi.useFakeTimers() })
-afterEach(() => { cleanup(); vi.useRealTimers() }) // vitest globals are off, so RTL's auto-cleanup does not run
+afterEach(() => { cleanup(); vi.useRealTimers(); sessionStorage.clear() }) // vitest globals are off, so RTL's auto-cleanup does not run; an unfinished run is remembered in session storage
 
 describe('AgentRunPanel acceptance: agent unavailable fallback', () => {
   it('disables the request box and Start, shows the reason and says manual planning is unaffected', async () => {
@@ -334,5 +334,71 @@ describe('AgentRunPanel acceptance: wording', () => {
     expect(panelText(view.container)).toMatch(/may or may not have reached|may not have reached/i)
 
     for (const [label, words] of Object.entries(seen)) expect({ label, words }).toEqual({ label, words: [] })
+  })
+})
+
+describe('AgentRunPanel acceptance: a run that ends with no tool step and no loaded result', () => {
+  /** Text outside the model block, the run's identity facts and the revision hint: the places a figure could be claimed. */
+  function claimableText(root: HTMLElement): string {
+    const skip = [root.querySelector('[data-testid="arp-narrative"]'), root.querySelector('dl.arp-facts'), root.querySelector('[data-testid="arp-hint"]')]
+      .filter((e): e is Element => e !== null)
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    let out = ''
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (!skip.some(e => e.contains(n))) out += `${n.textContent ?? ''} `
+    return out
+  }
+  const UNITS = /£|°\s*C|m²|%|\bpence\b/
+  const noChain = (root: HTMLElement) => {
+    expect(root.querySelector('[data-testid="arp-evidence"] details')).toBeNull()
+    expect(root.querySelector('[data-testid="arp-evidence"] dl')).toBeNull()
+  }
+
+  it('with no narrative it shows no figure anywhere and no evidence chain', async () => {
+    const { view } = await completedRun(fakeWorkspace({ runs: [] }), { steps: [], evidenceIds: [], narrative: null, outcome: null })
+    const root = view.container
+    expect(liveRegion(root).textContent).toMatch(/completed/i)
+    expect(panelText(root)).toMatch(/no tool steps/i)
+    expect(panelText(root)).toMatch(/no computed evidence/i)
+    expect(root.querySelector('[data-testid="arp-narrative"]')).toBeNull()
+    expect(panelText(root)).not.toContain(MODEL_INTERPRETATION_LABEL)
+    noChain(root)
+    expect(claimableText(root)).not.toMatch(/\d/)
+    expect(claimableText(root)).not.toMatch(UNITS)
+  })
+
+  it('a narrative with numbers stays in the untrusted block; none of its figures is marked as computed', async () => {
+    const NARRATIVE = 'Planting 4 trees gives 98.76 m²·h of shade for £321.00 and cools the square by 2 °C.'
+    const { view } = await completedRun(fakeWorkspace({ runs: [] }), { steps: [], evidenceIds: [], narrative: NARRATIVE, outcome: null })
+    const root = view.container
+    const block = root.querySelector<HTMLElement>('[data-testid="arp-narrative"]')
+    expect(block).not.toBeNull()
+    expect(block!.textContent).toContain(MODEL_INTERPRETATION_LABEL)
+    expect(block!.textContent).toContain(NARRATIVE)
+    expect(block!.querySelector('[data-testid="arp-narrative-warning"]')).not.toBeNull()
+    const statuses = Array.from(block!.querySelectorAll('[data-status]')).map(e => e.getAttribute('data-status'))
+    expect(statuses.length).toBeGreaterThan(0)
+    expect(statuses).not.toContain('appears-in-result')
+    noChain(root)
+    expect(claimableText(root)).not.toMatch(/\d/)
+    expect(claimableText(root)).not.toMatch(UNITS)
+    expect(claimableText(root)).not.toMatch(/\bcools\b|\bPlanting\b/)
+  })
+
+  it('a result loaded in the workspace that no step links to lends its figures to nothing', async () => {
+    // The narrative repeats the loaded result's own figures and the model cites its run id, but the run reported no step.
+    const NARRATIVE = 'The layout gives 12.34 m²·h for £450.00.'
+    const ws = fakeWorkspace({ runs: [record(job(), result())], currentRunIds: { evaluation: 'run-1', search: null, comparison: null }, currentRunId: 'run-1' })
+    const { view } = await completedRun(ws, { steps: [], evidenceIds: ['run-1'], narrative: NARRATIVE, outcome: null })
+    const root = view.container
+    const block = root.querySelector<HTMLElement>('[data-testid="arp-narrative"]')
+    expect(block).not.toBeNull()
+    const outside = textOutside(root, block!)
+    for (const fragment of FIGURE_FRAGMENTS) expect(outside).not.toContain(fragment)
+    noChain(root)
+    expect(panelText(root)).toMatch(/no computed evidence/i)
+    const statuses = Array.from(block!.querySelectorAll('[data-status]')).map(e => e.getAttribute('data-status'))
+    expect(statuses.length).toBeGreaterThan(0)
+    expect(statuses).not.toContain('appears-in-result')
+    expect(block!.querySelector('[data-testid="arp-narrative-warning"]')).not.toBeNull()
   })
 })

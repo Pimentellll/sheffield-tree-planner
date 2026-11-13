@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  applySnapshot, isReadableSnapshot, isTerminalPhase, supersededByHead, unavailableTransport, validateQuestion,
+  AGENT_RUN_STORAGE_KEY, applySnapshot, decodeStoredRun, encodeStoredRun, isReadableSnapshot, isTerminalPhase,
+  restoredRunView, storedRunOf, supersededByHead, unavailableTransport, validateQuestion,
   type AgentAvailability, type AgentRunSnapshot, type AgentRunTransport, type AgentRunView, type AgentScenarioKey,
+  type StoredAgentRun,
 } from './agentRun'
 import type { Workspace } from './useWorkspace'
 
@@ -50,6 +52,31 @@ function withTimeout<T>(call: () => Promise<T>, ms: number): Promise<T> {
   })
 }
 
+// Session storage holds only what is needed to find a run again (see StoredAgentRun). Every access can throw
+// (private mode, blocked site data, quota), so each is guarded: without storage a run simply does not survive
+// a reload, and nothing else changes.
+function sessionStore(): Storage | null {
+  try { return typeof window !== 'undefined' ? window.sessionStorage : null } catch { return null }
+}
+/** The stored record, or null. A record that cannot be read as this version's is removed. */
+function readStoredRun(): StoredAgentRun | null {
+  try {
+    const store = sessionStore()
+    const raw = store ? store.getItem(AGENT_RUN_STORAGE_KEY) : null
+    if (!store || raw === null) return null
+    const record = decodeStoredRun(raw)
+    if (!record) store.removeItem(AGENT_RUN_STORAGE_KEY)
+    return record
+  } catch { return null }
+}
+function writeStoredRun(record: StoredAgentRun): void {
+  try { sessionStore()?.setItem(AGENT_RUN_STORAGE_KEY, encodeStoredRun(record)) } catch { /* not stored */ }
+}
+function removeStoredRun(): void {
+  try { sessionStore()?.removeItem(AGENT_RUN_STORAGE_KEY) } catch { /* nothing to remove, or not removable */ }
+}
+const storedSignature = (run: StoredAgentRun) => `${run.requestId}\n${run.agentRunId ?? ''}`
+
 const headKey = (ws: Workspace): AgentScenarioKey | null =>
   ws.scenario ? { scenario_id: ws.scenario.scenario_id, revision: ws.scenario.revision, scope: ws.scenario.scope } : null
 
@@ -90,6 +117,11 @@ interface Live {
  * Lifecycle of one planning-agent run against the accepted scenario. Every reply is applied only if it answers
  * the latest call for the current request (a call token and the requestId are checked before each state write),
  * and nothing is written after unmount. Unmounting stops polling; it does not cancel the run on the server.
+ *
+ * A run that has not ended is remembered in session storage by its request id and run id only. After a reload
+ * or a remount, once the transport reports available, it is shown as 'status_unknown' and asked for again:
+ * get() when a run id was received, otherwise start() with the same request id. Only that reply can set its
+ * phase, steps, narrative and evidence. The record is removed when the run ends and on clear().
  */
 export function useAgentRun(ws: Workspace, transport: AgentRunTransport = unavailableTransport, options: AgentRunOptions = {}): AgentRunController {
   const [availability, setAvailability] = useState<AgentAvailability | null>(null)
@@ -115,7 +147,16 @@ export function useAgentRun(ws: Workspace, transport: AgentRunTransport = unavai
     let pollTimer: ReturnType<typeof setTimeout> | null = null
     const cfg = () => live.current!
 
-    const commit = (next: AgentRunView | null) => { runRef.current = next; setRun(next) }
+    /** Request id and run id last written; a poll that changes neither does not touch storage. */
+    let stored: string | null = null
+    const remember = (next: AgentRunView | null) => {
+      if (!next || isTerminalPhase(next.phase)) { stored = null; removeStoredRun(); return }
+      const signature = storedSignature(next)
+      if (signature === stored) return
+      stored = signature
+      writeStoredRun(storedRunOf(next))
+    }
+    const commit = (next: AgentRunView | null) => { runRef.current = next; remember(next); setRun(next) }
     const stopPolling = () => { if (pollTimer !== null) clearTimeout(pollTimer); pollTimer = null }
 
     const call = (
@@ -172,9 +213,29 @@ export function useAgentRun(ws: Workspace, transport: AgentRunTransport = unavai
       call(view.requestId, t => t.start(req), startUnknown, true)
     }
 
+    const requery = (r: AgentRunView) => {
+      if (r.agentRunId) {
+        const id = r.agentRunId
+        call(r.requestId, t => t.get(id), getUnknown)
+      } else {
+        startCall(r) // same requestId, same question and scenario
+      }
+    }
+
     return {
-      mount: () => { alive.current = true },
+      // Reading here also drops a stored record this version cannot read, whatever the transport says.
+      mount: () => { alive.current = true; readStoredRun() },
       unmount: () => { alive.current = false; token.current += 1; stopPolling() },
+      /** Called when the transport reports available. Does nothing if a run is already held. */
+      restore: () => {
+        if (!alive.current || runRef.current !== null) return
+        const record = readStoredRun()
+        if (!record) return
+        const view = restoredRunView(record) // 'status_unknown': stored data never says a run is going
+        stored = storedSignature(view)
+        commit(view)
+        requery(view)
+      },
       submit: (text: string) => {
         const c = cfg()
         if (blockedBy(c.availability, c.ws, runRef.current) !== null) return
@@ -197,12 +258,7 @@ export function useAgentRun(ws: Workspace, transport: AgentRunTransport = unavai
       recheck: () => {
         const r = runRef.current
         if (!r || r.phase !== 'status_unknown') return
-        if (r.agentRunId) {
-          const id = r.agentRunId
-          call(r.requestId, t => t.get(id), getUnknown)
-        } else {
-          startCall(r) // same requestId, same question and scenario
-        }
+        requery(r)
       },
       clear: () => {
         const r = runRef.current
@@ -223,11 +279,17 @@ export function useAgentRun(ws: Workspace, transport: AgentRunTransport = unavai
     let cancelled = false
     setAvailability(null)
     withTimeout(() => transport.status(), live.current!.timeoutMs).then(
-      value => { if (!cancelled) setAvailability(value) },
+      value => {
+        if (cancelled) return
+        setAvailability(value)
+        // Same batch as the availability update, so there is no moment at which a new request could be
+        // submitted while a stored run is still waiting to be found. Unavailable: the record is left alone.
+        if (value.kind === 'available') ops.restore()
+      },
       err => { if (!cancelled) setAvailability({ kind: 'unavailable', reason: `The planning agent is unavailable: its status could not be read (${message(err)}).` }) },
     )
     return () => { cancelled = true }
-  }, [transport])
+  }, [transport, ops])
 
   const headId = ws.scenario?.scenario_id
   const headRevision = ws.scenario?.revision

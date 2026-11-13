@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { Scenario } from '../api/types'
 import { AGENT_TRANSPORT_UNAVAILABLE_REASON, type AgentAvailability, type AgentRunSnapshot, type AgentRunTransport } from './agentRun'
 import { useAgentRun, type AgentRunOptions } from './useAgentRun'
@@ -54,6 +54,9 @@ async function ready(transport: AgentRunTransport, ws?: Workspace, options?: Age
   await waitFor(() => expect(hook.result.current.availability).not.toBeNull())
   return hook
 }
+
+// An unfinished run is remembered in session storage; each test starts without one.
+afterEach(() => { cleanup(); sessionStorage.clear() })
 
 describe('useAgentRun', () => {
   it('defaults to the unavailable transport: not connected, cannot submit, submit does nothing', async () => {
@@ -140,6 +143,9 @@ describe('useAgentRun', () => {
     await act(async () => f.of('start')[1].resolve(snap({ seq: 1 })))
     expect(result.current.run).toMatchObject({ phase: 'running', agentRunId: 'ar-1', error: null })
 
+    // A separate session for the second half: without this the second hook would find the run above
+    // (still running) in session storage and ask for it again instead of accepting a new request.
+    sessionStorage.clear()
     const g = fakeTransport()
     const other = await ready(g.transport)
     act(() => other.result.current.submit('q'))

@@ -141,3 +141,79 @@ export function validateQuestion(text: string): { readonly ok: true; readonly qu
   }
   return { ok: true, question }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Finding a run again after a reload or a remount
+//
+// Only what the client itself chose is kept: the request identity, the run id once the server gave one, the
+// question, the scenario key and the selected feature. Nothing the server reported (phase, steps, narrative,
+// evidence, outcome) is stored, so a restored run can show those only from a fresh server reply.
+
+export interface StoredAgentRun {
+  readonly requestId: string
+  readonly agentRunId: string | null
+  readonly question: string
+  readonly scenario: AgentScenarioKey
+  readonly selectedFeatureId: string | null
+}
+
+/** Session-storage key. The version is part of the key and of the record; a record of another version is dropped. */
+export const AGENT_RUN_STORAGE_VERSION = 1
+export const AGENT_RUN_STORAGE_KEY = `tree-planner.agent-run.v${AGENT_RUN_STORAGE_VERSION}`
+
+const MAX_STORED_ID_LENGTH = 200
+const storedId = (v: unknown): v is string => typeof v === 'string' && v !== '' && v.length <= MAX_STORED_ID_LENGTH
+
+/** Exactly the stored fields of a run (a view carries more; the rest is dropped). */
+export function storedRunOf(run: StoredAgentRun): StoredAgentRun {
+  return {
+    requestId: run.requestId,
+    agentRunId: run.agentRunId,
+    question: run.question,
+    scenario: { scenario_id: run.scenario.scenario_id, revision: run.scenario.revision, scope: run.scenario.scope },
+    selectedFeatureId: run.selectedFeatureId,
+  }
+}
+
+export function encodeStoredRun(record: StoredAgentRun): string {
+  return JSON.stringify({ version: AGENT_RUN_STORAGE_VERSION, ...storedRunOf(record) })
+}
+
+/** Null for anything that is not exactly a record this version wrote: bad JSON, another version, a wrong field. */
+export function decodeStoredRun(raw: string | null | undefined): StoredAgentRun | null {
+  if (typeof raw !== 'string' || raw === '') return null
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return null }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const o = parsed as Record<string, unknown>
+  if (o.version !== AGENT_RUN_STORAGE_VERSION) return null
+  if (!storedId(o.requestId)) return null
+  if (o.agentRunId !== null && !storedId(o.agentRunId)) return null
+  if (o.selectedFeatureId !== null && !storedId(o.selectedFeatureId)) return null
+  if (typeof o.question !== 'string') return null
+  const question = validateQuestion(o.question)
+  if (!question.ok || question.question !== o.question) return null
+  const s = o.scenario
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return null
+  const { scenario_id, revision, scope } = s as Record<string, unknown>
+  if (!storedId(scenario_id) || !storedId(scope)) return null
+  if (typeof revision !== 'number' || !Number.isFinite(revision)) return null
+  return {
+    requestId: o.requestId, agentRunId: o.agentRunId, question: o.question,
+    scenario: { scenario_id, revision, scope }, selectedFeatureId: o.selectedFeatureId,
+  }
+}
+
+export const RESTORED_RUN_NOTE =
+  'This request was made before the page was reloaded or this panel was reopened. Nothing about its progress was kept here, so its status is being asked from the server. If no answer arrives, re-check.'
+
+/**
+ * The view of a stored run before the server has answered: always 'status_unknown', never 'running', with no
+ * steps, narrative, evidence or outcome. The first applied snapshot replaces all of those (lastSeq is 0).
+ */
+export function restoredRunView(record: StoredAgentRun): AgentRunView {
+  return {
+    ...storedRunOf(record),
+    phase: 'status_unknown', steps: [], narrative: null, evidenceIds: [], outcome: null, error: RESTORED_RUN_NOTE, lastSeq: 0,
+  }
+}

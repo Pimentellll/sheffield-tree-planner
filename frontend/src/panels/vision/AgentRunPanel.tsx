@@ -18,13 +18,15 @@ import './AgentRunPanel.css'
  * yet, so the panel never names a "selected" tree; a host that tracks a real selection passes it as
  * `useAgentRun(ws, transport, { selectedFeatureId })` and the run facts then show it.
  *
- * Lifetime LIMIT: without a `controller` prop the panel owns its run state, so the run lives only as
- * long as the panel is mounted. Opening the scenario editor or changing screen unmounts it, which
- * stops polling and forgets the run without cancelling it on the server. Before a real transport
- * (#73) is wired, the host must call `useAgentRun` where the studio stays mounted (App level) and pass
- * the result as `controller` (through `AgentPanel`), so a run survives those changes and a second run
- * cannot be started while the first is still going. With the default unavailable transport no run
- * can exist, so this limit has no effect in the current build.
+ * Lifetime: without a `controller` prop the panel owns its run state. Opening the scenario editor,
+ * changing screen or reloading the page unmounts it, which stops polling without cancelling the run
+ * on the server. The hook keeps the request id and run id of an unfinished run in session storage,
+ * so when the panel is mounted again the run is shown as "status unknown" and asked for again from
+ * the server; a second run cannot be started until that one is re-checked or cleared. LIMIT: nothing
+ * is polled while the panel is unmounted, and a run that ended is not kept across a reload. A host
+ * that wants continuous polling calls `useAgentRun` where the studio stays mounted (App level) and
+ * passes the result as `controller` (through `AgentPanel`). With the default unavailable transport
+ * no run can exist, so none of this has an effect in the current build.
  */
 export function AgentRunPanel({ ws, controller, headingId }: { ws: Workspace; controller?: AgentRunController; headingId?: string }) {
   return controller

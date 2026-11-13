@@ -104,7 +104,7 @@ async function runningRun(t: SyntheticTransport, ws?: Workspace) {
 }
 
 beforeEach(() => { vi.useFakeTimers() })
-afterEach(() => { cleanup(); vi.useRealTimers() }) // vitest globals are off, so RTL's auto-cleanup does not run
+afterEach(() => { cleanup(); vi.useRealTimers(); sessionStorage.clear() }) // vitest globals are off, so RTL's auto-cleanup does not run; an unfinished run is remembered in session storage
 
 describe('useAgentRun acceptance: submit and status lifecycle', () => {
   it('is unavailable by default: no submit, a plain blocked reason, no run', async () => {

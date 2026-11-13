@@ -7,6 +7,7 @@ import {
   primaryMetric, unitLabel, type Currentness,
 } from '../planning/evaluation'
 import type { RunRecord, Workspace } from '../planning/useWorkspace'
+import { latestEvaluation } from '../planning/shell'
 
 function describeAttenuation(a: unknown): string {
   const v = a as { mode?: string; transmission?: number | null } | null
@@ -122,7 +123,8 @@ export function TreeEditor({ ws, profile, state, caseState }: { ws: Workspace; p
 export function EvaluationControls({ ws }: { ws: Workspace }) {
   const job = ws.activeJob
   const described = job ? describeJob(job) : null
-  const running = job ? job.status === 'queued' || job.status === 'running' : false
+  const lost = Boolean(job && ws.jobStatusLost && (job.status === 'queued' || job.status === 'running'))
+  const running = !lost && (job ? job.status === 'queued' || job.status === 'running' : false)
   const label = ws.busy === 'committing' ? 'Accepting revision…' : ws.busy === 'submitting' ? 'Submitting…' : ws.draftDirty ? 'Accept changes & evaluate' : 'Evaluate planting'
   return (
     <div className="detail-section">
@@ -135,11 +137,22 @@ export function EvaluationControls({ ws }: { ws: Workspace }) {
           {job?.cancel_requested ? 'Cancel requested' : 'Cancel job'}
         </button>
       )}
+      {ws.draftDirty && ws.requirementErrors.length > 0 && (
+        <p className="fine-print text-warning" data-testid="draft-errors">Cannot accept the draft yet: {ws.requirementErrors.join(' ')}</p>
+      )}
       {ws.connection.status === 'connected' && !ws.connection.health.available_operations.includes('evaluate_layout') && (
         <p className="fine-print text-warning">This backend has no evaluate_layout provider, so no result can be computed.</p>
       )}
       <div role="status" aria-live="polite">
-        {job && described && (
+        {job && lost && (
+          <div className="job-status tone-warning" data-testid="job-status-unknown">
+            <strong>Status unknown</strong>
+            <span>Job {short(job.job_id, 8)} · scenario rev {job.scenario_revision}</span>
+            <span>Contact was lost while following this job. It may still be running on the backend; no result is assumed.</span>
+            <button type="button" className="secondary-action" onClick={() => void ws.recheckJob()}>Re-check job status</button>
+          </div>
+        )}
+        {job && described && !lost && (
           <div className={`job-status tone-${described.tone}`}>
             <strong>{described.label}</strong>
             <span>Job {short(job.job_id, 8)} · scenario rev {job.scenario_revision}</span>
@@ -166,7 +179,8 @@ const CURRENTNESS_TONE: Record<Currentness, string> = { current: 'tone-success',
 
 export function ResultCard({ ws }: { ws: Workspace }) {
   const evaluations = ws.runs.filter(r => r.job.operation === 'evaluate_layout')
-  const record = evaluations.find(r => r.result) ?? null
+  // The backend-selected run wins over arrival order (a late older job must not displace it).
+  const record = latestEvaluation(ws.runs, ws.currentRunIds.evaluation)
   const latestFailure = evaluations[0] && !evaluations[0].result ? evaluations[0] : null
   const primaryCase = ws.scenario?.input.objective.primary_case_id ?? null
   if (!record?.result) {

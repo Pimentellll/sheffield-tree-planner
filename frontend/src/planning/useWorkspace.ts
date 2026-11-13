@@ -52,6 +52,8 @@ export interface Workspace {
   /** Any unaccepted edit: tree position or requirements. */
   readonly draftDirty: boolean
   readonly activeJob: Job | null
+  /** Polling the active job failed: its real status is unknown until re-checked (never shown as running). */
+  readonly jobStatusLost: boolean
   readonly runs: readonly RunRecord[]
   readonly currentRunId: string | null
   readonly currentRunIds: Readonly<Record<ViewSlot, string | null>>
@@ -67,6 +69,8 @@ export interface Workspace {
   readonly evaluate: () => Promise<void>
   readonly submit: (build: (head: Scenario, requestId: string) => JobRequest) => Promise<void>
   readonly cancel: () => Promise<void>
+  /** Re-query the active job after a polling failure and, if it is still running, keep following it. */
+  readonly recheckJob: () => Promise<void>
   readonly loadProposal: (scenarioId: string, revision: number) => Promise<void>
   readonly acceptProposal: () => Promise<void>
   readonly dismissProposal: () => void
@@ -94,6 +98,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
   const [draftPosition, setDraft] = useState<Vec3 | null>(null)
   const [draftRequirements, setDraftRequirements] = useState<Requirements | null>(null)
   const [activeJob, setActiveJob] = useState<Job | null>(null)
+  const [jobStatusLost, setJobStatusLost] = useState(false)
   const [runs, setRuns] = useState<RunRecord[]>([])
   const [currentRunIds, setCurrentRunIds] = useState<Record<ViewSlot, string | null>>({ evaluation: null, search: null, comparison: null })
   const currentRunId = currentRunIds.evaluation
@@ -207,6 +212,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
         })
         setRuns(existing)
         setActiveJob(null)
+        setJobStatusLost(false)
         setReview(null)
         setConnection({ status: 'connected', health })
       } catch (err) {
@@ -224,8 +230,14 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     let current = job
     while (alive.current && !TERMINAL_JOB_STATES.has(current.status)) {
       await sleep(POLL_MS)
-      current = await client.job(job.job_id)
-      if (activeJobId.current === job.job_id) setActiveJob(current)
+      try {
+        current = await client.job(job.job_id)
+      } catch (err) {
+        // The job may still be running on the backend; say its status is unknown rather than keep showing it as running.
+        if (activeJobId.current === job.job_id) setJobStatusLost(true)
+        throw err
+      }
+      if (activeJobId.current === job.job_id) { setActiveJob(current); setJobStatusLost(false) }
     }
     const result = current.status === 'completed' && current.run_id ? await client.result(current.run_id) : null
     if (result && (result.source_job_id !== current.job_id || result.input_fingerprint !== current.input_fingerprint)) {
@@ -266,6 +278,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
       const job = await client.submitJob(build(head, newRequestId()))
       activeJobId.current = job.job_id
       setActiveJob(job)
+      setJobStatusLost(false)
       setBusy(null)
       await poll(job)
     } catch (err) {
@@ -354,7 +367,22 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     return classifyResult({ result, head: refOf(scenario), currentRunId: currentRunIds[slotOf(result.operation)], draftDirty })
   }, [scenario, currentRunIds, draftDirty])
 
-  const jobRunning = activeJob !== null && !TERMINAL_JOB_STATES.has(activeJob.status)
+  const recheckJob = useCallback(async () => {
+    const id = activeJobId.current
+    if (!id) return
+    setError(null)
+    try {
+      const job = await client.job(id)
+      if (activeJobId.current === id) { setActiveJob(job); setJobStatusLost(false) }
+      await poll(job)
+    } catch (err) {
+      if (activeJobId.current === id) setJobStatusLost(true)
+      await handleFailure(err)
+    }
+  }, [client, poll, handleFailure])
+
+  // A job whose status is unknown is not treated as running, so it cannot block planning indefinitely.
+  const jobRunning = activeJob !== null && !TERMINAL_JOB_STATES.has(activeJob.status) && !jobStatusLost
   const connectedOk = connection.status === 'connected' && busy === null &&
     connection.health.available_operations.includes('evaluate_layout') && Boolean(placement)
 
@@ -362,7 +390,7 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
     connection, session, declaration, site, profile, scenario, layout,
     placementId: placement?.placement_id ?? null,
     committedPosition, draftPosition, positionDirty, acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors,
-    draftChanges, draftDirty, activeJob, runs, currentRunId, currentRunIds, busy, notice, error, review,
+    draftChanges, draftDirty, activeJob, jobStatusLost, runs, currentRunId, currentRunIds, busy, notice, error, review,
     canEvaluate: connectedOk && requirementErrors.length === 0 && !(jobRunning && !draftDirty),
     currentness,
     setDraftPosition: (p: Vec3) => setDraft(p),
@@ -371,10 +399,10 @@ export function useWorkspace(client: CanopyClient = defaultClient): Workspace {
       if (committedPosition) setDraft(committedPosition)
       if (acceptedRequirements) setDraftRequirements(acceptedRequirements)
     },
-    evaluate, submit, cancel, loadProposal, acceptProposal,
+    evaluate, submit, cancel, recheckJob, loadProposal, acceptProposal,
     dismissProposal: () => setReview(null),
     reload: () => setAttempt(a => a + 1),
   }), [connection, session, declaration, site, profile, scenario, layout, placement, committedPosition, draftPosition, positionDirty,
-    acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors, draftChanges, draftDirty, activeJob, runs, currentRunId, currentRunIds,
-    busy, notice, error, review, connectedOk, jobRunning, currentness, evaluate, submit, cancel, loadProposal, acceptProposal])
+    acceptedRequirements, draftRequirements, requirementsDirty, requirementErrors, draftChanges, draftDirty, activeJob, jobStatusLost, runs, currentRunId, currentRunIds,
+    busy, notice, error, review, connectedOk, jobRunning, currentness, evaluate, submit, cancel, recheckJob, loadProposal, acceptProposal])
 }

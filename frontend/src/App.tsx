@@ -44,10 +44,10 @@ function App() {
     .filter(row => row.role !== 'baseline')
     .map(row => ({ id: row.layoutId, positions: row.placements.map(p => p.position_enu_m as Vec3), highlighted: row.layoutId === selectedLayoutId })), [searchRecord, selectedLayoutId])
 
-  // The scenario editor (C01) opens by itself when a draft or a proposal appears; the user can close it.
+  // The scenario editor (C01) opens by itself for a requirements draft; the user can close it.
+  // A tree move alone does not open it, so the map key that explains the ghost tree stays visible.
   const [editorOpen, setEditorOpen] = useState(false)
-  useEffect(() => { if (ws.draftDirty) setEditorOpen(true) }, [ws.draftDirty])
-  useEffect(() => { if (ws.review) setEditorOpen(true) }, [ws.review])
+  useEffect(() => { if (ws.requirementsDirty) setEditorOpen(true) }, [ws.requirementsDirty])
 
   return (
     <div className={`app-shell screen-${screen}`}>
@@ -59,14 +59,10 @@ function App() {
         {screen === 'studio' ? (
           <div className="studio">
             <h1 className="sr-only">Planting studio</h1>
-            <section className="site-panel studio-scene" aria-labelledby="site-heading">
-              <h2 id="site-heading" className="sr-only">{ws.site?.name ?? 'No site loaded'}</h2>
-              <SiteScene scene={scene} candidates={candidates} onStep={candidateMode ? stepTree : undefined} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={moveTree} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} framing={1.9} />
-            </section>
-
+            {/* DOM order is the reading and keyboard order: scenario first, then the scene, then results. */}
             <div className="studio-left">
               <ScenarioStrip ws={ws} editorOpen={editorOpen} onToggle={() => setEditorOpen(open => !open)} />
-              <DraftBanner ws={ws} onReview={() => setEditorOpen(true)} />
+              <DraftBanner ws={ws} editorOpen={editorOpen} onReview={() => setEditorOpen(true)} />
               {(synthetic || !connected) && (
                 <div className="notice glass-light" role="status" data-testid="site-notice">
                   <span className="notice-icon" aria-hidden="true">ⓘ</span>
@@ -78,10 +74,14 @@ function App() {
               {editorOpen && (
                 <aside id="scenario-editor" className="scenario-editor glass-light" aria-label="Scenario editor">
                   <RequirementsPanel ws={ws} />
-                  <ProposalReviewPanel ws={ws} />
                 </aside>
               )}
             </div>
+
+            <section className="site-panel studio-scene" aria-labelledby="site-heading">
+              <h2 id="site-heading" className="sr-only">{ws.site?.name ?? 'No site loaded'}</h2>
+              <SiteScene scene={scene} candidates={candidates} onStep={candidateMode ? stepTree : undefined} treeState={treeState} committed={ws.committedPosition} draft={ws.draftPosition} editable={connected && Boolean(ws.draftPosition)} onDraftChange={moveTree} siteLabel={synthetic ? 'SYNTHETIC TEST SITE' : ws.site ? 'SITE' : 'NO SITE'} overlays={overlays} framing={1.9} />
+            </section>
 
             <div className="studio-right">
               <aside className="detail-panel" aria-label="Planning controls and evidence">
@@ -90,6 +90,8 @@ function App() {
                 <EvidenceChainDetails ws={ws} />
                 <TreeEditor ws={ws} profile={ws.profile} state={treeState} caseState={primaryCase?.profile_state ?? null} />
                 <AlternativesPanel ws={ws} selectedLayoutId={selectedLayoutId} onSelectLayout={setSelectedLayoutId} />
+                {/* Human review of a prepared proposal stays reachable without opening the requirements editor. */}
+                <ProposalReviewPanel ws={ws} />
                 <RunHistory ws={ws} />
                 <SiteStatus ws={ws} transform={transform} />
                 <div className="detail-section card-actions">
@@ -100,8 +102,9 @@ function App() {
               <ProvenanceStrip ws={ws} />
             </div>
 
+            {/* While the editor is open it takes the lower-left area (as in C01), so the key and agent bar give way. */}
             {!editorOpen && <MapKey scene={scene} dirty={ws.draftDirty} locationCount={new Set(catalogue.map(c => c.location_id)).size} optionCount={overlays.length} candidateMode={candidateMode} />}
-            <AgentPanel ws={ws} />
+            {!editorOpen && <AgentPanel ws={ws} />}
           </div>
         ) : (
           <div className="page-content">

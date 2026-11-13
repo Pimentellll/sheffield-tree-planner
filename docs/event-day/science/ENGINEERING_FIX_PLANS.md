@@ -24,7 +24,7 @@
 | [FIX-3](#fix-3--record-and-configure-the-real-ollama-runtime) [#64](https://github.com/Pimentellll/sheffield-tree-planner/issues/64) | Committed deployment profile is vLLM/HF BF16, not the organiser's Ollama tag | **P0** | `deploy/spark/application.env.example`, new `deploy/spark/ollama-runtime.md`, `docs/DGX_SPARK.md` | 15 min | #60 model field, X-02 |
 | [FIX-4](#fix-4--optional-relocation-to-another-catalogue-position) [#65](https://github.com/Pimentellll/sheffield-tree-planner/issues/65) | `compare_locations` to another catalogue position is always infeasible | P1, **optional; after P0 only** | `backend/src/tree_planner/search/__init__.py`, `evaluators/physical_runtime.py`, tests | 30–45 min | Nothing for submission |
 
-**Order:** FIX-3 step 1–3 (smoke test) → FIX-1 → FIX-2 → hand the window to Arnav → FIX-4 only if time remains before the 16:00 freeze. Every fix keeps AGENTS.md rules: no hard-constraint relaxation, no fabricated outputs, tests added for changed behaviour, evidence recorded in BUILD/#54.
+**Order:** FIX-3 step 1–3 (smoke test) → FIX-1 → FIX-2 → hand the window to Arnav → FIX-4 **post-submission** *(13 Nov reconciliation: the five-case run and the filmed release must be one SHA, protocol §2 / acceptance X-03, and C3 is pre-registered as variant A; if FIX-4 is added to any release SHA, C1–C5 must be re-run on that SHA)*. Every fix keeps AGENTS.md rules: no hard-constraint relaxation, no fabricated outputs, tests added for changed behaviour, evidence recorded in BUILD/#54.
 
 ---
 
@@ -417,7 +417,7 @@ Spacing, budget, count, region and winter checks still apply through `check()`. 
 
 ### Coordination
 - Tell **Alex**: a relocation can now be feasible, and the UI must not still label every relocation "diagnostic".
-- Tell **Arnav before the five-case run**. Per the protocol PASS/FAIL AMENDMENT of 13 Nov (protocol §8), FIX-4 is scheduled **after** the five-case run and C3 is scored only as variant A; if FIX-4 is on the release SHA anyway, Arnav records that and reports C3 as run under a changed contract, not re-graded as C3-B.
+- Tell **Arnav before the five-case run**. Per the protocol PASS/FAIL AMENDMENT of 13 Nov (protocol §8), FIX-4 is **post-submission** and C3 is scored only as variant A; if FIX-4 is on any release SHA anyway, C1–C5 are re-run on that SHA and C3 is reported as run under a changed contract (no pre-registered grade exists for it), not re-graded as C3-B.
 - Update the PHYSICAL_RUNTIME.md sentence "A known candidate moved away from its catalogue coordinate is computed only in explicit diagnostic mode" to mention catalogue rebinding.
 
 ---
